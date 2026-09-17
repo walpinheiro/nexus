@@ -70,6 +70,3 @@ export async function readShareHash(hash: string): Promise<{ ok: boolean; doc?: 
   }
 }
 
-export function docParaLinkM3E(hash: string): string {
-  return `https://lnkiai.github.io/m3e-canvas/${hash}`
-}
