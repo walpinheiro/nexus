@@ -8,18 +8,19 @@ import StudioToolbar from '@/components/studio/StudioToolbar.vue'
 import LayersPanel from '@/components/studio/LayersPanel.vue'
 import FramePanel from '@/components/studio/FramePanel.vue'
 import PreviewModal from '@/components/studio/PreviewModal.vue'
+import NewFrameDialog from '@/components/studio/NewFrameDialog.vue'
 
 const studio = useStudio()
-const novoNome = ref('')
 const renomeando = ref('')
 const abaEsq = ref<'parts' | 'layers'>('parts')
 const abaDir = ref<'edit' | 'prompt'>('edit')
 const previewAberto = ref(false)
+const dialogNovaTela = ref(false)
 
-function adicionar(tipo: 'phone' | 'desktop') {
-  if (tipo === 'phone') studio.adicionarFrame(412, 892, novoNome.value || 'Nova tela')
-  else studio.adicionarFrame(1280, 800, novoNome.value || 'Nova tela web')
-  novoNome.value = ''
+function criarDoDialog(v: { nome: string; preset: 'phone' | 'desktop' }) {
+  if (v.preset === 'phone') studio.adicionarFrame(412, 892, v.nome || 'Nova tela')
+  else studio.adicionarFrame(1280, 800, v.nome || 'Nova tela web')
+  dialogNovaTela.value = false
 }
 
 function confirmarRemocao(id: string) {
@@ -75,9 +76,7 @@ function abrirPreview() {
         {{ renomeando === fr.id ? '' : fr.name }} <span class="text-nexo-muted">{{ fr.w }}×{{ fr.h }}</span>
       </button>
       <span class="flex shrink-0 gap-1">
-        <input v-model="novoNome" placeholder="Nome…" aria-label="Nome da nova tela" class="w-28 rounded-btn border border-nexo-border px-2 py-1" />
-        <button type="button" title="Adicionar tela desktop 1280x800 (padrão)" class="rounded-btn border border-nexo-primary px-2 py-1 font-semibold text-nexo-primary" @click="adicionar('desktop')">+Web</button>
-        <button type="button" title="Adicionar tela phone 412x892" class="rounded-btn border border-nexo-border px-2 py-1" @click="adicionar('phone')">+Phone</button>
+        <button type="button" title="Criar tela (pergunta mobile ou desktop)" class="rounded-btn border border-nexo-primary px-3 py-1 font-semibold text-nexo-primary" @click="dialogNovaTela = true">+ Nova tela</button>
       </span>
       <span class="ml-auto flex shrink-0 gap-1">
         <button
@@ -105,5 +104,6 @@ function abrirPreview() {
       <button type="button" class="underline" @click="renomeando = ''">fechar</button>
     </div>
     <PreviewModal v-if="previewAberto" :inicio-id="studio.screenId" @fechar="previewAberto = false" />
+    <NewFrameDialog v-if="dialogNovaTela" @fechar="dialogNovaTela = false" @criar="criarDoDialog" />
   </div>
 </template>
