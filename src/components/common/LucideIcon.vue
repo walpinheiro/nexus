@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Lock,
   Maximize2,
+  Menu,
   Move,
   Pencil,
   Play,
@@ -45,6 +46,7 @@ const mapa: Record<string, unknown> = {
   star: Star,
   image: ImageIcon,
   move: Move,
+  menu: Menu,
   expand: Maximize2
 }
 

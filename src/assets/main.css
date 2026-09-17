@@ -27,6 +27,23 @@ body {
   background-size: 20px 20px;
 }
 
+.studio-enter-active,
+.studio-leave-active {
+  transition:
+    opacity 300ms ease,
+    transform 300ms ease;
+}
+
+.studio-enter-from,
+.studio-leave-to {
+  opacity: 0;
+}
+
+.studio-enter-from .studio-panel,
+.studio-leave-to .studio-panel {
+  transform: scale(0.98);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

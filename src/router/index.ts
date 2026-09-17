@@ -10,7 +10,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: HomeView },
   { path: '/canvas', name: 'canvas', component: CanvasView },
   { path: '/studio', redirect: '/canvas?view=studio' },
-  { path: '/studio-full', name: 'studio', component: StudioView },
+  { path: '/studio-full', name: 'studio', component: StudioView, meta: { layout: 'studio' } },
   { path: '/backlog', name: 'backlog', component: BacklogView },
   { path: '/gates/:id', name: 'gate', component: GateView, props: true },
   { path: '/usuarios', name: 'usuarios', component: UsersView },
