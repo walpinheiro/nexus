@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useStudio } from '@/stores/useStudio'
+import { paletteOf } from './m3/theme'
+import M3Node from './m3/M3Node.vue'
 
 const studio = useStudio()
 const caixa = ref<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
@@ -19,6 +21,11 @@ const itens = computed(() => {
 })
 
 const transform = computed(() => `translate(${studio.pan[0]}px, ${studio.pan[1]}px) scale(${studio.zoom})`)
+const scheme = computed(() => paletteOf(studio.doc.paletteKey, false))
+const transicaoAtual = computed(() => {
+  const it = studio.itemPorId(studio.selecionados[0] ?? '')
+  return it?.action?.transition ?? 'slide'
+})
 
 function snap(v: number, semSnap: boolean): number {
   return semSnap ? Math.round(v) : Math.round(v / 4) * 4
@@ -248,19 +255,22 @@ defineExpose({ alternarPreview })
         role="button"
         tabindex="0"
         :aria-label="`${it.kind} ${it.label ?? ''}`"
-        class="absolute cursor-move rounded-badge border bg-white px-3 py-2 text-xs shadow-card"
-        :class="studio.selecionados.includes(it.id) ? 'border-nexo-primary outline outline-2 outline-nexo-primary' : 'border-nexo-border'"
-        :style="{ left: it.x + 'px', top: it.y + 'px', minWidth: Math.min(180, (it.size ?? 180)) + 'px' }"
+        class="absolute cursor-move"
+        :style="{ left: it.x + 'px', top: it.y + 'px' }"
         @pointerdown="onMoverParte(it.id, $event)"
         @click="selecionar(it.id, $event)"
         @dblclick="$event.stopPropagation()"
         @keydown.enter="selecionar(it.id, $event as unknown as MouseEvent)"
       >
-        <span class="font-semibold">{{ it.kind }}</span>
-        <span v-if="it.label"> — {{ it.label }}</span>
-        <span v-if="it.supporting" class="block text-nexo-muted">{{ it.supporting }}</span>
-        <span v-if="it.action" class="block text-nexo-primary">→ {{ it.action.to }} ({{ it.action.transition }})</span>
-        <span v-if="it.note" class="block italic text-nexo-muted">“{{ it.note }}”</span>
+        <div
+          :class="[
+            'm3-ripple',
+            modo === 'preview' && transicaoAtual !== 'none' ? `m3-trans-${transicaoAtual}` : '',
+            studio.selecionados.includes(it.id) ? 'm3-select-ring' : ''
+          ]"
+        >
+          <M3Node :item="it" :scheme="scheme" :selecionado="studio.selecionados.includes(it.id)" />
+        </div>
       </div>
       <g v-if="false" />
       <div
