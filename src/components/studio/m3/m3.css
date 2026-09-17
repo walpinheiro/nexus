@@ -45,6 +45,18 @@
 
 .m3-ripple:active::after {
   opacity: 0.1;
+  animation: m3-ripple-grow 0.42s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes m3-ripple-grow {
+  from {
+    transform: scale(0.4);
+    opacity: 0.16;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0.1;
+  }
 }
 
 .m3-elev-1 {
@@ -139,5 +151,16 @@
   .m3-trans-expand {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+@keyframes m3-ripple-grow {
+  from {
+    transform: scale(0.4);
+    opacity: 0.16;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0.1;
   }
 }

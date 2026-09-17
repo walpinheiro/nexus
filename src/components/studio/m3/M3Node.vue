@@ -28,6 +28,14 @@ import M3Image from './M3Image.vue'
 import M3Box from './M3Box.vue'
 import M3Divider from './M3Divider.vue'
 import M3Loading from './M3Loading.vue'
+import M3SplitButton from './M3SplitButton.vue'
+import M3FabMenu from './M3FabMenu.vue'
+import M3Carousel from './M3Carousel.vue'
+import M3Badge from './M3Badge.vue'
+import M3DatePicker from './M3DatePicker.vue'
+import M3TimePicker from './M3TimePicker.vue'
+import M3Camera from './M3Camera.vue'
+import M3Map from './M3Map.vue'
 
 const props = withDefaults(
   defineProps<{ item: StudioItem; scheme: Scheme; selecionado?: boolean; mini?: boolean }>(),
@@ -88,6 +96,22 @@ const comp = computed(() => {
     case 'linearProgress':
     case 'circularProgress':
       return M3Loading
+    case 'splitButton':
+      return M3SplitButton
+    case 'fabMenu':
+      return M3FabMenu
+    case 'datePicker':
+      return M3DatePicker
+    case 'timePicker':
+      return M3TimePicker
+    case 'carousel':
+      return M3Carousel
+    case 'camera':
+      return M3Camera
+    case 'map':
+      return M3Map
+    case 'badge':
+      return M3Badge
     default:
       return null
   }
