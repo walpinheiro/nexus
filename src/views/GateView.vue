@@ -6,6 +6,7 @@ import { useGraph } from '@/stores/useGraph'
 import { useUsers } from '@/stores/useUsers'
 import { avaliarGate, gateAnterior, gateDesbloqueado } from '@/utils/gates'
 import BlockedReason from '@/components/gates/BlockedReason.vue'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 import type { GateId } from '@/types/nexo'
 
 const props = defineProps<{ id: string }>()
@@ -74,8 +75,7 @@ function corrigirNoObjeto(id: string) {
     <div v-if="alvoId && graph.noPorId(alvoId)" class="text-xs">
       <p class="font-semibold">Checklist bloqueante (tempo real):</p>
       <ul>
-        <li v-for="c in avaliarGate(graph.noPorId(alvoId)!).checks" :key="c.codigo">
-          {{ c.ok ? '✔' : '✘' }} {{ c.codigo }} — {{ c.descricao }} [{{ c.severidade }}]
+          <li v-for="c in avaliarGate(graph.noPorId(alvoId)!).checks" :key="c.codigo" class="flex items-center gap-1"><LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" /> {{ c.codigo }} — {{ c.descricao }} [{{ c.severidade }}]
           <span v-if="!c.ok && c.severidade === 'bloqueante'">
             · <button type="button" class="text-nexo-primary underline" @click="corrigirNoObjeto(alvoId)">corrigir no objeto</button>
           </span>

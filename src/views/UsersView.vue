@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useUsers } from '@/stores/useUsers'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 import type { Role } from '@/types/nexo'
 
 const users = useUsers()
@@ -67,7 +68,13 @@ function remover(id: string) {
       </li>
     </ul>
     <div class="text-xs text-nexo-muted">
-      <p>Permissões do papel atual: visualizar {{ users.pode('visualizar') ? '✔' : '✘' }} · propor {{ users.pode('propor') ? '✔' : '✘' }} · editar {{ users.pode('editar') ? '✔' : '✘' }} · aprovar G2 {{ users.pode('aprovar', { gate: 'G2' } as never) ? '✔' : '✘ (só PM)' }} · aprovar G3 {{ users.pode('aprovar', { gate: 'G3' } as never) ? '✔' : '✘ (Arq/TL/Seg)' }}</p>
+      <p class="flex flex-wrap items-center gap-1">Permissões do papel atual:
+        <span class="inline-flex items-center gap-0.5">visualizar <LucideIcon :name="users.pode('visualizar') ? 'check' : 'x'" :size="12" /></span> ·
+        <span class="inline-flex items-center gap-0.5">propor <LucideIcon :name="users.pode('propor') ? 'check' : 'x'" :size="12" /></span> ·
+        <span class="inline-flex items-center gap-0.5">editar <LucideIcon :name="users.pode('editar') ? 'check' : 'x'" :size="12" /></span> ·
+        <span class="inline-flex items-center gap-0.5">aprovar G2 <LucideIcon :name="users.pode('aprovar', { gate: 'G2' } as never) ? 'check' : 'x'" :size="12" /><span v-if="!users.pode('aprovar', { gate: 'G2' } as never)">(só PM)</span></span> ·
+        <span class="inline-flex items-center gap-0.5">aprovar G3 <LucideIcon :name="users.pode('aprovar', { gate: 'G3' } as never) ? 'check' : 'x'" :size="12" /><span v-if="!users.pode('aprovar', { gate: 'G3' } as never)">(Arq/TL/Seg)</span></span>
+      </p>
     </div>
   </div>
 </template>

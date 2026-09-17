@@ -4,6 +4,7 @@ import { useUI } from '@/stores/useUI'
 import { useUsers } from '@/stores/useUsers'
 import { useGate } from '@/stores/useGate'
 import { gateAnterior, gateDesbloqueado, ORDEM_GATES } from '@/utils/gates'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const $route = useRoute()
 const ui = useUI()
@@ -131,8 +132,9 @@ function tooltip(gid: string): string {
             {{ gid }}
           </span>
           {{ rotulos[gid] }}
-          <span class="ml-auto text-xs" aria-hidden="true">
-            {{ estadoGate(gid) === 'bloqueado' ? '🔒' : estadoGate(gid) === 'aprovado' ? '✔' : '' }}
+          <span class="ml-auto inline-flex" aria-hidden="true">
+            <LucideIcon v-if="estadoGate(gid) === 'bloqueado'" name="lock" :size="14" />
+            <LucideIcon v-else-if="estadoGate(gid) === 'aprovado'" name="check" :size="14" />
           </span>
         </RouterLink>
       </nav>
@@ -154,7 +156,7 @@ function tooltip(gid: string): string {
         aria-label="Recolher barra lateral"
         @click="ui.alternarSidebar()"
       >
-        ‹
+        <LucideIcon name="chevL" :size="14" />
       </button>
     </div>
   </aside>

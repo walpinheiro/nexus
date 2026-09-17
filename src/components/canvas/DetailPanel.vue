@@ -9,6 +9,7 @@ import { gerarPrompt } from '@/utils/prompt'
 import { encodeShare, type ShareState } from '@/utils/share'
 import { avaliarGate } from '@/utils/gates'
 import type { NexoStatus } from '@/types/nexo'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const graph = useGraph()
 const ui = useUI()
@@ -335,11 +336,11 @@ function proporTexto() {
     <template v-else>
       <div class="flex items-start justify-between p-4 pb-0">
         <h2 class="text-lg font-bold">{{ sel.titulo }}</h2>
-        <button type="button" aria-label="Fechar painel" class="p-1 text-nexo-muted hover:text-nexo-text" @click="fecharPainel">×</button>
+        <button type="button" aria-label="Fechar painel" class="p-1 text-nexo-muted hover:text-nexo-text" @click="fecharPainel"><LucideIcon name="x" :size="14" /></button>
       </div>
       <p class="px-4 pt-1 text-sm">
-        <span v-if="sel.status === 'approved'" class="font-semibold text-nexo-approved">✔ Aprovada</span>
-        <span v-else-if="sel.status === 'stale'" class="font-semibold text-nexo-stale">⚠ Desatualizada</span>
+        <span v-if="sel.status === 'approved'" class="inline-flex items-center gap-1 font-semibold text-nexo-approved"><LucideIcon name="check" :size="14" /> Aprovada</span>
+        <span v-else-if="sel.status === 'stale'" class="inline-flex items-center gap-1 font-semibold text-nexo-stale"><LucideIcon name="alert" :size="14" /> Desatualizada</span>
         <span v-else class="font-semibold">{{ sel.status }}</span>
         <span class="text-nexo-muted"> · </span>
         <span class="font-semibold text-nexo-primary">Gate {{ sel.gate.replace('G', '') === sel.gate ? sel.gate : sel.gate }}</span>
@@ -374,18 +375,18 @@ function proporTexto() {
             class="w-full rounded-badge border border-nexo-banner-border bg-nexo-stale-bg p-3 text-left"
             @click="irImpacto()"
           >
-            <span class="flex items-center gap-2 text-sm font-semibold text-nexo-stale">⚠ Impacto identificado <span class="ml-auto">›</span></span>
+            <span class="flex items-center gap-2 text-sm font-semibold text-nexo-stale"><LucideIcon name="alert" :size="14" /> Impacto identificado <span class="ml-auto inline-flex"><LucideIcon name="chevR" :size="14" /></span></span>
             <span class="mt-1 block text-[13px] text-nexo-stale">Alterações nesta feature podem impactar 3 features, 2 serviços e 4 PBIs.</span>
           </button>
           <div v-if="gateEval" class="rounded-badge border border-nexo-border p-3 text-xs">
             <p class="font-semibold">Gate {{ sel.gate }} — {{ gateEval.bloqueantesOk ? 'bloqueantes OK' : 'bloqueantes faltando: ' + gateEval.bloqueantesFaltando.join(', ') }}</p>
             <ul class="mt-1 space-y-1">
-              <li v-for="c in gateEval.checks" :key="c.codigo">{{ c.ok ? '✔' : '✘' }} {{ c.codigo }} — {{ c.descricao }}</li>
+              <li v-for="c in gateEval.checks" :key="c.codigo" class="flex items-center gap-1"><LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" /> {{ c.codigo }} — {{ c.descricao }}</li>
             </ul>
           </div>
           <div class="space-y-2">
-            <button type="button" class="w-full rounded-btn border border-nexo-primary px-4 py-3 text-sm font-semibold text-nexo-primary" @click="ui.setTab('copilot')">✨ Perguntar à IA</button>
-            <button type="button" class="w-full rounded-btn bg-nexo-primary px-4 py-3 text-sm font-semibold text-white" @click="proporAberto = !proporAberto">✎ Propor alteração</button>
+            <button type="button" class="flex w-full items-center justify-center gap-2 rounded-btn border border-nexo-primary px-4 py-3 text-sm font-semibold text-nexo-primary" @click="ui.setTab('copilot')"><LucideIcon name="sparkles" :size="14" /> Perguntar à IA</button>
+            <button type="button" class="flex w-full items-center justify-center gap-2 rounded-btn bg-nexo-primary px-4 py-3 text-sm font-semibold text-white" @click="proporAberto = !proporAberto"><LucideIcon name="pencil" :size="14" /> Propor alteração</button>
           </div>
           <div v-if="proporAberto" class="space-y-2 rounded-badge border border-nexo-border p-3">
             <label class="block text-xs">Título<input v-model="campoTitulo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-sm" /></label>
@@ -513,7 +514,7 @@ function proporTexto() {
             <label>Escopo <select v-model="promptEscopo" class="rounded-btn border border-nexo-border px-2 py-1" @change="atualizarPrompt"><option value="selecao">Seleção</option><option value="tudo">Tudo</option></select></label>
             <label>Alvo <select v-model="promptAlvo" class="rounded-btn border border-nexo-border px-2 py-1" @change="atualizarPrompt"><option value="vue">Vue 3</option><option value="ruby">API Ruby</option></select></label>
             <label>Idioma <select v-model="promptIdioma" class="rounded-btn border border-nexo-border px-2 py-1" @change="atualizarPrompt"><option value="pt">PT-BR</option><option value="en">EN</option></select></label>
-            <button type="button" class="ml-auto text-nexo-muted" @click="promptAberto = false">× Fechar</button>
+            <button type="button" class="ml-auto text-nexo-muted" @click="promptAberto = false"><LucideIcon name="x" :size="14" /></button>
           </div>
           <textarea v-model="promptTexto" rows="16" class="mt-2 w-full rounded-btn border border-nexo-border p-2 font-mono text-xs" aria-label="Prompt editável" />
           <div class="mt-2 flex gap-2">

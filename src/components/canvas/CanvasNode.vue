@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NexoObject } from '@/types/nexo'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 
 defineProps<{ no: NexoObject; selecionado: boolean; teal?: boolean; preview?: boolean }>()
 
@@ -156,9 +157,9 @@ function onKeydown(id: string, ev: KeyboardEvent) {
     <div class="mt-3 flex items-center justify-between">
       <span
         v-if="no.status === 'stale'"
-        class="rounded-badge bg-nexo-stale-bg px-2 py-0.5 text-xs font-medium text-nexo-stale"
+        class="inline-flex items-center gap-1 rounded-badge bg-nexo-stale-bg px-2 py-0.5 text-xs font-medium text-nexo-stale"
       >
-        ⚠ Desatualizada
+        <LucideIcon name="alert" :size="12" /> Desatualizada
       </span>
       <span
         v-else

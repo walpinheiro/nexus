@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { GateId } from '@/types/nexo'
 import { gateAnterior } from '@/utils/gates'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const props = defineProps<{ gateId: GateId; anteriorId: GateId | null; motivo: string; anteriorTitulo?: string }>()
 const anterior = gateAnterior(props.gateId)
@@ -9,7 +10,7 @@ const anterior = gateAnterior(props.gateId)
 <template>
   <div class="rounded-badge border border-nexo-border bg-nexo-draft-bg p-3 text-sm" role="alert">
     <p class="flex items-center gap-2 font-semibold text-nexo-draft">
-      <span aria-hidden="true">🔒</span> Gate {{ props.gateId }} bloqueado
+      <LucideIcon name="lock" :size="14" /> Gate {{ props.gateId }} bloqueado
     </p>
     <p class="mt-1">{{ props.motivo }}</p>
     <p v-if="anterior" class="mt-1">

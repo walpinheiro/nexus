@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useGraph } from '@/stores/useGraph'
 import { useUsers } from '@/stores/useUsers'
 import { avaliarGate } from '@/utils/gates'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const graph = useGraph()
 const users = useUsers()
@@ -48,7 +49,7 @@ defineExpose({ definirAlvo })
     <p v-if="!alvo" class="text-nexo-muted">Selecione um objeto no GateView.</p>
     <ul v-else class="space-y-1">
       <li v-for="c in checks" :key="c.codigo" class="rounded-badge border border-nexo-border p-2">
-        {{ c.ok ? '✔' : '✘' }} {{ c.codigo }} — {{ c.descricao }} [{{ c.severidade }}]
+        <LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" /> {{ c.codigo }} — {{ c.descricao }} [{{ c.severidade }}]
         <span v-if="dispensado(c.codigo)" class="ml-1 text-nexo-stale">· {{ dispensado(c.codigo) }}</span>
         <span v-if="c.severidade === 'aviso' && !c.ok && !dispensado(c.codigo)">
           · <input v-model="dispJust" placeholder="justificativa (20+)" class="rounded-btn border border-nexo-border px-1 py-0.5" aria-label="Justificativa da dispensa" />

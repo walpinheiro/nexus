@@ -2,6 +2,7 @@
 import { useRouter } from 'vue-router'
 import { useGraph } from '@/stores/useGraph'
 import { useUI } from '@/stores/useUI'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const graph = useGraph()
 const ui = useUI()
@@ -28,6 +29,6 @@ function ir() {
       <circle cx="12" cy="16.5" r="0.5" fill="currentColor" />
     </svg>
     Impacto alto detectado
-    <span aria-hidden="true">›</span>
+    <span class="inline-flex" aria-hidden="true"><LucideIcon name="chevR" :size="14" /></span>
   </button>
 </template>

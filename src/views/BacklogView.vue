@@ -5,6 +5,7 @@ import { useGraph } from '@/stores/useGraph'
 import { useUsers } from '@/stores/useUsers'
 import { avaliarGate } from '@/utils/gates'
 import GateChecklist from '@/components/backlog/GateChecklist.vue'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const graph = useGraph()
 const users = useUsers()
@@ -129,7 +130,7 @@ function verChecklist(id: string) {
           </td>
           <td>{{ n.status }}</td>
           <td class="text-xs">
-            <span v-for="c in avaliarGate(n, waiversDe(n.id)).checks" :key="c.codigo" class="mr-1 rounded-badge px-1" :class="c.ok ? 'bg-nexo-approved-bg text-nexo-approved' : 'bg-nexo-blocked-bg text-nexo-blocked'">{{ c.codigo }}{{ c.ok ? '✔' : '✘' }}</span>
+            <span v-for="c in avaliarGate(n, waiversDe(n.id)).checks" :key="c.codigo" class="mr-1 inline-flex items-center gap-0.5 rounded-badge px-1" :class="c.ok ? 'bg-nexo-approved-bg text-nexo-approved' : 'bg-nexo-blocked-bg text-nexo-blocked'">{{ c.codigo }}<LucideIcon :name="c.ok ? 'check' : 'x'" :size="10" /></span>
             <button type="button" class="ml-1 underline" @click="verChecklist(n.id)">dispensas</button>
           </td>
           <td><button type="button" class="text-nexo-primary underline" @click="abrirNoCanvas(n.id)">Abrir Canvas</button></td>

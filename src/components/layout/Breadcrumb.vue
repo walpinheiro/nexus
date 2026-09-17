@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useProject } from '@/stores/useProject'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 import type { NivelZoom } from '@/types/nexo'
 
 const project = useProject()
@@ -28,7 +29,7 @@ function irPara(nivel: NivelZoom, rota?: string) {
       </button>
       <span v-else-if="i < itens.length - 1" class="text-nexo-text">{{ item.rotulo }}</span>
       <span v-else class="font-semibold text-nexo-primary" aria-current="page">{{ item.rotulo }}</span>
-      <span v-if="i < itens.length - 1" class="text-nexo-muted" aria-hidden="true">›</span>
+      <span v-if="i < itens.length - 1" class="inline-flex text-nexo-muted" aria-hidden="true"><LucideIcon name="chevR" :size="14" /></span>
     </template>
   </nav>
 </template>
