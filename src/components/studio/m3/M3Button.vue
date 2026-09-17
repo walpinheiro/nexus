@@ -30,7 +30,15 @@ const estilo = computed(() => {
   <button
     type="button"
     class="m3-ripple flex h-10 items-center justify-center gap-2 px-5 text-sm font-medium"
-    :style="{ background: estilo.background, color: estilo.color, border: estilo.border, boxShadow: estilo.shadow, borderRadius: '999px', minWidth: '120px' }"
+    :style="{
+      background: estilo.background,
+      color: estilo.color,
+      border: estilo.border,
+      boxShadow: estilo.shadow,
+      borderRadius: '999px',
+      minWidth: '120px',
+      width: item.w ? item.w + 'px' : undefined
+    }"
   >
     <M3Icon v-if="item.icon" :name="item.icon" :size="18" :fill="variant === 'filled'" />
     {{ label }}

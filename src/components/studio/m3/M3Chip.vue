@@ -17,7 +17,13 @@ const estilo = computed(() => {
 <template>
   <span
     class="inline-flex h-8 items-center gap-1.5 px-3 text-[13px] font-medium"
-    :style="{ background: estilo.background, color: estilo.color, border: estilo.border, borderRadius: '8px' }"
+    :style="{
+      background: estilo.background,
+      color: estilo.color,
+      border: estilo.border,
+      borderRadius: '8px',
+      width: item.w ? item.w + 'px' : undefined
+    }"
   >
     <M3Icon v-if="item.checked" name="check" :size="16" />
     <M3Icon v-else-if="item.icon" :name="item.icon" :size="16" />

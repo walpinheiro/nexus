@@ -8,8 +8,8 @@ defineProps<{ item: StudioItem; scheme: Scheme }>()
 
 <template>
   <header
-    class="flex h-16 w-full items-center gap-3 px-4"
-    :style="{ background: scheme.surface, color: scheme.onSurface }"
+    class="flex h-16 items-center gap-3 px-4"
+    :style="{ background: scheme.surface, color: scheme.onSurface, width: item.w ? item.w + 'px' : '100%' }"
   >
     <M3Icon v-if="item.icon" :name="item.icon" :size="24" />
     <span class="flex-1 text-[22px]">{{ item.label ?? 'Título' }}</span>

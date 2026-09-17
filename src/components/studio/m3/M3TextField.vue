@@ -16,8 +16,13 @@ const contorno = computed(() =>
 
 <template>
   <label
-    class="relative block h-14 w-full"
-    :style="{ background: contorno.background, border: contorno.border, borderRadius: '4px' }"
+    class="relative block h-14"
+    :style="{
+      background: contorno.background,
+      border: contorno.border,
+      borderRadius: '4px',
+      width: item.w ? item.w + 'px' : '100%'
+    }"
   >
     <span
       class="absolute -top-2 left-3 px-1 text-xs"

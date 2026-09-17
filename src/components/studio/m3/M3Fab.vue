@@ -19,7 +19,13 @@ const estilo = computed(() => {
   <button
     type="button"
     class="m3-ripple m3-elev-2 flex h-14 w-14 items-center justify-center"
-    :style="{ background: estilo.background, color: estilo.color, borderRadius: '16px' }"
+    :style="{
+      background: estilo.background,
+      color: estilo.color,
+      borderRadius: '16px',
+      width: (item.w ?? 56) + 'px',
+      height: (item.h ?? 56) + 'px'
+    }"
     :aria-label="item.label || item.icon || 'fab'"
   >
     <M3Icon :name="item.icon ?? 'add'" :size="24" />

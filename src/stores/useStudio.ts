@@ -341,6 +341,22 @@ export const useStudio = defineStore('studio', () => {
     return mapa[kind] ?? kind
   }
 
+  function redimensionarItem(id: string, w: number, h: number): void {
+    const it = itemPorId(id)
+    if (!it) return
+    pushHistory()
+    it.w = Math.max(16, Math.round(w))
+    it.h = Math.max(16, Math.round(h))
+    if (it.kind === 'button' || it.kind === 'chip' || it.kind === 'slider' || it.kind === 'textField' || it.kind === 'select' || it.kind === 'divider' || it.kind === 'linearProgress') {
+      it.size = it.w
+    }
+    if (it.kind === 'image' || it.kind === 'box' || it.kind === 'card' || it.kind === 'camera' || it.kind === 'map') {
+      it.size = it.w
+      it.size2 = it.h
+    }
+    persist()
+  }
+
   function moverItens(ids: string[], dx: number, dy: number): void {
     for (const id of ids) {
       const it = itemPorId(id)
@@ -381,6 +397,7 @@ export const useStudio = defineStore('studio', () => {
     pushHistory()
     const f = frameAtual()
     if (!f) return
+    const ESPACO = 16
     const itens = todosItens()
       .filter((i) => i.x >= f.x && i.x < f.x + f.w)
       .sort((a, b) => a.y - b.y || a.x - b.x)
@@ -389,7 +406,8 @@ export const useStudio = defineStore('studio', () => {
       if (it.kind === 'topAppBar' || it.kind === 'bottomNav') continue
       it.x = f.x + 16
       it.y = y
-      y += 96
+      const h = it.h ?? it.size2 ?? 80
+      y += h + ESPACO
     }
     persist()
   }
@@ -435,6 +453,7 @@ export const useStudio = defineStore('studio', () => {
     removerItens,
     duplicarItens,
     tidy,
+    redimensionarItem,
     importarDoc
   }
 })

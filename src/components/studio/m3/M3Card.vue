@@ -17,8 +17,14 @@ const estilo = computed(() => {
 
 <template>
   <article
-    class="w-full overflow-hidden"
-    :style="{ background: estilo.background, boxShadow: estilo.shadow, border: estilo.border, borderRadius: '16px' }"
+    class="overflow-hidden"
+    :style="{
+      background: estilo.background,
+      boxShadow: estilo.shadow,
+      border: estilo.border,
+      borderRadius: '16px',
+      width: item.w ? item.w + 'px' : '100%'
+    }"
   >
     <div
       v-if="!item.noImage"

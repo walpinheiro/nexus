@@ -8,6 +8,10 @@ export interface KindSpec {
   w: number
   h: number
   radius: number
+  minW?: number
+  maxW?: number
+  minH?: number
+  maxH?: number
   variants: string[]
   defaults: Record<string, string | number | boolean>
   hasLabel: boolean
@@ -752,4 +756,30 @@ export function variantsOf(kind: string): string[] {
 
 export function specOf(kind: string): KindSpec | undefined {
   return KIND_SPEC[kind]
+}
+
+export function limitesDe(kind: string): { minW: number; maxW: number; minH: number; maxH: number } {
+  const s = KIND_SPEC[kind]
+  if (!s) return { minW: 24, maxW: 1280, minH: 16, maxH: 892 }
+  return {
+    minW: s.minW ?? 24,
+    maxW: s.maxW ?? 1280,
+    minH: s.minH ?? 16,
+    maxH: s.maxH ?? 892
+  }
+}
+
+export function validarMedida(kind: string, w: number, h: number): string {
+  const s = KIND_SPEC[kind]
+  if (!s) return 'sem padrão definido para este kind'
+  const l = limitesDe(kind)
+  const dw = s.w
+  const dh = s.h
+  const okW = w >= l.minW && w <= l.maxW
+  const okH = h >= l.minH && h <= l.maxH
+  if (okW && okH) return `largura ${w} e altura ${h} dentro do padrão ${dw}×${dh} (limites ${l.minW}–${l.maxW} × ${l.minH}–${l.maxH})`
+  const partes: string[] = []
+  if (!okW) partes.push(`largura ${w} fora do padrão ${l.minW}–${l.maxW}`)
+  if (!okH) partes.push(`altura ${h} fora do padrão ${l.minH}–${l.maxH}`)
+  return partes.join('; ')
 }

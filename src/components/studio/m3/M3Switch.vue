@@ -6,7 +6,7 @@ defineProps<{ item: StudioItem; scheme: Scheme }>()
 </script>
 
 <template>
-  <span class="inline-flex h-12 items-center gap-3">
+  <span class="inline-flex h-12 items-center gap-3" :style="{ width: item.w ? item.w + 'px' : undefined }">
     <span
       class="flex h-8 w-[52px] items-center px-1"
       :style="{

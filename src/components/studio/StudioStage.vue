@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { paletteOf } from './m3/theme'
+import { limitesDe, specOf } from './m3/tokens'
 import M3Node from './m3/M3Node.vue'
 
 const studio = useStudio()
@@ -160,6 +161,64 @@ function grupoDe(itemId: string) {
   return studio.doc.groups.find((g) => g.items.some((i) => i.id === itemId))
 }
 
+function tamanhoDe(id: string): { w: number; h: number } {
+  const it = studio.itemPorId(id)
+  const spec = it ? specOf(it.kind) : undefined
+  const w = it?.w ?? it?.size ?? spec?.w ?? 180
+  const h = it?.h ?? (it?.kind === 'button' || it?.kind === 'chip' ? 40 : spec?.h ?? 48)
+  return { w, h }
+}
+
+// SizeHandles: 8 alças (cantos+lados) na part selecionada
+const resizeBase = ref<{ id: string; x: number; y: number; w: number; h: number } | null>(null)
+
+function onResizeStart(id: string, dir: string, ev: PointerEvent) {
+  ev.stopPropagation()
+  ev.preventDefault()
+  const it = studio.itemPorId(id)
+  if (!it) return
+  studio.pushHistory()
+  const t = tamanhoDe(id)
+  resizeBase.value = { id, x: ev.clientX, y: ev.clientY, w: t.w, h: t.h }
+  ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
+  const move = (m: PointerEvent) => {
+    const b = resizeBase.value
+    if (!b) return
+    const semSnap = m.ctrlKey
+    const dx = (m.clientX - b.x) / studio.zoom
+    const dy = (m.clientY - b.y) / studio.zoom
+    let nw = b.w
+    let nh = b.h
+    if (dir.includes('e')) nw = b.w + dx
+    if (dir.includes('s')) nh = b.h + dy
+    if (dir.includes('w')) nw = b.w - dx
+    if (dir.includes('n')) nh = b.h - dy
+    const lim = limitesDe(it.kind)
+    nw = Math.min(lim.maxW, Math.max(lim.minW, snap(nw, semSnap)))
+    nh = Math.min(lim.maxH, Math.max(lim.minH, snap(nh, semSnap)))
+    studio.redimensionarItem(id, Math.round(nw), Math.round(nh))
+  }
+  const up = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    resizeBase.value = null
+    studio.persist()
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+}
+
+const ALCAS: { dir: string; cursor: string; pos: string }[] = [
+  { dir: 'nw', cursor: 'nwse-resize', pos: 'left:-5px;top:-5px' },
+  { dir: 'n', cursor: 'ns-resize', pos: 'left:50%;top:-5px;transform:translateX(-50%)' },
+  { dir: 'ne', cursor: 'nesw-resize', pos: 'right:-5px;top:-5px' },
+  { dir: 'e', cursor: 'ew-resize', pos: 'right:-5px;top:50%;transform:translateY(-50%)' },
+  { dir: 'se', cursor: 'nwse-resize', pos: 'right:-5px;bottom:-5px' },
+  { dir: 's', cursor: 'ns-resize', pos: 'left:50%;bottom:-5px;transform:translateX(-50%)' },
+  { dir: 'sw', cursor: 'nesw-resize', pos: 'left:-5px;bottom:-5px' },
+  { dir: 'w', cursor: 'ew-resize', pos: 'left:-5px;top:50%;transform:translateY(-50%)' }
+]
+
 function onDrop(ev: DragEvent) {
   const kind = ev.dataTransfer?.getData('text/studio-kind')
   if (!kind) return
@@ -290,6 +349,18 @@ defineExpose({ alternarPreview })
           >
             <M3Node :item="it" :scheme="scheme" :selecionado="studio.selecionados.includes(it.id)" />
           </div>
+          <template v-if="studio.selecionados.includes(it.id) && modo !== 'preview'">
+            <span
+              v-for="a in ALCAS"
+              :key="a.dir"
+              role="separator"
+              :aria-label="`Redimensionar ${a.dir}`"
+              :title="`Redimensionar (${a.dir}) — Ctrl desliga snap`"
+              class="absolute z-10 h-[10px] w-[10px] rounded-sm border-2 border-nexo-primary bg-white"
+              :style="`${a.pos};cursor:${a.cursor}`"
+              @pointerdown="onResizeStart(it.id, a.dir, $event)"
+            />
+          </template>
         </div>
       </template>
       <g v-if="false" />
