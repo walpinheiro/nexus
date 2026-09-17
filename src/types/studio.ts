@@ -58,6 +58,8 @@ export interface StudioGroup {
   y: number
   axis: 'x' | 'y'
   items: StudioItem[]
+  order: number
+  locked?: boolean
 }
 
 export interface StudioFrame {
@@ -67,6 +69,7 @@ export interface StudioFrame {
   y: number
   w: number
   h: number
+  preset?: 'phone' | 'desktop'
   note?: string
   bg?: string
   swipe?: { left?: string; right?: string; up?: string; down?: string } | boolean

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { StudioDoc, StudioFrame, StudioItem } from '@/types/studio'
+import type { StudioDoc, StudioFrame, StudioGroup, StudioItem } from '@/types/studio'
 
 const KEY = 'nexo.v1.studio'
 
@@ -13,45 +13,49 @@ function seedDoc(): StudioDoc {
     title: 'Cobranças Pix',
     brief: 'Protótipo de telas do pagamento por Pix (espelha as 4 features NEXO).',
     frame: 'phone',
-    platform: 'android',
+    platform: 'web',
     paletteKey: 'blue',
     theme: { palette: 'blue', scheme: 'blue', type: 'expressive', radius: 'rounded' },
     frames: [
-      { id: 'pagpix', name: 'Pagamento Pix', x: 0, y: 0, w: 412, h: 892, note: 'Pagar fatura com Pix; abre Checkout Web.' },
-      { id: 'checkout', name: 'Checkout Web', x: 492, y: 0, w: 1280, h: 800, note: 'Criar cobrança Pix + status de pagamento.' }
+      { id: 'checkout', name: 'Checkout Web', x: 0, y: 0, w: 1280, h: 800, preset: 'desktop', note: 'Criar cobrança Pix + status de pagamento.' },
+      { id: 'pagpix', name: 'Pagamento Pix', x: 1400, y: 0, w: 412, h: 892, preset: 'phone', note: 'Pagar fatura com Pix; abre Checkout Web.' }
     ],
     groups: [
       {
+        id: 'g-web',
+        x: 28,
+        y: 60,
+        axis: 'x',
+        order: 0,
+        items: [{ id: 't1', kind: 'text', label: 'Criar cobrança Pix', size: 28, x: 28, y: 60 }]
+      },
+      {
         id: 'g-bar',
-        x: 0,
+        x: 1400,
         y: 0,
         axis: 'x',
-        items: [{ id: 'bar1', kind: 'topAppBar', label: 'Pagamento Pix', icon: 'menu', variant: 'filled', x: 0, y: 0 }]
+        order: 1,
+        items: [{ id: 'bar1', kind: 'topAppBar', label: 'Pagamento Pix', icon: 'menu', variant: 'filled', x: 1400, y: 0 }]
       },
       {
         id: 'g-list',
-        x: 16,
+        x: 1416,
         y: 112,
         axis: 'y',
+        order: 2,
         items: [
-          { id: 'c1', kind: 'card', label: 'Pagar fatura com Pix', supporting: 'Pix de forma simples e segura.', variant: 'filled', action: { to: 'checkout', transition: 'slide' }, x: 16, y: 112 },
-          { id: 'c2', kind: 'card', label: 'Confirmação idempotente', supporting: 'Sem transações duplicadas.', variant: 'filled', x: 16, y: 350 },
-          { id: 'c3', kind: 'card', label: 'Status de pagamento', supporting: 'Exibe o status da cobrança.', variant: 'outlined', x: 16, y: 588 }
+          { id: 'c1', kind: 'card', label: 'Pagar fatura com Pix', supporting: 'Pix de forma simples e segura.', variant: 'filled', action: { to: 'checkout', transition: 'slide' }, x: 1416, y: 112 },
+          { id: 'c2', kind: 'card', label: 'Confirmação idempotente', supporting: 'Sem transações duplicadas.', variant: 'filled', x: 1416, y: 350 },
+          { id: 'c3', kind: 'card', label: 'Status de pagamento', supporting: 'Exibe o status da cobrança.', variant: 'outlined', x: 1416, y: 588 }
         ]
       },
       {
         id: 'g-pay',
-        x: 16,
+        x: 1416,
         y: 700,
         axis: 'x',
-        items: [{ id: 'b1', kind: 'button', label: 'Pagar com Pix', variant: 'filled', size: 380, action: { to: 'checkout', transition: 'slide' }, note: 'Cria cobrança e abre o checkout.', x: 16, y: 700 }]
-      },
-      {
-        id: 'g-web',
-        x: 492,
-        y: 0,
-        axis: 'x',
-        items: [{ id: 't1', kind: 'text', label: 'Criar cobrança Pix', size: 28, x: 520, y: 60 }]
+        order: 3,
+        items: [{ id: 'b1', kind: 'button', label: 'Pagar com Pix', variant: 'filled', size: 380, action: { to: 'checkout', transition: 'slide' }, note: 'Cria cobrança e abre o checkout.', x: 1416, y: 700 }]
       }
     ]
   }
@@ -67,7 +71,7 @@ function load(): { doc: StudioDoc; screenId: string } {
   } catch {
     // usa seed
   }
-  return { doc: seedDoc(), screenId: 'pagpix' }
+  return { doc: seedDoc(), screenId: 'checkout' }
 }
 
 export interface StudioSnapshot {
@@ -141,11 +145,91 @@ export const useStudio = defineStore('studio', () => {
   function adicionarFrame(w: number, h: number, nome: string): StudioFrame {
     pushHistory()
     const maxX = doc.value.frames.reduce((m, f) => Math.max(m, f.x + f.w), 0)
-    const f: StudioFrame = { id: rid('fr'), name: nome, x: maxX + 80, y: 0, w, h }
+    const preset = w >= 1280 ? 'desktop' : 'phone'
+    const f: StudioFrame = { id: rid('fr'), name: nome, x: maxX + 120, y: 0, w, h, preset }
     doc.value.frames.push(f)
     screenId.value = f.id
     persist()
     return f
+  }
+
+  function setFramePreset(id: string, preset: 'phone' | 'desktop'): void {
+    const f = doc.value.frames.find((x) => x.id === id)
+    if (!f) return
+    pushHistory()
+    f.preset = preset
+    if (preset === 'phone') {
+      f.w = 412
+      f.h = 892
+    } else {
+      f.w = 1280
+      f.h = 800
+    }
+    persist()
+  }
+
+  function gruposOrdenados(): StudioGroup[] {
+    return [...doc.value.groups].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  }
+
+  function reordenarGrupos(idsTopFirst: string[]): void {
+    pushHistory()
+    const n = idsTopFirst.length
+    idsTopFirst.forEach((id, i) => {
+      const g = doc.value.groups.find((x) => x.id === id)
+      if (g) g.order = n - 1 - i
+    })
+    persist()
+  }
+
+  function trazerFrente(id: string): void {
+    const gs = gruposOrdenados()
+    const i = gs.findIndex((g) => g.id === id)
+    if (i < 0 || i === gs.length - 1) return
+    pushHistory()
+    const a = doc.value.groups.find((g) => g.id === id)!
+    const b = doc.value.groups.find((g) => g.id === gs[i + 1].id)!
+    const t = a.order
+    a.order = b.order
+    b.order = t
+    persist()
+  }
+
+  function enviarTras(id: string): void {
+    const gs = gruposOrdenados()
+    const i = gs.findIndex((g) => g.id === id)
+    if (i <= 0) return
+    pushHistory()
+    const a = doc.value.groups.find((g) => g.id === id)!
+    const b = doc.value.groups.find((g) => g.id === gs[i - 1].id)!
+    const t = a.order
+    a.order = b.order
+    b.order = t
+    persist()
+  }
+
+  function paraFrente(id: string): void {
+    pushHistory()
+    const max = Math.max(...doc.value.groups.map((g) => g.order ?? 0))
+    const g = doc.value.groups.find((x) => x.id === id)
+    if (g) g.order = max + 1
+    persist()
+  }
+
+  function paraTras(id: string): void {
+    pushHistory()
+    const min = Math.min(...doc.value.groups.map((g) => g.order ?? 0))
+    const g = doc.value.groups.find((x) => x.id === id)
+    if (g) g.order = min - 1
+    persist()
+  }
+
+  function alternarLock(id: string): void {
+    const g = doc.value.groups.find((x) => x.id === id)
+    if (!g) return
+    pushHistory()
+    g.locked = !g.locked
+    persist()
   }
 
   function renomearFrame(id: string, nome: string): void {
@@ -171,6 +255,7 @@ export const useStudio = defineStore('studio', () => {
         x: g.x + dx,
         y: g.y,
         axis: g.axis,
+        order: Math.max(...doc.value.groups.map((x) => x.order ?? 0)) + 1,
         items: dentro.map((i) => ({ ...JSON.parse(JSON.stringify(i)), id: rid('it'), x: i.x + dx }))
       })
     }
@@ -196,7 +281,8 @@ export const useStudio = defineStore('studio', () => {
   function criarItem(kind: string, x: number, y: number, label?: string): StudioItem {
     pushHistory()
     const it: StudioItem = { id: rid('it'), kind, label: label ?? rotuloDefault(kind), icon: null, variant: 'filled', x: Math.round(x), y: Math.round(y) }
-    doc.value.groups.push({ id: rid('g'), x: it.x, y: it.y, axis: 'x', items: [it] })
+    const max = doc.value.groups.reduce((m, g) => Math.max(m, g.order ?? 0), -1)
+    doc.value.groups.push({ id: rid('g'), x: it.x, y: it.y, axis: 'x', order: max + 1, items: [it] })
     selecionados.value = [it.id]
     persist()
     return it
@@ -311,6 +397,14 @@ export const useStudio = defineStore('studio', () => {
     todosItens,
     itemPorId,
     adicionarFrame,
+    setFramePreset,
+    gruposOrdenados,
+    reordenarGrupos,
+    trazerFrente,
+    enviarTras,
+    paraFrente,
+    paraTras,
+    alternarLock,
     renomearFrame,
     duplicarFrame,
     removerFrame,
