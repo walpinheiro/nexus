@@ -5,6 +5,7 @@ import { paletteOf } from './m3/theme'
 import M3Node from './m3/M3Node.vue'
 
 const studio = useStudio()
+const emit = defineEmits<{ (e: 'preview'): void }>()
 const caixa = ref<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 let panAtivo = false
 let panStart = { x: 0, y: 0, px: 0, py: 0 }
@@ -14,10 +15,15 @@ const historico = ref<string[]>([])
 const guides = ref<{ v: number[]; h: number[] }>({ v: [], h: [] })
 
 const f = computed(() => studio.frameAtual())
+const itensDaTela = (fid: string) =>
+  studio.doc.groups.flatMap((g) => g.items).filter((i) => {
+    const fr = studio.doc.frames.find((x) => x.id === fid)
+    return fr ? i.x >= fr.x && i.x < fr.x + fr.w : false
+  })
 const itens = computed(() => {
   const fr = f.value
   if (!fr) return []
-  return studio.doc.groups.flatMap((g) => g.items).filter((i) => i.x >= fr.x && i.x < fr.x + fr.w)
+  return itensDaTela(fr.id)
 })
 
 const transform = computed(() => `translate(${studio.pan[0]}px, ${studio.pan[1]}px) scale(${studio.zoom})`)
@@ -150,6 +156,10 @@ function onMoverParte(id: string, ev: PointerEvent) {
   window.addEventListener('pointerup', up)
 }
 
+function grupoDe(itemId: string) {
+  return studio.doc.groups.find((g) => g.items.some((i) => i.id === itemId))
+}
+
 function onDrop(ev: DragEvent) {
   const kind = ev.dataTransfer?.getData('text/studio-kind')
   if (!kind) return
@@ -197,9 +207,7 @@ function onKeydown(ev: KeyboardEvent) {
 }
 
 function alternarPreview() {
-  modo.value = modo.value === 'preview' ? 'edit' : 'preview'
-  studio.preview = modo.value === 'preview'
-  historico.value = []
+  emit('preview')
 }
 
 function voltar() {
@@ -241,37 +249,49 @@ defineExpose({ alternarPreview })
       @dragover.prevent
       @drop="onDrop"
     >
-      <div
-        v-if="f"
-        class="absolute rounded-card border-2 bg-white"
-        :style="{ left: f.x + 'px', top: f.y + 'px', width: f.w + 'px', height: f.h + 'px', borderColor: modo === 'preview' ? '#15803D' : '#CBD5E1' }"
-      >
-        <p class="p-2 text-xs font-semibold text-nexo-muted">{{ f.name }} · {{ f.w }}×{{ f.h }}</p>
-      </div>
-      <div
-        v-for="it in itens"
-        :key="it.id"
-        data-part
-        role="button"
-        tabindex="0"
-        :aria-label="`${it.kind} ${it.label ?? ''}`"
-        class="absolute cursor-move"
-        :style="{ left: it.x + 'px', top: it.y + 'px' }"
-        @pointerdown="onMoverParte(it.id, $event)"
-        @click="selecionar(it.id, $event)"
-        @dblclick="$event.stopPropagation()"
-        @keydown.enter="selecionar(it.id, $event as unknown as MouseEvent)"
-      >
+      <template v-for="fr in studio.doc.frames" :key="fr.id">
         <div
-          :class="[
-            'm3-ripple',
-            modo === 'preview' && transicaoAtual !== 'none' ? `m3-trans-${transicaoAtual}` : '',
-            studio.selecionados.includes(it.id) ? 'm3-select-ring' : ''
-          ]"
+          class="absolute rounded-card border-2 bg-white"
+          :style="{ left: fr.x + 'px', top: fr.y + 'px', width: fr.w + 'px', height: fr.h + 'px', borderColor: fr.id === studio.screenId ? '#1D4ED8' : '#CBD5E1' }"
+          @pointerdown.stop="studio.screenId = fr.id; studio.persist()"
         >
-          <M3Node :item="it" :scheme="scheme" :selecionado="studio.selecionados.includes(it.id)" />
+          <p class="flex items-center gap-2 p-2 text-xs font-semibold text-nexo-muted">
+            {{ fr.name }} · {{ fr.w }}×{{ fr.h }}
+            <button
+              type="button"
+              class="rounded-btn border border-nexo-border bg-white px-1.5 py-0.5 text-[10px]"
+              :title="fr.w >= 1280 ? 'Trocar para phone 412x892' : 'Trocar para desktop 1280x800'"
+              @click.stop="studio.setFramePreset(fr.id, fr.w >= 1280 ? 'phone' : 'desktop')"
+            >
+              {{ fr.w >= 1280 ? 'desktop → phone' : 'phone → desktop' }}
+            </button>
+          </p>
         </div>
-      </div>
+        <div
+          v-for="it in itensDaTela(fr.id).sort((a, b) => (grupoDe(a.id)?.order ?? 0) - (grupoDe(b.id)?.order ?? 0))"
+          :key="it.id"
+          data-part
+          role="button"
+          tabindex="0"
+          :aria-label="`${it.kind} ${it.label ?? ''}`"
+          class="absolute cursor-move"
+          :style="{ left: it.x + 'px', top: it.y + 'px', zIndex: (grupoDe(it.id)?.order ?? 0) + 10 }"
+          @pointerdown="onMoverParte(it.id, $event)"
+          @click="selecionar(it.id, $event)"
+          @dblclick="$event.stopPropagation()"
+          @keydown.enter="selecionar(it.id, $event as unknown as MouseEvent)"
+        >
+          <div
+            :class="[
+              'm3-ripple',
+              modo === 'preview' && transicaoAtual !== 'none' ? `m3-trans-${transicaoAtual}` : '',
+              studio.selecionados.includes(it.id) ? 'm3-select-ring' : ''
+            ]"
+          >
+            <M3Node :item="it" :scheme="scheme" :selecionado="studio.selecionados.includes(it.id)" />
+          </div>
+        </div>
+      </template>
       <g v-if="false" />
       <div
         v-for="gx in guides.v"

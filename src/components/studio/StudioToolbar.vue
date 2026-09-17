@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { useGraph } from '@/stores/useGraph'
 import { encodeDoc } from '@/utils/studioShare'
 import { gerarPromptStudio } from '@/utils/studioPrompt'
+
+const emit = defineEmits<{ (e: 'preview'): void }>()
 
 const studio = useStudio()
 const graph = useGraph()
@@ -79,18 +81,29 @@ async function copiarPrompt() {
   await navigator.clipboard.writeText(promptTexto.value)
   flash('Prompt copiado.')
 }
-
-const origemNo = computed(() => graph.state.selecionadoId ?? '—')
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-1 border-b border-nexo-border bg-white p-2 text-xs">
-    <strong class="mr-1">Studio</strong>
-    <span class="text-nexo-muted">origem: {{ origemNo }}</span>
-    <button type="button" title="Organizar (tidy)" class="rounded-btn border border-nexo-border px-2 py-1" @click="studio.tidy()">Tidy</button>
-    <button type="button" title="Desfazer (Ctrl+Z)" class="rounded-btn border border-nexo-border px-2 py-1" @click="studio.undo()">↩</button>
-    <button type="button" title="Refazer (Ctrl+Shift+Z)" class="rounded-btn border border-nexo-border px-2 py-1" @click="studio.redo()">↪</button>
-    <button type="button" title="Ajustar zoom (0)" class="rounded-btn border border-nexo-border px-2 py-1" @click="studio.zoom = 0.7">Fit</button>
+  <div
+    class="flex flex-wrap items-center gap-1 p-1.5 text-xs shadow-card"
+    :style="{ background: '#F7F2FA', borderRadius: '28px', border: '1px solid #E2E8F0' }"
+    role="toolbar"
+    aria-label="Toolbar do Studio"
+  >
+    <span class="flex items-center gap-1" role="group" aria-label="Modo">
+      <button type="button" title="Selecionar (V)" aria-label="Selecionar" class="rounded-btn px-2 py-1 font-semibold text-nexo-primary">V</button>
+      <button type="button" title="Mover (H)" aria-label="Mover" class="rounded-btn px-2 py-1">H</button>
+    </span>
+    <span class="flex items-center gap-1" role="group" aria-label="Zoom">
+      <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="rounded-btn px-1.5 py-1" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
+      <span class="min-w-12 text-center" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
+      <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="rounded-btn px-1.5 py-1" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
+      <button type="button" title="Ajustar (0)" class="rounded-btn px-2 py-1" @click="studio.zoom = 0.7">Fit</button>
+    </span>
+    <button type="button" title="Organizar (tidy)" class="rounded-btn px-2 py-1" @click="studio.tidy()">Tidy</button>
+    <button type="button" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" class="rounded-btn px-2 py-1" @click="studio.undo()">Desfazer</button>
+    <button type="button" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" class="rounded-btn px-2 py-1" @click="studio.redo()">Refazer</button>
+    <button type="button" title="Preview modal (P)" aria-label="Abrir preview" class="rounded-btn bg-nexo-primary px-3 py-1 font-semibold text-white" @click="emit('preview')">Preview</button>
     <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="abrirPrompt()">Prompt</button>
     <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="copiarShare()">Share-link</button>
     <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="copiarM3E()">Link m3e</button>

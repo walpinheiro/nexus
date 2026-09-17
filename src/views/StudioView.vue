@@ -5,10 +5,16 @@ import PartsPalette from '@/components/studio/PartsPalette.vue'
 import StudioStage from '@/components/studio/StudioStage.vue'
 import StudioInspector from '@/components/studio/StudioInspector.vue'
 import StudioToolbar from '@/components/studio/StudioToolbar.vue'
+import LayersPanel from '@/components/studio/LayersPanel.vue'
+import FramePanel from '@/components/studio/FramePanel.vue'
+import PreviewModal from '@/components/studio/PreviewModal.vue'
 
 const studio = useStudio()
 const novoNome = ref('')
 const renomeando = ref('')
+const abaEsq = ref<'parts' | 'layers'>('parts')
+const abaDir = ref<'edit' | 'prompt'>('edit')
+const previewAberto = ref(false)
 
 function adicionar(tipo: 'phone' | 'desktop') {
   if (tipo === 'phone') studio.adicionarFrame(412, 892, novoNome.value || 'Nova tela')
@@ -17,17 +23,45 @@ function adicionar(tipo: 'phone' | 'desktop') {
 }
 
 function confirmarRemocao(id: string) {
-  if (confirm('Remover esta tela? Actions para ela viram "back".')) studio.removerFrame(id)
+  if (window.confirm('Remover esta tela? Actions para ela viram "back".')) studio.removerFrame(id)
+}
+
+function abrirPreview() {
+  previewAberto.value = true
 }
 </script>
 
 <template>
-  <div class="flex h-full min-h-[560px] flex-col">
-    <StudioToolbar />
-    <div class="flex min-h-0 flex-1">
-      <PartsPalette />
-      <StudioStage class="m-2" />
-      <StudioInspector />
+  <div class="relative flex h-full min-h-[560px] flex-col">
+    <div class="pointer-events-none absolute left-0 right-0 top-2 z-30 flex justify-center">
+      <div class="pointer-events-auto" style="border-radius: 28px">
+        <StudioToolbar @preview="abrirPreview()" />
+      </div>
+    </div>
+    <div class="flex min-h-0 flex-1 pt-14">
+      <aside class="flex w-60 shrink-0 flex-col border-r border-nexo-border bg-white" aria-label="Paleta e layers">
+        <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas da esquerda">
+          <button type="button" role="tab" :aria-selected="abaEsq === 'parts'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'parts' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaEsq = 'parts'">Parts</button>
+          <button type="button" role="tab" :aria-selected="abaEsq === 'layers'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'layers' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaEsq = 'layers'">Layers</button>
+        </div>
+        <PartsPalette v-if="abaEsq === 'parts'" class="min-h-0 flex-1 border-r-0" />
+        <LayersPanel v-else class="min-h-0 flex-1" />
+      </aside>
+      <StudioStage class="m-2" @preview="abrirPreview()" />
+      <aside class="flex w-72 shrink-0 flex-col border-l border-nexo-border bg-white" aria-label="Painel direito">
+        <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas da direita">
+          <button type="button" role="tab" :aria-selected="abaDir === 'edit'" class="flex-1 rounded-btn px-2 py-1" :class="abaDir === 'edit' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaDir = 'edit'">Editar</button>
+          <button type="button" role="tab" :aria-selected="abaDir === 'prompt'" class="flex-1 rounded-btn px-2 py-1" :class="abaDir === 'prompt' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaDir = 'prompt'">Prompt</button>
+        </div>
+        <div v-if="abaDir === 'edit'" class="min-h-0 flex-1 overflow-auto">
+          <FramePanel />
+          <StudioInspector />
+        </div>
+        <div v-else class="min-h-0 flex-1 overflow-auto p-3 text-xs">
+          <p class="font-semibold">Prompt da tela atual</p>
+          <p class="mt-1 text-nexo-muted">Use o botão Prompt na toolbar para o design inteiro ou 1 tela (editável antes de copiar).</p>
+        </div>
+      </aside>
     </div>
     <div class="flex items-center gap-2 overflow-auto border-t border-nexo-border bg-white p-2 text-xs" aria-label="Telas">
       <button
@@ -42,8 +76,8 @@ function confirmarRemocao(id: string) {
       </button>
       <span class="flex shrink-0 gap-1">
         <input v-model="novoNome" placeholder="Nome…" aria-label="Nome da nova tela" class="w-28 rounded-btn border border-nexo-border px-2 py-1" />
+        <button type="button" title="Adicionar tela desktop 1280x800 (padrão)" class="rounded-btn border border-nexo-primary px-2 py-1 font-semibold text-nexo-primary" @click="adicionar('desktop')">+Web</button>
         <button type="button" title="Adicionar tela phone 412x892" class="rounded-btn border border-nexo-border px-2 py-1" @click="adicionar('phone')">+Phone</button>
-        <button type="button" title="Adicionar tela desktop 1280x800" class="rounded-btn border border-nexo-border px-2 py-1" @click="adicionar('desktop')">+Web</button>
       </span>
       <span class="ml-auto flex shrink-0 gap-1">
         <button
@@ -54,7 +88,7 @@ function confirmarRemocao(id: string) {
           :title="`Renomear/duplicar/remover ${fr.name}`"
           @click="renomeando = renomeando === fr.id ? '' : fr.id"
         >
-          ✎ {{ fr.name }}
+          Editar {{ fr.name }}
         </button>
       </span>
     </div>
@@ -70,5 +104,6 @@ function confirmarRemocao(id: string) {
       <button type="button" class="rounded-btn border border-nexo-blocked-border px-2 py-1 text-nexo-blocked" @click="renomeando && confirmarRemocao(renomeando); renomeando = ''">Remover</button>
       <button type="button" class="underline" @click="renomeando = ''">fechar</button>
     </div>
+    <PreviewModal v-if="previewAberto" :inicio-id="studio.screenId" @fechar="previewAberto = false" />
   </div>
 </template>

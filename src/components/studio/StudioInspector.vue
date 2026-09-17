@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { specOf, variantsOf } from './m3/tokens'
-import type { StudioTab } from '@/types/studio'
+import TapStage from './TapStage.vue'
+import type { StudioTab, StudioTransition } from '@/types/studio'
 
 const studio = useStudio()
 const item = computed(() => studio.itemPorId(studio.selecionados[0] ?? ''))
@@ -26,6 +27,11 @@ function setAbas(valor: string) {
       .filter(Boolean)
       .map((label) => ({ label }))
   )
+}
+
+function onTapChange(v: { to: string; transition: StudioTransition }) {
+  if (!v.to) set('action', undefined)
+  else set('action', { to: v.to, transition: v.transition })
 }
 </script>
 
@@ -57,6 +63,7 @@ function setAbas(valor: string) {
           <option value="slide">slide</option><option value="slideLeft">slideLeft</option><option value="slideUp">slideUp</option><option value="slideDown">slideDown</option><option value="fade">fade</option><option value="expand">expand</option><option value="none">none</option>
         </select>
       </label>
+      <TapStage v-if="spec?.hasAction ?? true" :item-id="item.id" @change="onTapChange" />
       <label v-if="spec?.hasChecked" class="flex items-center gap-2">Checked<input type="checkbox" :checked="!!item.checked" @change="set('checked', ($event.target as HTMLInputElement).checked)" /></label>
       <label v-if="spec?.hasValue" class="block">Value (0–100)<input type="number" :value="item.value ?? 50" min="0" max="100" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1" @change="set('value', Number(($event.target as HTMLInputElement).value))" /></label>
       <div class="flex gap-1">
