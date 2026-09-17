@@ -1,0 +1,324 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import type { StudioDoc, StudioFrame, StudioItem } from '@/types/studio'
+
+const KEY = 'nexo.v1.studio'
+
+function rid(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+}
+
+function seedDoc(): StudioDoc {
+  return {
+    title: 'Cobranças Pix',
+    brief: 'Protótipo de telas do pagamento por Pix (espelha as 4 features NEXO).',
+    frame: 'phone',
+    platform: 'android',
+    paletteKey: 'blue',
+    theme: { palette: 'blue', scheme: 'blue', type: 'expressive', radius: 'rounded' },
+    frames: [
+      { id: 'pagpix', name: 'Pagamento Pix', x: 0, y: 0, w: 412, h: 892, note: 'Pagar fatura com Pix; abre Checkout Web.' },
+      { id: 'checkout', name: 'Checkout Web', x: 492, y: 0, w: 1280, h: 800, note: 'Criar cobrança Pix + status de pagamento.' }
+    ],
+    groups: [
+      {
+        id: 'g-bar',
+        x: 0,
+        y: 0,
+        axis: 'x',
+        items: [{ id: 'bar1', kind: 'topAppBar', label: 'Pagamento Pix', icon: 'menu', variant: 'filled', x: 0, y: 0 }]
+      },
+      {
+        id: 'g-list',
+        x: 16,
+        y: 112,
+        axis: 'y',
+        items: [
+          { id: 'c1', kind: 'card', label: 'Pagar fatura com Pix', supporting: 'Pix de forma simples e segura.', variant: 'filled', action: { to: 'checkout', transition: 'slide' }, x: 16, y: 112 },
+          { id: 'c2', kind: 'card', label: 'Confirmação idempotente', supporting: 'Sem transações duplicadas.', variant: 'filled', x: 16, y: 350 },
+          { id: 'c3', kind: 'card', label: 'Status de pagamento', supporting: 'Exibe o status da cobrança.', variant: 'outlined', x: 16, y: 588 }
+        ]
+      },
+      {
+        id: 'g-pay',
+        x: 16,
+        y: 700,
+        axis: 'x',
+        items: [{ id: 'b1', kind: 'button', label: 'Pagar com Pix', variant: 'filled', size: 380, action: { to: 'checkout', transition: 'slide' }, note: 'Cria cobrança e abre o checkout.', x: 16, y: 700 }]
+      },
+      {
+        id: 'g-web',
+        x: 492,
+        y: 0,
+        axis: 'x',
+        items: [{ id: 't1', kind: 'text', label: 'Criar cobrança Pix', size: 28, x: 520, y: 60 }]
+      }
+    ]
+  }
+}
+
+function load(): { doc: StudioDoc; screenId: string } {
+  try {
+    const raw = localStorage.getItem(KEY)
+    if (raw) {
+      const s = JSON.parse(raw) as { doc: StudioDoc; screenId: string }
+      if (s.doc && Array.isArray(s.doc.frames)) return s
+    }
+  } catch {
+    // usa seed
+  }
+  return { doc: seedDoc(), screenId: 'pagpix' }
+}
+
+export interface StudioSnapshot {
+  doc: StudioDoc
+  screenId: string
+}
+
+export const useStudio = defineStore('studio', () => {
+  const loaded = load()
+  const doc = ref<StudioDoc>(loaded.doc)
+  const screenId = ref<string>(loaded.screenId)
+  const selecionados = ref<string[]>([])
+  const preview = ref(false)
+  const zoom = ref(0.7)
+  const pan = ref<[number, number]>([20, 20])
+  const undoStack = ref<StudioSnapshot[]>([])
+  const redoStack = ref<StudioSnapshot[]>([])
+
+  function persist() {
+    localStorage.setItem(KEY, JSON.stringify({ doc: doc.value, screenId: screenId.value }))
+  }
+
+  if (localStorage.getItem(KEY) == null) persist()
+
+  function snap(): StudioSnapshot {
+    return {
+      doc: JSON.parse(JSON.stringify(doc.value)) as StudioDoc,
+      screenId: screenId.value
+    }
+  }
+
+  function pushHistory() {
+    undoStack.value.push(snap())
+    if (undoStack.value.length > 60) undoStack.value.shift()
+    redoStack.value = []
+  }
+
+  function undo(): boolean {
+    const p = undoStack.value.pop()
+    if (!p) return false
+    redoStack.value.push(snap())
+    doc.value = p.doc
+    screenId.value = p.screenId
+    selecionados.value = []
+    persist()
+    return true
+  }
+
+  function redo(): boolean {
+    const n = redoStack.value.pop()
+    if (!n) return false
+    undoStack.value.push(snap())
+    doc.value = n.doc
+    screenId.value = n.screenId
+    persist()
+    return true
+  }
+
+  function frameAtual(): StudioFrame | undefined {
+    return doc.value.frames.find((f) => f.id === screenId.value)
+  }
+
+  function todosItens(): StudioItem[] {
+    return doc.value.groups.flatMap((g) => g.items)
+  }
+
+  function itemPorId(id: string): StudioItem | undefined {
+    return todosItens().find((i) => i.id === id)
+  }
+
+  function adicionarFrame(w: number, h: number, nome: string): StudioFrame {
+    pushHistory()
+    const maxX = doc.value.frames.reduce((m, f) => Math.max(m, f.x + f.w), 0)
+    const f: StudioFrame = { id: rid('fr'), name: nome, x: maxX + 80, y: 0, w, h }
+    doc.value.frames.push(f)
+    screenId.value = f.id
+    persist()
+    return f
+  }
+
+  function renomearFrame(id: string, nome: string): void {
+    pushHistory()
+    const f = doc.value.frames.find((x) => x.id === id)
+    if (f) f.name = nome
+    persist()
+  }
+
+  function duplicarFrame(id: string): void {
+    const f = doc.value.frames.find((x) => x.id === id)
+    if (!f) return
+    pushHistory()
+    const maxX = doc.value.frames.reduce((m, x) => Math.max(m, x.x + x.w), 0)
+    const nid = rid('fr')
+    const dx = maxX + 80 - f.x
+    doc.value.frames.push({ ...f, id: nid, name: `${f.name} (cópia)`, x: f.x + dx })
+    for (const g of doc.value.groups) {
+      const dentro = g.items.filter((i) => i.x >= f.x && i.x < f.x + f.w)
+      if (dentro.length === 0) continue
+      doc.value.groups.push({
+        id: rid('g'),
+        x: g.x + dx,
+        y: g.y,
+        axis: g.axis,
+        items: dentro.map((i) => ({ ...JSON.parse(JSON.stringify(i)), id: rid('it'), x: i.x + dx }))
+      })
+    }
+    screenId.value = nid
+    persist()
+  }
+
+  function removerFrame(id: string): boolean {
+    if (doc.value.frames.length <= 1) return false
+    pushHistory()
+    doc.value.frames = doc.value.frames.filter((f) => f.id !== id)
+    for (const i of todosItens()) {
+      if (i.action?.to === id) {
+        i.action = { to: 'back', transition: 'none' }
+        i.note = `${i.note ?? ''} (destino removido)`.trim()
+      }
+    }
+    if (screenId.value === id) screenId.value = doc.value.frames[0].id
+    persist()
+    return true
+  }
+
+  function criarItem(kind: string, x: number, y: number, label?: string): StudioItem {
+    pushHistory()
+    const it: StudioItem = { id: rid('it'), kind, label: label ?? rotuloDefault(kind), icon: null, variant: 'filled', x: Math.round(x), y: Math.round(y) }
+    doc.value.groups.push({ id: rid('g'), x: it.x, y: it.y, axis: 'x', items: [it] })
+    selecionados.value = [it.id]
+    persist()
+    return it
+  }
+
+  function rotuloDefault(kind: string): string {
+    const mapa: Record<string, string> = {
+      button: 'Botão',
+      fab: '',
+      chip: 'Chip',
+      topAppBar: 'Título',
+      bottomNav: '',
+      tabs: '',
+      searchBar: 'Buscar',
+      card: 'Card',
+      listItem: 'Item',
+      dialog: 'Diálogo',
+      snackbar: 'Mensagem',
+      textField: 'Campo',
+      select: 'Opção',
+      switch: 'Alternar',
+      checkbox: 'Marcar',
+      radio: 'Opção',
+      slider: '',
+      text: 'Texto',
+      image: '',
+      box: '',
+      divider: '',
+      loadingIndicator: '',
+      navRail: '',
+      toolbar: '',
+      extendedFab: 'Ação'
+    }
+    return mapa[kind] ?? kind
+  }
+
+  function moverItens(ids: string[], dx: number, dy: number): void {
+    for (const id of ids) {
+      const it = itemPorId(id)
+      if (it) {
+        it.x = Math.round(it.x + dx)
+        it.y = Math.round(it.y + dy)
+      }
+    }
+    persist()
+  }
+
+  function removerItens(ids: string[]): void {
+    if (ids.length === 0) return
+    pushHistory()
+    const set = new Set(ids)
+    for (const g of doc.value.groups) g.items = g.items.filter((i) => !set.has(i.id))
+    doc.value.groups = doc.value.groups.filter((g) => g.items.length > 0)
+    selecionados.value = []
+    persist()
+  }
+
+  function duplicarItens(ids: string[]): void {
+    if (ids.length === 0) return
+    pushHistory()
+    const novos: string[] = []
+    for (const g of doc.value.groups) {
+      const cop = g.items
+        .filter((i) => ids.includes(i.id))
+        .map((i) => ({ ...JSON.parse(JSON.stringify(i)), id: rid('it'), x: i.x + 24, y: i.y + 24 }) as StudioItem)
+      g.items.push(...cop)
+      novos.push(...cop.map((c) => c.id))
+    }
+    selecionados.value = novos
+    persist()
+  }
+
+  function tidy(): void {
+    pushHistory()
+    const f = frameAtual()
+    if (!f) return
+    const itens = todosItens()
+      .filter((i) => i.x >= f.x && i.x < f.x + f.w)
+      .sort((a, b) => a.y - b.y || a.x - b.x)
+    let y = f.y + 110
+    for (const it of itens) {
+      if (it.kind === 'topAppBar' || it.kind === 'bottomNav') continue
+      it.x = f.x + 16
+      it.y = y
+      y += 96
+    }
+    persist()
+  }
+
+  function importarDoc(novo: StudioDoc): void {
+    pushHistory()
+    doc.value = novo
+    screenId.value = novo.frames[0]?.id ?? screenId.value
+    selecionados.value = []
+    persist()
+  }
+
+  return {
+    doc,
+    screenId,
+    selecionados,
+    preview,
+    zoom,
+    pan,
+    undoStack,
+    redoStack,
+    persist,
+    pushHistory,
+    undo,
+    redo,
+    frameAtual,
+    todosItens,
+    itemPorId,
+    adicionarFrame,
+    renomearFrame,
+    duplicarFrame,
+    removerFrame,
+    criarItem,
+    moverItens,
+    removerItens,
+    duplicarItens,
+    tidy,
+    importarDoc
+  }
+})

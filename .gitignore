@@ -1,1 +1,4 @@
 blueprint-nexo.md
+node_modules/
+dist/
+*.local
