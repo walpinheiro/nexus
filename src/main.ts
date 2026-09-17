@@ -9,6 +9,7 @@ import { useGate } from '@/stores/useGate'
 import { useUsers } from '@/stores/useUsers'
 import { useUI } from '@/stores/useUI'
 import '@/assets/main.css'
+import '@/components/studio/m3/m3.css'
 
 const app = createApp(App)
 const pinia = createPinia()
