@@ -43,7 +43,7 @@ void scheme
         <option value="back">back</option>
         <option v-for="fr in studio.doc.frames" :key="fr.id" :value="fr.id">{{ fr.name }}</option>
       </select>
-      <div class="flex gap-1" role="group" aria-label="Transição">
+      <div class="flex gap-1 overflow-x-auto" role="group" aria-label="Transição">
         <button
           v-for="t in TRANSICOES"
           :key="t"

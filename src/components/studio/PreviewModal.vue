@@ -16,7 +16,16 @@ const scheme = computed(() => paletteOf(studio.doc.paletteKey, false))
 
 const topo = computed(() => pilha.value[pilha.value.length - 1])
 const frame = computed(() => studio.doc.frames.find((f) => f.id === topo.value?.id) ?? studio.doc.frames[0])
-const ehPhone = computed(() => (frame.value?.w ?? 412) < 1280)
+const moldura = ref<'auto' | 'phone' | 'desktop'>('auto')
+const ehPhone = computed(() => {
+  if (moldura.value === 'phone') return true
+  if (moldura.value === 'desktop') return false
+  return (frame.value?.w ?? 412) < 1280
+})
+
+function alternarMoldura() {
+  moldura.value = ehPhone.value ? 'desktop' : 'phone'
+}
 
 const itens = computed(() => {
   const fr = frame.value
@@ -102,6 +111,11 @@ onMounted(() => window.addEventListener('keydown', onKey))
       <div class="flex items-center gap-2 text-sm text-white">
         <button v-if="pilha.length > 1" type="button" class="rounded-btn bg-white/10 px-3 py-1" @click="voltar()">‹ Voltar</button>
         <span>{{ frame?.name }} · {{ anim.t }}{{ anim.back ? ' (back)' : '' }}</span>
+        <span class="flex gap-1" role="group" aria-label="Moldura do preview">
+          <button type="button" class="rounded-btn px-2 py-1" :class="ehPhone ? 'bg-white/20 font-semibold' : 'bg-white/10'" :aria-pressed="ehPhone" title="Moldura phone 412x892" @click="moldura = 'phone'">Phone</button>
+          <button type="button" class="rounded-btn px-2 py-1" :class="!ehPhone ? 'bg-white/20 font-semibold' : 'bg-white/10'" :aria-pressed="!ehPhone" title="Moldura desktop 1280x800" @click="moldura = 'desktop'">Desktop</button>
+        </span>
+        <button type="button" class="rounded-btn bg-white/10 px-2 py-1" title="Alternar moldura" @click="alternarMoldura()">Alternar</button>
         <button type="button" class="rounded-btn bg-white/10 px-3 py-1" aria-label="Fechar preview (Esc)" @click="emit('fechar')">Fechar</button>
       </div>
       <div

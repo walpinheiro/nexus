@@ -65,8 +65,30 @@ function load(): { doc: StudioDoc; screenId: string } {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw) {
-      const s = JSON.parse(raw) as { doc: StudioDoc; screenId: string }
-      if (s.doc && Array.isArray(s.doc.frames)) return s
+      const s = JSON.parse(raw) as { doc: StudioDoc; screenId: string; v?: number }
+      if (s.doc && Array.isArray(s.doc.frames)) {
+        // backfill order: grupos antigos sem order ganham índice estável (sem empates)
+        let i = 0
+        const vistos = new Set<number>()
+        for (const g of s.doc.groups) {
+          if (typeof g.order !== 'number') {
+            let o = i
+            while (vistos.has(o)) o++
+            g.order = o
+            vistos.add(o)
+          } else if (vistos.has(g.order)) {
+            let o = g.order + 1
+            while (vistos.has(o)) o++
+            g.order = o
+            vistos.add(o)
+          } else {
+            vistos.add(g.order)
+          }
+          i++
+        }
+        ;(s.doc as unknown as Record<string, unknown>).v = 2
+        return s
+      }
     }
   } catch {
     // usa seed

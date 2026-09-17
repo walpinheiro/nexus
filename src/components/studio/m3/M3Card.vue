@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { StudioItem } from '@/types/studio'
 import type { Scheme } from './theme'
+import M3Icon from './M3Icon.vue'
 
 const props = defineProps<{ item: StudioItem; scheme: Scheme }>()
 
@@ -25,7 +26,7 @@ const estilo = computed(() => {
       :style="{ background: item.src ? undefined : scheme.primaryContainer, color: scheme.onPrimaryContainer }"
     >
       <img v-if="item.src" :src="item.src" alt="" class="h-full w-full object-cover" />
-      <span v-else class="text-2xl font-medium">✦</span>
+      <M3Icon v-else name="image" :size="28" />
     </div>
     <div class="p-4">
       <h3 class="text-base font-medium" :style="{ color: scheme.onSurface }">{{ item.label ?? 'Título do card' }}</h3>

@@ -19,16 +19,46 @@ function flash(msg: string) {
   setTimeout(() => (aviso.value = ''), 2500)
 }
 
+async function copiarTexto(texto: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(texto)
+    return true
+  } catch {
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = texto
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
+  }
+}
+
 async function copiarShare() {
-  const hash = await encodeDoc(studio.doc)
-  await navigator.clipboard.writeText(`${location.origin}${location.pathname}#/studio-full${hash}`)
-  flash('Share-link #docz= copiado (abre no m3e original).')
+  try {
+    const hash = await encodeDoc(studio.doc)
+    const ok = await copiarTexto(`${location.origin}${location.pathname}#/studio-full${hash}`)
+    flash(ok ? 'Share-link #docz= copiado (abre no m3e original).' : 'Não foi possível copiar — verifique a permissão do navegador.')
+  } catch {
+    flash('Não foi possível gerar o share-link.')
+  }
 }
 
 async function copiarM3E() {
-  const hash = await encodeDoc(studio.doc)
-  await navigator.clipboard.writeText(`https://lnkiai.github.io/m3e-canvas/${hash}`)
-  flash('Link m3e copiado.')
+  try {
+    const hash = await encodeDoc(studio.doc)
+    const ok = await copiarTexto(`https://lnkiai.github.io/m3e-canvas/${hash}`)
+    flash(ok ? 'Link m3e copiado.' : 'Não foi possível copiar — verifique a permissão do navegador.')
+  } catch {
+    flash('Não foi possível gerar o link m3e.')
+  }
 }
 
 function exportarJSON() {
@@ -78,8 +108,8 @@ function abrirPrompt() {
 }
 
 async function copiarPrompt() {
-  await navigator.clipboard.writeText(promptTexto.value)
-  flash('Prompt copiado.')
+  const ok = await copiarTexto(promptTexto.value)
+  flash(ok ? 'Prompt copiado.' : 'Não foi possível copiar — verifique a permissão do navegador.')
 }
 </script>
 

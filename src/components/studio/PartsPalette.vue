@@ -4,6 +4,7 @@ import { useStudio } from '@/stores/useStudio'
 import { CATEGORIES } from './m3/tokens'
 import { paletteOf } from './m3/theme'
 import M3Node from './m3/M3Node.vue'
+import M3Icon from './m3/M3Icon.vue'
 import type { StudioItem } from '@/types/studio'
 
 const studio = useStudio()
@@ -189,12 +190,13 @@ onMounted(() => {
             <button
               type="button"
               :aria-label="favoritos.includes(t.kind) ? `Desfavoritar ${t.rotulo}` : `Favoritar ${t.rotulo}`"
+              :aria-pressed="favoritos.includes(t.kind)"
               :title="favoritos.includes(t.kind) ? 'Desfavoritar' : 'Favoritar'"
-              class="absolute right-0.5 top-0.5 text-[11px]"
+              class="absolute right-0.5 top-0.5"
               :class="favoritos.includes(t.kind) ? 'text-nexo-primary' : 'text-nexo-muted'"
               @click.stop="alternarFav(t.kind)"
             >
-              {{ favoritos.includes(t.kind) ? '★' : '☆' }}
+              <M3Icon :name="favoritos.includes(t.kind) ? 'star' : 'star_outline'" :size="14" :fill="favoritos.includes(t.kind)" />
             </button>
           </div>
         </div>
