@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { gerarDraft, type DraftSpec } from '@/ai/studioDraft'
 import { useStudioDraftHistory } from '@/stores/studioDraftHistory'
@@ -23,6 +23,7 @@ interface TubeUndoEntry {
 
 const emit = defineEmits<{
   (e: 'abrir-prompt'): void
+  (e: 'abrir-ai-settings'): void
   (e: 'atividade', info: { autor: string; provider: string; prompt: string; at: number }): void
 }>()
 
@@ -49,6 +50,17 @@ const texto = ref('')
 const preview = ref<DraftSpec[]>([])
 const pilhaUndo = ref<TubeUndoEntry[]>([])
 const aviso = ref('')
+const copiadoLink = ref(false)
+const copiadoInstrucao = ref(false)
+const inputDescricaoRef = ref<HTMLInputElement | null>(null)
+
+watch(aberto, (val) => {
+  if (val) {
+    nextTick(() => {
+      inputDescricaoRef.value?.focus()
+    })
+  }
+})
 
 const ultimoUndo = computed(() => pilhaUndo.value[pilhaUndo.value.length - 1] ?? null)
 const scheme = computed(() => paletteOf(studio.doc.paletteKey, false))
@@ -64,19 +76,17 @@ function alturaDe(kind: string): number {
 
 function gerar() {
   preview.value = gerarDraft(texto.value)
-  aviso.value = preview.value.length === 0 ? 'Descreva a tela (ex.: tela de login com email e senha e botão entrar).' : ''
+  aviso.value = preview.value.length === 0 ? 'Descreva o que deseja construir (ex.: tela de login com email e senha e botão entrar).' : ''
 }
 
 function notificarAtividade(autor: string, provider: string, promptTxt: string, at: number) {
   emit('atividade', { autor, provider, prompt: promptTxt, at })
-  try {
-    presence.registrarEvento({
-      actorUserId: currentAuthor.value?.userId || 'u-pm',
-      kind: 'draft',
-      detalhe: `gerou rascunho via ${provider} (${currentAuthor.value?.model || ''})`,
-      at
-    })
-  } catch {}
+  presence.registrarEvento({
+    actorUserId: currentAuthor.value?.userId || 'u-pm',
+    kind: 'draft',
+    detalhe: `gerou rascunho via ${provider} (${currentAuthor.value?.model || ''})`,
+    at
+  })
 }
 
 function confirmar() {
@@ -148,6 +158,23 @@ function desfazerTubo() {
   studio.persist()
 }
 
+async function copiarLink() {
+  try {
+    await navigator.clipboard.writeText(window.location.href)
+    copiadoLink.value = true
+    setTimeout(() => { copiadoLink.value = false }, 2000)
+  } catch {}
+}
+
+async function copiarInstrucao() {
+  const instrucao = `You are a Material 3 design assistant for Maestri Studio. Generate or update design JSON for the requested screen: "${texto.value || 'an app to save and search recipes'}". Ensure compliance with M3 expressive tokens, component heights, and color palettes.`
+  try {
+    await navigator.clipboard.writeText(instrucao)
+    copiadoInstrucao.value = true
+    setTimeout(() => { copiadoInstrucao.value = false }, 2000)
+  } catch {}
+}
+
 function rotuloPrev(p: DraftSpec): string {
   const l = (p.props as { label?: unknown }).label
   return typeof l === 'string' && l ? `— ${l}` : ''
@@ -162,26 +189,48 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
   <div class="pointer-events-none absolute bottom-4 left-4 z-30 flex">
     <div class="pointer-events-auto flex items-center gap-2 rounded-full border border-nexo-border bg-white px-3 py-1.5 text-xs shadow-card">
       <M3Icon name="auto_awesome" :size="14" label="Assistente de tela" />
-      <button type="button" class="rounded-full bg-nexo-primary px-3 py-1 font-semibold text-white" title="Descreva a tela e gere um rascunho" @click="aberto = true">
-        Ask an AI
+      <button type="button" class="flex items-center gap-1.5 rounded-full bg-nexo-primary px-3 py-1 font-semibold text-white hover:opacity-95" title="Descreva a tela e gere um rascunho" @click="aberto = true">
+        <span>Ask an AI</span>
+        <span class="rounded-full bg-white/20 px-1 py-0.2 text-[9px] font-bold uppercase tracking-wider text-white">BETA</span>
       </button>
       <button v-if="pilhaUndo.length > 0" type="button" class="rounded-full border border-nexo-border px-2 py-0.5 text-xs font-medium text-nexo-text hover:bg-slate-50" :title="'Desfazer último rascunho de ' + (ultimoUndo ? ultimoUndo.authorName : '')" @click="desfazerTubo()">
         Desfazer<template v-if="ultimoUndo"> ({{ ultimoUndo.authorName }})</template>
       </button>
     </div>
-    <div v-if="aberto" class="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6" role="dialog" aria-modal="true" aria-label="Gerar tela com IA local" @click.self="aberto = false">
-      <div class="flex max-h-full w-full max-w-xl flex-col rounded-card bg-white p-4 shadow-card">
-        <div class="flex items-center justify-between">
-          <p class="text-sm font-semibold">Descreva a tela</p>
-          <button type="button" class="rounded-btn p-1 text-nexo-muted hover:bg-slate-100" aria-label="Fechar" @click="aberto = false">
-            <M3Icon name="close" :size="18" label="Fechar" />
-          </button>
+
+    <!-- Dialog Ask an AI (M3E §5 fiel) -->
+    <div v-if="aberto" class="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Ask an AI" @click.self="aberto = false">
+      <div class="flex max-h-full w-full max-w-xl flex-col rounded-card bg-white p-5 shadow-card">
+        <!-- Header: Ask an AI + BETA + Copy link + Close -->
+        <div class="flex items-center justify-between border-b border-nexo-border pb-3">
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-bold text-nexo-text">Ask an AI</h2>
+            <span class="rounded-full bg-nexo-primary-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-nexo-primary">BETA</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="flex items-center gap-1 rounded-full border border-nexo-border px-2.5 py-1 text-xs text-nexo-muted hover:bg-slate-50 hover:text-nexo-text"
+              :title="copiadoLink ? 'Copiado!' : 'Copiar link do projeto'"
+              @click="copiarLink()"
+            >
+              <M3Icon name="link" :size="15" label="Copiar link" />
+              <span>{{ copiadoLink ? 'Copiado!' : 'Copy link' }}</span>
+            </button>
+            <button type="button" class="rounded-btn p-1 text-nexo-muted hover:bg-slate-100 hover:text-nexo-text" aria-label="Fechar" @click="aberto = false">
+              <M3Icon name="close" :size="18" label="Fechar" />
+            </button>
+          </div>
         </div>
-        <p class="mt-0.5 text-xs text-nexo-muted">Gerador local (sem API externa). Ex.: "tela de login com email e senha e botão entrar".</p>
+
+        <!-- Parágrafo explicativo normativo M3E -->
+        <p class="mt-3 text-xs leading-relaxed text-nexo-muted">
+          Describe what you want and press Draft with AI: the model from the AI tab draws the design on the canvas. Or copy the instruction for an AI agent such as Claude Code; open the link it replies with, or save its JSON and load it with Open project.
+        </p>
 
         <!-- Seletor de Autor (7 papéis seed) -->
-        <div class="mt-3">
-          <span class="mb-1 block text-[11px] font-semibold text-nexo-muted uppercase tracking-wider">Desenhando como</span>
+        <div class="mt-3.5">
+          <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-nexo-muted">Desenhando como</span>
           <div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Selecione o autor da geração">
             <button
               v-for="a in authors"
@@ -196,15 +245,15 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
               <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-xs" :style="{ backgroundColor: a.color }">
                 {{ a.initials }}
               </span>
-              <span class="truncate max-w-[120px]">{{ a.name }}</span>
+              <span class="max-w-[120px] truncate">{{ a.name }}</span>
             </button>
           </div>
         </div>
 
-        <!-- Provider radio (OpenAI/Claude/Gemini/DeepSeek - como aba AI M3E) -->
+        <!-- Provider radio (OpenAI/Claude/Gemini/DeepSeek) -->
         <div class="mt-2.5">
           <div class="mb-1 flex items-center justify-between">
-            <span class="text-[11px] font-semibold text-nexo-muted uppercase tracking-wider">Provedor de IA</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-nexo-muted">Provedor de IA</span>
             <span class="font-mono text-[11px] text-nexo-muted">{{ currentAuthor?.model }}</span>
           </div>
           <div class="grid grid-cols-4 gap-1 rounded-btn border border-nexo-border bg-slate-50 p-0.5" role="radiogroup" aria-label="Provedor de IA">
@@ -223,31 +272,90 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
           </div>
         </div>
 
-        <!-- Input de texto do prompt -->
-        <input v-model="texto" class="mt-3 w-full rounded-btn border border-nexo-border px-2.5 py-2 text-sm focus:border-nexo-primary" aria-label="Descrição da tela" placeholder="tela de login com email e senha e botão entrar" @keydown.enter="gerar()" />
+        <!-- Textbox "What to build" com foco -->
+        <div class="mt-3.5">
+          <label for="ai-tube-input" class="mb-1 block text-xs font-semibold text-nexo-text">
+            What to build (e.g. an app to save and search recipes)
+          </label>
+          <input
+            id="ai-tube-input"
+            ref="inputDescricaoRef"
+            v-model="texto"
+            class="w-full rounded-btn border border-nexo-border px-3 py-2 text-sm focus:border-nexo-primary"
+            aria-label="What to build (e.g. an app to save and search recipes)"
+            placeholder="e.g. an app to save and search recipes"
+            @keydown.enter="gerar()"
+          />
+        </div>
 
-        <!-- Botões de ação -->
-        <div class="mt-2.5 flex items-center gap-1.5 text-xs">
-          <button type="button" class="rounded-btn bg-nexo-primary px-3.5 py-1.5 font-semibold text-white shadow-xs hover:opacity-95" @click="gerar()">
-            Draft with AI
-          </button>
-          <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 hover:bg-slate-50" @click="descartar(); aberto = false">
-            Descartar
-          </button>
-          <button v-if="preview.length > 0" type="button" class="rounded-btn border border-nexo-primary px-3.5 py-1.5 font-semibold text-nexo-primary hover:bg-nexo-primary-soft" @click="confirmar()">
-            Confirmar
+        <!-- Linha de sub-ações (Add a key / Copy the instruction / AI settings) -->
+        <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-nexo-border/60 pt-2 text-xs">
+          <span class="text-nexo-muted">Add a key to draft it right here</span>
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              class="flex items-center gap-1 rounded-btn border border-nexo-border px-2.5 py-1 text-xs text-nexo-muted hover:bg-slate-50 hover:text-nexo-text"
+              @click="copiarInstrucao()"
+            >
+              <M3Icon name="content_copy" :size="14" label="Copiar instrução" />
+              <span>{{ copiadoInstrucao ? 'Instrução copiada!' : 'Copy the instruction' }}</span>
+            </button>
+            <button
+              type="button"
+              class="flex items-center gap-1 rounded-btn border border-nexo-border px-2.5 py-1 text-xs text-nexo-muted hover:bg-slate-50 hover:text-nexo-text"
+              @click="emit('abrir-ai-settings')"
+            >
+              <M3Icon name="key" :size="14" label="Configurações de IA" />
+              <span>AI settings</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Botões de ação principais -->
+        <div class="mt-4 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="rounded-btn bg-nexo-primary px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-95"
+              @click="gerar()"
+            >
+              Draft with AI
+            </button>
+            <button
+              v-if="preview.length > 0"
+              type="button"
+              class="rounded-btn border border-nexo-primary bg-nexo-primary-soft px-3.5 py-1.5 text-xs font-semibold text-nexo-primary hover:bg-nexo-primary/10"
+              @click="confirmar()"
+            >
+              Confirmar
+            </button>
+            <button
+              v-if="preview.length > 0"
+              type="button"
+              class="rounded-btn border border-nexo-border px-3 py-1.5 text-xs hover:bg-slate-50"
+              @click="descartar()"
+            >
+              Descartar
+            </button>
+          </div>
+          <button
+            type="button"
+            class="rounded-btn border border-nexo-border px-3.5 py-1.5 text-xs font-medium text-nexo-text hover:bg-slate-50"
+            @click="descartar(); aberto = false"
+          >
+            Close
           </button>
         </div>
 
         <p v-if="aviso" class="mt-2 text-xs text-nexo-blocked" role="status">{{ aviso }}</p>
 
         <!-- Preview de peças geradas -->
-        <ul v-if="preview.length > 0" class="mt-2.5 max-h-56 space-y-1 overflow-auto rounded-btn border border-nexo-border p-1" aria-label="Prévia do rascunho">
+        <ul v-if="preview.length > 0" class="mt-3 max-h-52 space-y-1 overflow-auto rounded-btn border border-nexo-border p-1" aria-label="Prévia do rascunho">
           <li v-for="(p, i) in preview" :key="i" class="flex items-center gap-2 rounded-badge border border-nexo-border bg-slate-50/50 p-1">
             <span class="flex h-10 w-20 shrink-0 items-center justify-center overflow-hidden" aria-hidden="true">
               <M3Node :item="itemPrev(p, i)" :scheme="scheme" :mini="true" />
             </span>
-            <span class="text-xs">{{ p.kind }} {{ rotuloPrev(p) }}</span>
+            <span class="text-xs font-medium">{{ p.kind }} {{ rotuloPrev(p) }}</span>
           </li>
         </ul>
       </div>
