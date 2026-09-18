@@ -52,10 +52,39 @@ const stageRef = ref<{ $el: HTMLElement } | null>(null)
 // Integração Condicional com Features do Gate G2 (V2/O-STUDIO)
 const featureId = computed(() => (typeof route.query.feature === 'string' ? route.query.feature : ''))
 const featureSelecionadaId = ref(featureId.value)
+const featureAtual = computed(() => {
+  if (!featureId.value) return null
+  return graph.state.nos.find((n) => n.id === featureId.value) ?? null
+})
 // Seletor mostra SÓ G2-aprovadas com baseline (gateParaStudio.ts:111-121)
 const featuresDisponiveis = computed(() => listarFeaturesElegiveis(graph.state.nos, gates.gates))
 const entradaStudio = computed(() => (featureId.value ? montarEntradaStudio(featureId.value, graph.state.nos) : null))
 const mensagemGeracao = ref('')
+
+function origemDaTela(telaId: string): string | undefined {
+  const v = graph.vinculosTela.find((x) => x.telaId === telaId)
+  if (v) return v.origem
+  const t = entradaStudio.value?.telas.find((x) => x.id === telaId)
+  if (t) return t.origem
+  const fr = studio.doc.frames.find((x) => x.id === telaId)
+  const m = fr?.note?.match(/origem:\s*([a-z_]+)/)
+  return m ? m[1] : undefined
+}
+
+function formatarOrigem(o?: string): string {
+  if (!o) return ''
+  if (o === 'fluxo_feliz') return 'Fluxo Principal'
+  if (o === 'alternativo') return 'Alternativo'
+  if (o === 'bdd') return 'BDD'
+  return o
+}
+
+function badgeOrigemClass(o?: string): string {
+  if (o === 'fluxo_feliz') return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+  if (o === 'alternativo') return 'bg-amber-50 text-amber-700 border border-amber-200'
+  if (o === 'bdd') return 'bg-blue-50 text-blue-700 border border-blue-200'
+  return 'bg-slate-100 text-slate-700 border border-slate-200'
+}
 
 // Identificadores dos frames padrão gerados pelo seedDoc() de useStudio
 const SEED_FRAME_IDS = new Set(['checkout', 'pagpix'])
@@ -405,6 +434,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <span class="hidden text-sm font-medium text-nexo-text sm:inline" :title="projetoNome">
           {{ projetoNome }}
         </span>
+
+        <!-- Chip Linkback Studio → Feature no Gate G2 -->
+        <RouterLink
+          v-if="featureAtual"
+          :to="{ path: '/gates/G2', query: { alvo: featureAtual.id } }"
+          class="inline-flex items-center gap-1.5 rounded-full border border-nexo-primary/30 bg-nexo-primary/10 px-2.5 py-0.5 text-xs font-semibold text-nexo-primary hover:bg-nexo-primary/20 hover:border-nexo-primary transition-colors shrink-0 ml-1.5"
+          :title="`Voltar ao Gate G2 da Feature: ${featureAtual.titulo}`"
+        >
+          <M3Icon name="arrow_back" :size="14" />
+          <span>Feature: {{ featureAtual.titulo }}</span>
+        </RouterLink>
       </div>
       <span class="ml-auto flex items-center gap-2">
         <PresenceAvatars />
@@ -521,9 +561,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               class="rounded-badge px-2 py-1.5"
               :class="fr.id === studio.screenId ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'bg-nexo-canvas'"
             >
-              <button type="button" class="w-full truncate text-left" :title="`${fr.name} ${fr.w}×${fr.h}`" @click="studio.screenId = fr.id; studio.persist()">
-                {{ renomeando === fr.id ? '' : fr.name }} <span class="text-nexo-muted">{{ fr.w }}×{{ fr.h }}</span>
-              </button>
+              <div class="flex items-center justify-between gap-1">
+                <button type="button" class="truncate text-left font-medium" :title="`${fr.name} ${fr.w}×${fr.h}`" @click="studio.screenId = fr.id; studio.persist()">
+                  {{ renomeando === fr.id ? '' : fr.name }} <span class="text-nexo-muted font-normal">{{ fr.w }}×{{ fr.h }}</span>
+                </button>
+                <span
+                  v-if="origemDaTela(fr.id)"
+                  class="rounded-full px-1.5 py-0.2 text-[9px] font-mono font-medium shrink-0"
+                  :class="badgeOrigemClass(origemDaTela(fr.id))"
+                  :title="`Origem da tela: ${origemDaTela(fr.id)}`"
+                >
+                  {{ formatarOrigem(origemDaTela(fr.id)) }}
+                </span>
+              </div>
               <div class="mt-1 flex gap-1">
                 <button type="button" class="flex-1 rounded-btn border border-nexo-border px-1.5 py-0.5" :title="`Renomear ${fr.name}`" @click="renomeando = renomeando === fr.id ? '' : fr.id">Renomear</button>
                 <button type="button" class="flex-1 rounded-btn border border-nexo-border px-1.5 py-0.5" :title="`Duplicar ${fr.name}`" @click="studio.duplicarFrame(fr.id)">Duplicar</button>

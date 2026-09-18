@@ -1,12 +1,37 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useStudio } from '@/stores/useStudio'
+import { useGraph } from '@/stores/useGraph'
 import { paletteOf } from './m3/theme'
 import { limitesDe, specOf } from './m3/tokens'
 import M3Node from './m3/M3Node.vue'
 import StudioToolbar from './StudioToolbar.vue'
 
 const studio = useStudio()
+const graph = useGraph()
+
+function origemDaTela(telaId: string): string | undefined {
+  const v = graph.vinculosTela.find((x) => x.telaId === telaId)
+  if (v) return v.origem
+  const fr = studio.doc.frames.find((x) => x.id === telaId)
+  const m = fr?.note?.match(/origem:\s*([a-z_]+)/)
+  return m ? m[1] : undefined
+}
+
+function formatarOrigem(o?: string): string {
+  if (!o) return ''
+  if (o === 'fluxo_feliz') return 'Fluxo Principal'
+  if (o === 'alternativo') return 'Alternativo'
+  if (o === 'bdd') return 'BDD'
+  return o
+}
+
+function badgeOrigemClass(o?: string): string {
+  if (o === 'fluxo_feliz') return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+  if (o === 'alternativo') return 'bg-amber-50 text-amber-700 border border-amber-200'
+  if (o === 'bdd') return 'bg-blue-50 text-blue-700 border border-blue-200'
+  return 'bg-slate-100 text-slate-700 border border-slate-200'
+}
 const emit = defineEmits<{
   (e: 'preview'): void
   (e: 'abrir-prompt'): void
@@ -333,17 +358,27 @@ defineExpose({ alternarPreview })
           :style="{ left: fr.x + 'px', top: fr.y + 'px', width: fr.w + 'px', height: fr.h + 'px', borderColor: fr.id === studio.screenId ? '#1D4ED8' : '#CBD5E1' }"
           @pointerdown.stop="studio.screenId = fr.id; studio.persist()"
         >
-          <p class="flex items-center gap-2 p-2 text-xs font-semibold text-nexo-muted">
-            {{ fr.name }} · {{ fr.w }}×{{ fr.h }}
-            <button
-              type="button"
-              class="rounded-btn border border-nexo-border bg-white px-1.5 py-0.5 text-[10px]"
-              :title="fr.w >= 1280 ? 'Trocar para phone 412x892' : 'Trocar para desktop 1280x800'"
-              @click.stop="studio.setFramePreset(fr.id, fr.w >= 1280 ? 'phone' : 'desktop')"
-            >
-              {{ fr.w >= 1280 ? 'desktop → phone' : 'phone → desktop' }}
-            </button>
-          </p>
+          <div class="flex items-center justify-between gap-2 p-2 text-xs font-semibold text-nexo-muted">
+            <span class="truncate">{{ fr.name }} · {{ fr.w }}×{{ fr.h }}</span>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span
+                v-if="origemDaTela(fr.id)"
+                class="rounded-full px-2 py-0.5 text-[10px] font-mono font-medium"
+                :class="badgeOrigemClass(origemDaTela(fr.id))"
+                :title="`Origem da tela: ${origemDaTela(fr.id)}`"
+              >
+                {{ formatarOrigem(origemDaTela(fr.id)) }}
+              </span>
+              <button
+                type="button"
+                class="rounded-btn border border-nexo-border bg-white px-1.5 py-0.5 text-[10px]"
+                :title="fr.w >= 1280 ? 'Trocar para phone 412x892' : 'Trocar para desktop 1280x800'"
+                @click.stop="studio.setFramePreset(fr.id, fr.w >= 1280 ? 'phone' : 'desktop')"
+              >
+                {{ fr.w >= 1280 ? 'desktop → phone' : 'phone → desktop' }}
+              </button>
+            </div>
+          </div>
         </div>
         <div
           v-for="it in itensDaTela(fr.id).sort((a, b) => (grupoDe(a.id)?.order ?? 0) - (grupoDe(b.id)?.order ?? 0))"
