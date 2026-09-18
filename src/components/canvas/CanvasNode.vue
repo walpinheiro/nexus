@@ -178,7 +178,7 @@ function onKeydown(id: string, ev: KeyboardEvent) {
         {{ no.contribuidores.length }}
       </span>
     </div>
-    <span v-if="no.grupo" class="mt-2 inline-block rounded-badge bg-nexo-draft-bg px-2 py-0.5 text-[11px] text-nexo-draft">
+    <span v-if="no.grupo" class="mt-2 inline-block rounded-badge bg-nexo-draft-bg px-2 py-0.5 text-xs text-nexo-draft">
       {{ no.grupo }}
     </span>
 

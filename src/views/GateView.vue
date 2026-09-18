@@ -277,7 +277,7 @@ function baixarFeatureWiki(featureId: string) {
           {{ sessaoAiAberta ? 'Ocultar IA' : 'Sessão IA' }}
           <span
             v-if="pendenciasCount > 0"
-            class="ml-0.5 rounded-full bg-nexo-blocked px-1.5 py-0.2 text-[10px] font-bold text-white"
+            class="ml-0.5 rounded-full bg-nexo-blocked px-1.5 py-0.2 text-xs font-bold text-white"
           >
             {{ pendenciasCount }}
           </span>
@@ -313,7 +313,7 @@ function baixarFeatureWiki(featureId: string) {
           <LucideIcon name="alert-circle" :size="15" class="text-amber-700" />
           Atenção: Você possui {{ solicitacoesAguardandoJulgamento.length }} solicitação(ões) pendente(s) aguardando sua decisão
         </span>
-        <span class="text-[10px] text-amber-800 font-medium">Clique no item para selecionar o objeto</span>
+        <span class="text-xs text-amber-800 font-medium">Clique no item para selecionar o objeto</span>
       </div>
 
       <div class="flex flex-wrap gap-2">
@@ -321,13 +321,13 @@ function baixarFeatureWiki(featureId: string) {
           v-for="s in solicitacoesAguardandoJulgamento"
           :key="s.id"
           type="button"
-          class="flex items-center gap-1.5 rounded bg-white px-2.5 py-1 border text-[11px] font-medium transition-colors hover:border-amber-400 hover:bg-amber-100/50"
+          class="flex items-center gap-1.5 rounded bg-white px-3 py-1.5 min-h-[32px] border text-sm font-medium transition-colors hover:border-amber-400 hover:bg-amber-100/50"
           :class="s.alvoId === alvoId ? 'border-amber-500 text-amber-900 font-bold ring-1 ring-amber-400' : 'border-amber-200 text-nexo-text'"
           @click="selecionarAlvoSolicitacao(s.alvoId, s.gate)"
         >
-          <span class="rounded bg-amber-200 text-amber-950 px-1 py-0.2 text-[9px] font-bold">{{ s.gate }}</span>
+          <span class="rounded bg-amber-200 text-amber-950 px-1 py-0.2 text-xs font-bold">{{ s.gate }}</span>
           <span>{{ graph.noPorId(s.alvoId)?.titulo || s.alvoId }}</span>
-          <span class="text-[9px] text-nexo-muted">({{ s.solicitanteId }})</span>
+          <span class="text-xs text-nexo-muted">({{ s.solicitanteId }})</span>
         </button>
       </div>
     </div>
@@ -348,7 +348,7 @@ function baixarFeatureWiki(featureId: string) {
           <div class="flex flex-wrap items-center justify-between gap-3">
             <label class="flex items-center gap-2 text-sm font-semibold text-nexo-text">
               Objeto do gate:
-              <select v-model="alvoId" class="rounded-btn border border-nexo-border px-2.5 py-1.5 bg-white text-xs font-normal">
+              <select v-model="alvoId" class="rounded-btn border border-nexo-border px-2.5 py-1.5 min-h-[32px] bg-white text-sm font-normal">
                 <option value="">{{ alvos.length === 0 ? '(nenhum item elegível para este gate)' : '(selecionar)' }}</option>
                 <option v-for="n in alvos" :key="n.id" :value="n.id">
                   {{ n.titulo }} ({{ n.status }} v{{ n.versao }})
@@ -361,7 +361,7 @@ function baixarFeatureWiki(featureId: string) {
               <template v-if="props.id === 'G2' && objetoAlvo && objetoAlvo.tipo === 'feature'">
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-2.5 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
+                  class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
                   @click="abrirVerStory()"
                 >
                   <LucideIcon name="file-text" :size="13" />
@@ -369,7 +369,7 @@ function baixarFeatureWiki(featureId: string) {
                 </button>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-2.5 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
+                  class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
                   @click="abrirStudioParaFeature()"
                 >
                   <LucideIcon name="layout" :size="13" />
@@ -377,7 +377,7 @@ function baixarFeatureWiki(featureId: string) {
                 </button>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1 rounded-btn border border-green-600 bg-white px-2.5 py-1.5 text-xs font-semibold text-green-800 hover:bg-green-50 shadow-xs transition-colors"
+                  class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-green-600 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50 shadow-xs transition-colors"
                   @click="abrirPreview()"
                 >
                   <LucideIcon name="eye" :size="13" />
@@ -385,7 +385,7 @@ function baixarFeatureWiki(featureId: string) {
                 </button>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-2.5 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
+                  class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
                   :title="`Exportar wiki consolidada da feature ${objetoAlvo.titulo}`"
                   @click="baixarFeatureWiki(objetoAlvo.id)"
                 >
@@ -400,7 +400,7 @@ function baixarFeatureWiki(featureId: string) {
               <button
                 v-else
                 type="button"
-                class="rounded-btn border border-nexo-primary bg-nexo-primary/10 text-nexo-primary hover:bg-nexo-primary hover:text-white px-3 py-1.5 text-xs font-semibold transition-colors"
+                class="rounded-btn border border-nexo-primary bg-nexo-primary/10 text-nexo-primary hover:bg-nexo-primary hover:text-white px-3 py-1.5 min-h-[32px] text-sm font-semibold transition-colors"
                 :disabled="bloqueado || !alvoId"
                 @click="solicitarApprove()"
               >
@@ -438,7 +438,7 @@ function baixarFeatureWiki(featureId: string) {
               <LucideIcon name="inbox" :size="14" class="text-amber-700" />
               Fila de Solicitações Pendentes ({{ solicitacoesDesteGate.length }})
             </span>
-            <span class="text-[10px] text-amber-700 font-medium">Requer aprovação de papel habilitado (SoD)</span>
+            <span class="text-xs text-amber-700 font-medium">Requer aprovação de papel habilitado (SoD)</span>
           </div>
 
           <div class="space-y-2">
@@ -458,16 +458,16 @@ function baixarFeatureWiki(featureId: string) {
                   >
                     {{ graph.noPorId(sol.alvoId)?.titulo || sol.alvoId }}
                   </button>
-                  <span class="text-[11px] text-nexo-muted">por {{ sol.solicitanteId }} em {{ new Date(sol.em).toLocaleDateString() }}</span>
+                  <span class="text-xs text-nexo-muted">por {{ sol.solicitanteId }} em {{ new Date(sol.em).toLocaleDateString() }}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
                   <span
                     v-if="users.currentUser?.id !== sol.solicitanteId && podeAprovar"
-                    class="rounded bg-amber-600 text-white px-1.5 py-0.2 text-[9px] font-bold uppercase"
+                    class="rounded bg-amber-600 text-white px-1.5 py-0.2 text-xs font-bold uppercase"
                   >
                     Aguardando sua decisão
                   </span>
-                  <span class="rounded bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase">
+                  <span class="rounded bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-bold uppercase">
                     Pendente
                   </span>
                 </div>
@@ -475,10 +475,10 @@ function baixarFeatureWiki(featureId: string) {
 
               <!-- Ações da Fila -->
               <div class="pt-1 border-t border-gray-100 flex items-center justify-between gap-2">
-                <span v-if="users.currentUser?.id === sol.solicitanteId" class="text-[11px] text-amber-800 italic">
+                <span v-if="users.currentUser?.id === sol.solicitanteId" class="text-xs text-amber-800 italic">
                   Você solicitou este gate. Um segundo aprovador (SoD) deve aprovar.
                 </span>
-                <span v-else-if="!podeAprovar" class="text-[11px] text-nexo-muted">
+                <span v-else-if="!podeAprovar" class="text-xs text-nexo-muted">
                   Seu papel ({{ users.currentUser?.papel }}) não pode julgar este gate. Permitidos: {{ permitidos.join(', ') }}.
                 </span>
                 <div v-else class="flex items-center gap-2 ml-auto">
@@ -492,14 +492,14 @@ function baixarFeatureWiki(featureId: string) {
                     />
                     <button
                       type="button"
-                      class="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700 font-semibold"
+                      class="rounded bg-red-600 px-3 py-1.5 min-h-[32px] text-sm text-white hover:bg-red-700 font-semibold"
                       @click="confirmarNegacao(sol.id)"
                     >
                       Confirmar
                     </button>
                     <button
                       type="button"
-                      class="text-xs text-gray-500 hover:underline px-1"
+                      class="text-sm text-gray-500 hover:underline px-2 py-1.5 min-h-[32px]"
                       @click="cancelarNegacao()"
                     >
                       Cancelar
@@ -508,14 +508,14 @@ function baixarFeatureWiki(featureId: string) {
                   <template v-else>
                     <button
                       type="button"
-                      class="rounded-btn bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700"
+                      class="rounded-btn bg-green-600 px-3 py-1.5 min-h-[32px] text-sm font-semibold text-white hover:bg-green-700"
                       @click="aprovarSolicitacao(sol.id)"
                     >
                       Aprovar
                     </button>
                     <button
                       type="button"
-                      class="rounded-btn border border-red-200 text-red-700 hover:bg-red-50 px-2.5 py-1 text-xs font-semibold"
+                      class="rounded-btn border border-red-200 text-red-700 hover:bg-red-50 px-3 py-1.5 min-h-[32px] text-sm font-semibold"
                       @click="iniciarNegacao(sol.id)"
                     >
                       Negar
@@ -546,7 +546,7 @@ function baixarFeatureWiki(featureId: string) {
               <LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" :class="c.ok ? 'text-green-600' : 'text-red-600'" />
               <span>{{ c.codigo }} — {{ c.descricao }} [{{ c.severidade }}]</span>
               <span v-if="!c.ok && c.severidade === 'bloqueante'">
-                · <button type="button" class="text-nexo-primary underline" @click="corrigirNoObjeto(alvoId)">corrigir no objeto</button>
+                ·                 <button type="button" class="text-nexo-primary underline text-sm px-1 py-1" @click="corrigirNoObjeto(alvoId)">corrigir no objeto</button>
               </span>
               <span v-else-if="c.severidade === 'aviso' && !c.ok" class="text-amber-700"> · dispensável (ver Backlog)</span>
             </li>
@@ -622,9 +622,9 @@ function baixarFeatureWiki(featureId: string) {
         <div class="flex items-start justify-between border-b pb-3">
           <div>
             <div class="flex items-center gap-2">
-              <span class="rounded bg-nexo-primary/10 px-1.5 py-0.5 text-[10px] font-mono font-bold text-nexo-primary">{{ objetoAlvo.id }}</span>
-              <span class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">{{ objetoAlvo.gate }}</span>
-              <span class="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800">{{ objetoAlvo.status }}</span>
+              <span class="rounded bg-nexo-primary/10 px-1.5 py-0.5 text-xs font-mono font-bold text-nexo-primary">{{ objetoAlvo.id }}</span>
+              <span class="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">{{ objetoAlvo.gate }}</span>
+              <span class="rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-800">{{ objetoAlvo.status }}</span>
             </div>
             <h2 class="text-base font-bold text-nexo-text mt-1">{{ objetoAlvo.titulo }}</h2>
           </div>
@@ -657,7 +657,7 @@ function baixarFeatureWiki(featureId: string) {
             <h4 class="font-bold text-nexo-text mb-1">Critérios de Aceite (BDD):</h4>
             <div class="space-y-2">
               <div v-for="c in (objetoAlvo as Feature).criterios_bdd" :key="c.id" class="rounded border border-nexo-border/80 p-2 bg-white space-y-0.5">
-                <span class="font-mono text-[10px] font-bold text-nexo-primary">{{ c.id }}</span>
+                <span class="font-mono text-xs font-bold text-nexo-primary">{{ c.id }}</span>
                 <p class="text-[11px]"><strong class="text-gray-700">Dado</strong> {{ c.given }}</p>
                 <p class="text-[11px]"><strong class="text-gray-700">Quando</strong> {{ c.when }}</p>
                 <p class="text-[11px]"><strong class="text-gray-700">Então</strong> {{ c.then }}</p>
@@ -671,7 +671,7 @@ function baixarFeatureWiki(featureId: string) {
           <div class="flex items-center gap-2">
             <button
               type="button"
-              class="inline-flex items-center gap-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-nexo-primary/90"
+              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-nexo-primary/90"
               @click="storyModalAberto = false; abrirStudioParaFeature()"
             >
               <LucideIcon name="layout" :size="13" />
@@ -679,7 +679,7 @@ function baixarFeatureWiki(featureId: string) {
             </button>
             <button
               type="button"
-              class="inline-flex items-center gap-1 rounded-btn border border-green-600 bg-white px-3 py-1.5 text-xs font-semibold text-green-800 hover:bg-green-50"
+              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-green-600 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50"
               @click="storyModalAberto = false; abrirPreview()"
             >
               <LucideIcon name="eye" :size="13" />
@@ -688,7 +688,7 @@ function baixarFeatureWiki(featureId: string) {
             <button
               v-if="objetoAlvo"
               type="button"
-              class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-xs font-semibold text-nexo-text hover:bg-slate-50"
+              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-slate-50"
               :title="`Exportar wiki da feature ${objetoAlvo.titulo}`"
               @click="baixarFeatureWiki(objetoAlvo.id)"
             >
@@ -696,7 +696,7 @@ function baixarFeatureWiki(featureId: string) {
               Exportar wiki
             </button>
           </div>
-          <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 text-xs" @click="storyModalAberto = false">
+          <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="storyModalAberto = false">
             Fechar
           </button>
         </div>

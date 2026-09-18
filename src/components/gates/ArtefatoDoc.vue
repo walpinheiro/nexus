@@ -35,19 +35,19 @@ const emit = defineEmits<{
       </p>
       <div class="flex items-center gap-2">
         <span
-          class="inline-flex items-center gap-1 rounded bg-nexo-primary/10 px-2 py-0.5 text-[10px] font-bold text-nexo-primary"
+          class="inline-flex items-center gap-1 rounded bg-nexo-primary/10 px-2 py-0.5 text-xs font-bold text-nexo-primary"
         >
           Gate {{ artefato.gate }}
         </span>
         <span
           v-if="gateInfo?.baselineVersao"
-          class="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-800"
+          class="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-xs font-bold text-green-800"
         >
           <LucideIcon name="shield-check" :size="12" /> Baseline v{{ gateInfo.baselineVersao }}
         </span>
         <span
           v-else
-          class="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800"
+          class="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800"
         >
           <LucideIcon name="clock" :size="12" /> Baseline pendente
         </span>
@@ -55,7 +55,7 @@ const emit = defineEmits<{
         <button
           v-if="mostrarExportar"
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-btn border border-nexo-border bg-white px-2.5 py-1 text-xs font-semibold text-nexo-text hover:bg-slate-50 transition-colors shadow-xs"
+          class="inline-flex min-h-[32px] items-center gap-1.5 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-slate-50 transition-colors shadow-xs"
           :title="`Exportar markdown do Gate ${artefato.gate}`"
           @click="emit('exportar')"
         >

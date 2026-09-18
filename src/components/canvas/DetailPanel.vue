@@ -409,16 +409,16 @@ function proporTexto() {
             <ul><li v-for="m in patchPendente.mudancas" :key="m.campo">{{ m.campo }}: "{{ m.de }}" → "{{ m.para }}"</li></ul>
             <p>{{ patchPendente.justificativa }}</p>
             <div class="flex gap-2">
-              <button type="button" class="rounded-btn bg-nexo-primary px-3 py-1 font-semibold text-white" @click="graph.aceitarPatch(patchPendente.patch_id, users.state.currentUserId)">Aceitar (nova versão)</button>
-              <button type="button" class="rounded-btn border border-nexo-border px-3 py-1" @click="graph.rejeitarPatch(patchPendente.patch_id, users.state.currentUserId)">Rejeitar</button>
+              <button type="button" class="rounded-btn bg-nexo-primary px-3 py-1.5 min-h-[32px] text-sm font-semibold text-white" @click="graph.aceitarPatch(patchPendente.patch_id, users.state.currentUserId)">Aceitar (nova versão)</button>
+              <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="graph.rejeitarPatch(patchPendente.patch_id, users.state.currentUserId)">Rejeitar</button>
             </div>
           </div>
           <div class="space-y-2 border-t border-nexo-border pt-3">
             <p class="text-xs font-semibold">Prompt de implementação / compartilhamento</p>
             <div class="flex gap-2">
-              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2 text-xs" @click="abrirPrompt()">Copiar prompt</button>
-              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2 text-xs" @click="copiarShare()">Copiar share-link</button>
-              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2 text-xs" @click="exportarPNG()">Exportar PNG</button>
+              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2 min-h-[32px] text-sm" @click="abrirPrompt()">Copiar prompt</button>
+              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2 min-h-[32px] text-sm" @click="copiarShare()">Copiar share-link</button>
+              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2 min-h-[32px] text-sm" @click="exportarPNG()">Exportar PNG</button>
             </div>
           </div>
         </div>
@@ -436,7 +436,7 @@ function proporTexto() {
           </div>
           <ul v-if="pendenciasCopilot.length > 0" class="space-y-1 text-xs" aria-label="Pendências do gate">
             <li v-for="p in pendenciasCopilot.slice(0, 12)" :key="p.noId + p.codigo">
-              <button type="button" class="w-full rounded-badge border border-nexo-stale-border bg-nexo-stale-bg px-2 py-1 text-left text-nexo-stale" @click="abrirPendencia(p.noId)">
+              <button type="button" class="w-full rounded-badge border border-nexo-stale-border bg-nexo-stale-bg px-2 py-1.5 min-h-[32px] text-left text-xs text-nexo-stale" @click="abrirPendencia(p.noId)">
                 {{ p.codigo }} em "{{ p.titulo }}" — abrir nó
               </button>
             </li>
@@ -449,21 +449,21 @@ function proporTexto() {
 
         <!-- IMPACTO -->
         <div v-else-if="tab === 'impacto'" role="tabpanel" class="space-y-2">
-          <button type="button" class="w-full rounded-btn border border-nexo-border px-3 py-2 text-sm" @click="gerarPlano()">Calcular impacto de "{{ sel.titulo }}"</button>
+          <button type="button" class="w-full rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="gerarPlano()">Calcular impacto de "{{ sel.titulo }}"</button>
           <div v-if="planoLocal" class="space-y-2 text-xs">
             <p class="font-semibold">Plano {{ planoLocal.correlation_id }} — {{ planoLocal.itens.length }} dependente(s)</p>
-            <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="aprovarLote()">Aprovar lote</button>
+            <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="aprovarLote()">Aprovar lote</button>
             <ul class="space-y-1">
               <li v-for="it in planoLocal.itens" :key="it.id" class="rounded-badge border border-nexo-border p-2">
                 <strong>{{ it.titulo }}</strong> via {{ it.via.join('→') }} · op {{ it.operacao }} · owner {{ it.owner }}
                 <span v-if="it.aplicado" class="text-nexo-stale"> · aplicado (stale)</span>
-                <button v-if="!it.aprovado" type="button" class="ml-2 underline" @click="aprovarItem(it.id)">aprovar</button>
+                <button v-if="!it.aprovado" type="button" class="ml-2 underline text-sm px-1 py-1" @click="aprovarItem(it.id)">aprovar</button>
                 <span v-else class="ml-2 text-nexo-approved">aprovado</span>
               </li>
             </ul>
             <div class="flex gap-2">
-              <button type="button" class="flex-1 rounded-btn bg-nexo-primary px-2 py-2 font-semibold text-white" @click="aplicarPlano()">Aplicar aprovados (marca stale)</button>
-              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2" @click="reverterPlano()">Reverter aplicados</button>
+              <button type="button" class="flex-1 rounded-btn bg-nexo-primary px-2 py-1.5 min-h-[32px] text-sm font-semibold text-white" @click="aplicarPlano()">Aplicar aprovados (marca stale)</button>
+              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-1.5 min-h-[32px] text-sm" @click="reverterPlano()">Reverter aplicados</button>
             </div>
           </div>
         </div>

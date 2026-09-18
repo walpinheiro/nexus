@@ -210,7 +210,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
         <div class="flex items-center justify-between border-b border-nexo-border pb-3">
           <div class="flex items-center gap-2">
             <h2 class="text-base font-bold text-nexo-text">Ask an AI</h2>
-            <span class="rounded-full bg-nexo-primary-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-nexo-primary">BETA</span>
+            <span class="rounded-full bg-nexo-primary-soft px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider text-nexo-primary">BETA</span>
           </div>
           <div class="flex items-center gap-2">
             <button
@@ -235,7 +235,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
 
         <!-- Seletor de Autor (7 papéis seed) -->
         <div class="mt-3.5">
-          <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-nexo-muted">Desenhando como</span>
+          <span class="mb-1 block text-xs font-semibold uppercase tracking-wider text-nexo-muted">Desenhando como</span>
           <div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Selecione o autor da geração">
             <button
               v-for="a in authors"
@@ -243,11 +243,11 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
               type="button"
               role="radio"
               :aria-checked="selectedAuthorId === a.userId"
-              class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition"
+              class="flex min-h-[32px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition"
               :class="selectedAuthorId === a.userId ? 'border-nexo-primary bg-nexo-primary-soft font-semibold text-nexo-primary shadow-xs' : 'border-nexo-border bg-white text-nexo-text hover:bg-slate-50'"
               @click="selectedAuthorId = a.userId"
             >
-              <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-xs" :style="{ backgroundColor: a.color }">
+              <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs" :style="{ backgroundColor: a.color }">
                 {{ a.initials }}
               </span>
               <span class="max-w-[120px] truncate">{{ a.name }}</span>
@@ -258,8 +258,8 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
         <!-- Provider radio (OpenAI/Claude/Gemini/DeepSeek) -->
         <div class="mt-2.5">
           <div class="mb-1 flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-nexo-muted">Provedor de IA</span>
-            <span class="font-mono text-[11px] text-nexo-muted">{{ currentAuthor?.model }}</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-nexo-muted">Provedor de IA</span>
+            <span class="font-mono text-xs text-nexo-muted">{{ currentAuthor?.model }}</span>
           </div>
           <div class="grid grid-cols-4 gap-1 rounded-btn border border-nexo-border bg-slate-50 p-0.5" role="radiogroup" aria-label="Provedor de IA">
             <button
@@ -268,7 +268,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
               type="button"
               role="radio"
               :aria-checked="selectedProvider === prov"
-              class="rounded-btn py-1 text-center text-xs font-medium transition"
+              class="rounded-btn py-1.5 min-h-[32px] text-center text-sm font-medium transition"
               :class="selectedProvider === prov ? 'bg-white font-semibold text-nexo-primary shadow-xs' : 'text-nexo-muted hover:text-nexo-text'"
               @click="selectedProvider = prov"
             >
@@ -321,7 +321,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
           <div class="flex items-center gap-2">
             <button
               type="button"
-              class="rounded-btn bg-nexo-primary px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-95"
+              class="rounded-btn bg-nexo-primary px-4 py-1.5 min-h-[32px] text-sm font-semibold text-white shadow-xs hover:opacity-95"
               @click="gerar()"
             >
               Draft with AI
@@ -329,7 +329,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
             <button
               v-if="preview.length > 0"
               type="button"
-              class="rounded-btn border border-nexo-primary bg-nexo-primary-soft px-3.5 py-1.5 text-xs font-semibold text-nexo-primary hover:bg-nexo-primary/10"
+              class="rounded-btn border border-nexo-primary bg-nexo-primary-soft px-3.5 py-1.5 min-h-[32px] text-sm font-semibold text-nexo-primary hover:bg-nexo-primary/10"
               @click="confirmar()"
             >
               Confirmar
@@ -337,7 +337,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
             <button
               v-if="preview.length > 0"
               type="button"
-              class="rounded-btn border border-nexo-border px-3 py-1.5 text-xs hover:bg-slate-50"
+              class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm hover:bg-slate-50"
               @click="descartar()"
             >
               Descartar
@@ -345,7 +345,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
             <button
               v-if="pilhaUndo.length > 0"
               type="button"
-              class="flex items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 text-xs font-medium text-nexo-text hover:bg-slate-50"
+              class="flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 text-sm font-medium text-nexo-text hover:bg-slate-50"
               :title="'Desfazer último rascunho de ' + (ultimoUndo ? ultimoUndo.authorName : '')"
               @click="desfazerTubo()"
             >
@@ -356,7 +356,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
           </div>
           <button
             type="button"
-            class="rounded-btn border border-nexo-border px-3.5 py-1.5 text-xs font-medium text-nexo-text hover:bg-slate-50"
+            class="rounded-btn border border-nexo-border px-3.5 py-1.5 min-h-[32px] text-sm font-medium text-nexo-text hover:bg-slate-50"
             @click="descartar(); aberto = false"
           >
             Close

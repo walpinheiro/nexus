@@ -183,7 +183,7 @@ function baixarGateMarkdown() {
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-1.5">
               <LucideIcon :name="prontaParaStudio ? 'check-circle-2' : 'clock'" :size="15" :class="prontaParaStudio ? 'text-green-700' : 'text-amber-700'" />
-              <span class="font-bold uppercase tracking-wide text-[11px]" :class="prontaParaStudio ? 'text-green-900' : 'text-amber-900'">
+              <span class="font-bold uppercase tracking-wide text-xs" :class="prontaParaStudio ? 'text-green-900' : 'text-amber-900'">
                 {{ prontaParaStudio ? 'Pronto para Studio' : 'Pendente de Baseline G2 para Studio' }}
               </span>
             </div>
@@ -191,7 +191,7 @@ function baixarGateMarkdown() {
               <button
                 v-if="vinculosTela.length > 0"
                 type="button"
-                class="inline-flex items-center gap-1 rounded-btn border border-green-600 bg-white px-2.5 py-1 text-[11px] font-semibold text-green-800 shadow-xs hover:bg-green-50 transition-colors"
+                class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-green-600 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 shadow-xs hover:bg-green-50 transition-colors"
                 @click="emit('preview', vinculosTela[0].telaId)"
               >
                 <LucideIcon name="eye" :size="12" />
@@ -200,7 +200,7 @@ function baixarGateMarkdown() {
               <RouterLink
                 v-if="props.alvo"
                 :to="{ path: '/studio-full', query: { feature: props.alvo.id, from: 'gates/G2' } }"
-                class="inline-flex items-center gap-1 rounded-btn px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs transition-colors"
+                class="inline-flex min-h-[32px] items-center gap-1 rounded-btn px-3 py-1.5 text-sm font-semibold text-white shadow-xs transition-colors"
                 :class="prontaParaStudio ? 'bg-green-700 hover:bg-green-800' : 'bg-amber-600 hover:bg-amber-700'"
               >
                 <LucideIcon :name="vinculosTela.length > 0 ? 'layout' : 'auto_awesome'" :size="12" />
@@ -219,12 +219,12 @@ function baixarGateMarkdown() {
           <div v-if="entradaStudio" class="rounded bg-white p-2.5 border border-nexo-border/70 text-[11px] space-y-1.5">
             <div class="flex items-center justify-between font-semibold text-nexo-text">
               <span>Telas e Estados Prontos para Studio ({{ entradaStudio.telas.length }}):</span>
-              <span class="text-[10px] text-nexo-muted font-normal">{{ entradaStudio.navegacao.length }} transições BDD mapeadas</span>
+              <span class="text-xs text-nexo-muted font-normal">{{ entradaStudio.navegacao.length }} transições BDD mapeadas</span>
             </div>
             <ul class="space-y-1 pl-1">
-              <li v-for="t in entradaStudio.telas" :key="t.id" class="flex items-center justify-between gap-1.5 text-[10px] text-nexo-text">
+              <li v-for="t in entradaStudio.telas" :key="t.id" class="flex items-center justify-between gap-1.5 text-xs text-nexo-text">
                 <div class="flex items-start gap-1.5 min-w-0">
-                  <span class="rounded bg-nexo-primary/10 text-nexo-primary px-1 font-mono text-[9px] font-bold shrink-0">
+                  <span class="rounded bg-nexo-primary/10 text-nexo-primary px-1 font-mono text-xs font-bold shrink-0">
                     {{ t.origem === 'fluxo_feliz' ? 'passo' : 'exceção' }}
                   </span>
                   <span class="font-medium shrink-0">{{ t.nome }}:</span>
@@ -232,7 +232,7 @@ function baixarGateMarkdown() {
                 </div>
                 <button
                   type="button"
-                  class="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-nexo-primary hover:underline px-1 py-0.5"
+                  class="shrink-0 inline-flex min-h-[32px] items-center gap-0.5 text-xs text-nexo-primary hover:underline px-2 py-1.5"
                   @click="emit('preview', t.id)"
                 >
                   <LucideIcon name="eye" :size="11" />
@@ -249,18 +249,18 @@ function baixarGateMarkdown() {
           <div
             v-for="step in pipelinePassos"
             :key="step.numero"
-            class="rounded p-2 border text-[11px] space-y-1 transition-colors"
+            class="rounded p-2 border text-xs space-y-1 transition-colors"
             :class="step.ok ? 'bg-green-50/70 border-green-200 text-green-950' : 'bg-white border-nexo-border text-nexo-text'"
           >
             <div class="flex items-center justify-between">
-              <span class="font-bold text-[10px]">Passo {{ step.numero }}</span>
+              <span class="font-bold text-xs">Passo {{ step.numero }}</span>
               <LucideIcon :name="step.ok ? 'check-circle-2' : 'alert-circle'" :size="13" :class="step.ok ? 'text-green-600' : 'text-amber-500'" />
             </div>
-            <p class="font-medium text-[10px] leading-tight">{{ step.titulo }}</p>
-            <p class="text-[9px] text-nexo-muted truncate" :title="step.detalhe">{{ step.detalhe }}</p>
+            <p class="font-medium text-xs leading-tight">{{ step.titulo }}</p>
+            <p class="text-xs text-nexo-muted truncate" :title="step.detalhe">{{ step.detalhe }}</p>
           </div>
         </div>
-        <p class="text-[10px] text-nexo-muted text-right">
+        <p class="text-xs text-nexo-muted text-right">
           {{ pipelinePassos.filter((p) => p.ok).length }}/5 concluídos
         </p>
       </template>
