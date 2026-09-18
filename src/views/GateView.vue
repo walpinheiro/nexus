@@ -99,6 +99,17 @@ const checklistAlvo = computed(() => {
 const solicitacoesDesteGate = computed(() => gates.pendentesPorGate(props.id as GateId))
 const temSolicitacaoPendenteAlvo = computed(() => gates.temSolicitacaoPendente(props.id as GateId, alvoId.value))
 
+// Todas as solicitações aguardando julgamento pelo usuário atual
+const solicitacoesAguardandoJulgamento = computed(() => gates.solicitacoesAguardandoMeuJulgamento)
+
+function selecionarAlvoSolicitacao(solAlvoId: string, solGateId?: GateId) {
+  if (solGateId && solGateId !== props.id) {
+    router.push(`/gates/${solGateId}`)
+    return
+  }
+  alvoId.value = solAlvoId
+}
+
 // Permissões do usuário logado
 const permitidos = computed(() => aprovadoresDoGate(props.id as GateId))
 const podeAprovar = computed(() => {
@@ -183,6 +194,14 @@ function corrigirNoObjeto(id: string) {
     <!-- Topbar do Gate -->
     <div class="flex items-center gap-3">
       <h1 class="text-xl font-bold">Gate {{ props.id }}</h1>
+      <div
+        v-if="solicitacoesAguardandoJulgamento.length > 0"
+        class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-xs text-amber-900 font-semibold"
+      >
+        <span class="flex h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+        <LucideIcon name="inbox" :size="13" class="text-amber-700" />
+        {{ solicitacoesAguardandoJulgamento.length }} aguardando sua decisão
+      </div>
       <div class="ml-auto flex items-center gap-2">
         <button
           type="button"
@@ -218,6 +237,35 @@ function corrigirNoObjeto(id: string) {
       {{ gate.titulo }} · {{ gate.status }}<span v-if="gate.baselineVersao"> · baseline v{{ gate.baselineVersao }} por {{ gate.aprovadoPor }}</span>
     </p>
     <p v-else class="text-sm text-nexo-blocked">Gate desconhecido.</p>
+
+    <!-- Notificação Visível: Solicitações Aguardando Meu Julgamento -->
+    <div
+      v-if="solicitacoesAguardandoJulgamento.length > 0"
+      class="rounded-card border border-amber-300 bg-amber-50/90 p-3 text-xs space-y-2 shadow-sm"
+    >
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-1.5 font-bold text-amber-900">
+          <LucideIcon name="alert-circle" :size="15" class="text-amber-700" />
+          Atenção: Você possui {{ solicitacoesAguardandoJulgamento.length }} solicitação(ões) pendente(s) aguardando sua decisão
+        </span>
+        <span class="text-[10px] text-amber-800 font-medium">Clique no item para selecionar o objeto</span>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-for="s in solicitacoesAguardandoJulgamento"
+          :key="s.id"
+          type="button"
+          class="flex items-center gap-1.5 rounded bg-white px-2.5 py-1 border text-[11px] font-medium transition-colors hover:border-amber-400 hover:bg-amber-100/50"
+          :class="s.alvoId === alvoId ? 'border-amber-500 text-amber-900 font-bold ring-1 ring-amber-400' : 'border-amber-200 text-nexo-text'"
+          @click="selecionarAlvoSolicitacao(s.alvoId, s.gate)"
+        >
+          <span class="rounded bg-amber-200 text-amber-950 px-1 py-0.2 text-[9px] font-bold">{{ s.gate }}</span>
+          <span>{{ graph.noPorId(s.alvoId)?.titulo || s.alvoId }}</span>
+          <span class="text-[9px] text-nexo-muted">({{ s.solicitanteId }})</span>
+        </button>
+      </div>
+    </div>
 
     <!-- Split view: Checklist & Governança à esquerda + Sessão IA à direita -->
     <div class="flex flex-col lg:flex-row items-start gap-6">
@@ -286,16 +334,32 @@ function corrigirNoObjeto(id: string) {
             <div
               v-for="sol in solicitacoesDesteGate"
               :key="sol.id"
-              class="rounded border border-amber-200 bg-white p-2.5 text-xs space-y-1.5"
+              class="rounded border bg-white p-2.5 text-xs space-y-1.5 transition-colors"
+              :class="users.currentUser?.id !== sol.solicitanteId && podeAprovar ? 'border-amber-400 ring-1 ring-amber-300 bg-amber-50/20' : 'border-amber-200'"
             >
               <div class="flex items-center justify-between">
-                <div>
-                  <strong class="text-nexo-text">{{ graph.noPorId(sol.alvoId)?.titulo || sol.alvoId }}</strong>
-                  <span class="text-[11px] text-nexo-muted ml-1.5">por {{ sol.solicitanteId }} em {{ new Date(sol.em).toLocaleDateString() }}</span>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="font-bold text-nexo-text hover:text-nexo-primary hover:underline text-left cursor-pointer"
+                    title="Clique para selecionar este objeto no Gate"
+                    @click="selecionarAlvoSolicitacao(sol.alvoId)"
+                  >
+                    {{ graph.noPorId(sol.alvoId)?.titulo || sol.alvoId }}
+                  </button>
+                  <span class="text-[11px] text-nexo-muted">por {{ sol.solicitanteId }} em {{ new Date(sol.em).toLocaleDateString() }}</span>
                 </div>
-                <span class="rounded bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase">
-                  Pendente
-                </span>
+                <div class="flex items-center gap-1.5">
+                  <span
+                    v-if="users.currentUser?.id !== sol.solicitanteId && podeAprovar"
+                    class="rounded bg-amber-600 text-white px-1.5 py-0.2 text-[9px] font-bold uppercase"
+                  >
+                    Aguardando sua decisão
+                  </span>
+                  <span class="rounded bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase">
+                    Pendente
+                  </span>
+                </div>
               </div>
 
               <!-- Ações da Fila -->

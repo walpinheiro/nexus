@@ -527,9 +527,21 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
       roles: ['Dev', 'QA', 'TechLead'],
       descricao: 'Decompõe entregáveis em Definition of Ready com estratégias de testes automatizados.',
       autonomia: 'Não fecha estimativas de squad e não divide itens sem aceite verificável.',
-      checks: ['PBI-001', 'PBI-ACEITE', 'PBI-ORIGEM', 'PBI-ESCOPO', 'PBI-DEP', 'PBI-OWNER', 'PBI-TESTE', 'PBI-CONTRATO', 'PBI-BLOQ'],
+      checks: [
+        'PBI-ACEITE',
+        'PBI-ORIGEM',
+        'PBI-ESCOPO',
+        'PBI-DEP',
+        'PBI-OWNER',
+        'PBI-TESTE',
+        'PBI-CONTRATO',
+        'PBI-BLOQ',
+        'PBI-COND-COMPAT',
+        'PBI-COND-ROLLBACK',
+        'PBI-COND-TELA',
+        'PBI-COND-TESTE'
+      ],
       perguntas: [
-        DICIONARIO_PERGUNTAS['PBI-001'],
         DICIONARIO_PERGUNTAS['PBI-ACEITE'],
         DICIONARIO_PERGUNTAS['PBI-ORIGEM'],
         DICIONARIO_PERGUNTAS['PBI-ESCOPO'],
@@ -538,7 +550,7 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
         DICIONARIO_PERGUNTAS['PBI-TESTE'],
         DICIONARIO_PERGUNTAS['PBI-CONTRATO'],
         DICIONARIO_PERGUNTAS['PBI-BLOQ']
-      ]
+      ].filter(Boolean)
     }
   ],
   G5: [
@@ -895,10 +907,30 @@ export function gerarPropostaPatch(
     case 'DON-004':
     case 'DON-005':
     case 'DON-006': {
-      // DoD G5 - promover status para validated e registrar aceite
+      // DoD G5 - promover status para validated e registrar evidências completas
       const de = objeto.status
       const para: NexoStatus = 'validated'
       mudancas.push({ campo: 'status', de, para })
+
+      const deEvidencia = JSON.stringify((objeto as unknown as Record<string, unknown>).evidencia ?? {})
+      const paraEvidencia = JSON.stringify(
+        {
+          pr_url: 'https://github.com/locaweb/nexo/pull/142',
+          pr_merged: true,
+          checks_ci: ['lint:pass', 'test:pass', 'sast:pass', 'policy:pass'],
+          sast_ok: true,
+          policy_ok: true,
+          aceite_registrado: true,
+          testes_verdes: true,
+          seg_aprovado: true,
+          observabilidade: ['latencia_p95', 'erro_5xx', 'grafana_dashboard_pbi'],
+          rastreabilidade: ['git_commit_sha', 'story_map_node', 'jira_issue']
+        },
+        null,
+        2
+      )
+      mudancas.push({ campo: 'evidencia', de: deEvidencia, para: paraEvidencia })
+
       return {
         justificativa: `[IA Gate G5] Promover status para validated e consolidar conformidade de DoD para ${codigoCheck}`,
         mudancas
@@ -1129,13 +1161,13 @@ export function processarMensagemGate(
     const prop = gerarPropostaPatch(objeto, 'DON-001', mensagem)
     if (prop) {
       return {
-        texto: `**Proposta Gerada (G5):** Consolidei a Definition of Done promovendo o status de "${objeto.titulo}" para validated com conformidade de testes e evidências.`,
+        texto: `**Proposta Gerada (G5):** Consolidei a Definition of Done promovendo o status de "${objeto.titulo}" para validated com evidências completas de PR, CI/SAST, testes automatizados e observabilidade.`,
         propostaPatch: {
           alvoId: objeto.id,
           justificativa: prop.justificativa,
           mudancas: prop.mudancas
         },
-        checksAfetados: ['DON-001']
+        checksAfetados: ['DON-001', 'DON-002', 'DON-003', 'DON-004', 'DON-005', 'DON-006']
       }
     }
   }

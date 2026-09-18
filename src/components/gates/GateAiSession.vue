@@ -55,10 +55,10 @@ const governanca = computed(() => {
   return obterGovernancaGate(props.gateId, users.currentUser, props.alvo, gates.gates)
 })
 
-// Inicializa ou limpa chat ao trocar de objeto
+// Inicializa ou limpa chat ao trocar de objeto ou gate
 watch(
-  () => props.alvoId,
-  (novoId) => {
+  [() => props.alvoId, () => props.gateId],
+  ([novoId]) => {
     patchPendente.value = null
     if (!novoId || !props.alvo) {
       historicoChat.value = [
@@ -84,7 +84,7 @@ watch(
 
     historicoChat.value = [
       {
-        id: `init-${novoId}`,
+        id: `init-${novoId}-${props.gateId}`,
         autor: 'ia',
         texto: msgInicial,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -478,22 +478,38 @@ function rejeitarPatch() {
           >
             O que falta?
           </button>
-          <button
-            v-if="props.gateId === 'G0'"
-            type="button"
-            class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
-            @click="enviarMensagem('Estruturar hipótese e problema de enquadramento')"
-          >
-            + Hipótese & Dor
-          </button>
-          <button
-            v-if="props.gateId === 'G1'"
-            type="button"
-            class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
-            @click="enviarMensagem('Adicionar KPI mensurável e escopo in/out')"
-          >
-            + KPI e Escopo
-          </button>
+          <template v-if="props.gateId === 'G0'">
+            <button
+              type="button"
+              class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
+              @click="enviarMensagem('Estruturar hipótese e problema de enquadramento')"
+            >
+              + Hipótese & Dor
+            </button>
+            <button
+              type="button"
+              class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
+              @click="enviarMensagem('Definir escopo in e escopo out do enquadramento')"
+            >
+              + Escopo In/Out
+            </button>
+          </template>
+          <template v-if="props.gateId === 'G1'">
+            <button
+              type="button"
+              class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
+              @click="enviarMensagem('Adicionar KPI mensurável')"
+            >
+              + KPI Mensurável
+            </button>
+            <button
+              type="button"
+              class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
+              @click="enviarMensagem('Definir escopo in e escopo out do épico')"
+            >
+              + Escopo In/Out
+            </button>
+          </template>
           <button
             v-if="props.gateId === 'G2'"
             type="button"
