@@ -154,36 +154,78 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
 
   if (gate === 'G2' || (isFeature(objeto) && gate >= 'G2')) {
     const f = getFeatureFields(objeto)
+    const ff = objeto as unknown as Record<string, unknown>
+    const regrasIds = Array.isArray(ff['regras_ids']) ? (ff['regras_ids'] as unknown[]) : []
+    const telasIds = Array.isArray(ff['telas_ids']) ? (ff['telas_ids'] as unknown[]) : []
+    const integ = Array.isArray(ff['integracoes']) ? (ff['integracoes'] as unknown[]) : []
+    const bdds = Array.isArray(ff['criterios_bdd']) ? (ff['criterios_bdd'] as Record<string, unknown>[]) : []
     checks.push({
       codigo: 'FTR-001',
-      descricao: 'Narrativa contém ator, capacidade e benefício',
+      descricao: 'Narrativa contém ator, capacidade e benefício literais',
       severidade: 'bloqueante',
-      ok: f.ator.trim().length > 0 && objeto.descricao.trim().length > 0
+      ok: f.ator.trim().length > 0 && String(ff['beneficio'] ?? '').trim().length > 0 && objeto.descricao.trim().length >= 20
     })
     checks.push({
       codigo: 'FTR-002',
       descricao: 'Fluxo feliz com entrada, ação e resultado observável',
       severidade: 'bloqueante',
-      ok: f.fluxo.trim().length >= 10
+      ok: (() => {
+        const s = f.fluxo.toLowerCase()
+        return f.fluxo.trim().length >= 10 && s.includes(' ') && /retorna|exibe|gera|baixa|cria|envia|atualiza/.test(s)
+      })()
     })
     checks.push({
-      codigo: 'FTR-007',
-      descricao: 'Ao menos 1 critério BDD verificável',
+      codigo: 'FTR-003',
+      descricao: 'Regra vinculada tem fonte e não está arquivada',
       severidade: 'bloqueante',
-      ok: f.bdd >= 1
+      ok: regrasIds.length >= 1 && (ff['fonte'] ?? 'stated') !== 'pending_decision'
     })
     checks.push({
       codigo: 'FTR-004',
-      descricao: 'Owner definido',
+      descricao: 'Alteração de dados possui permissão/policy',
       severidade: 'bloqueante',
-      ok: f.owner.trim().length > 0
+      ok: (() => {
+        const perms = Array.isArray(ff['permissoes']) ? (ff['permissoes'] as Record<string, unknown>[]) : []
+        return f.owner.trim().length > 0 && perms.some((p) => String(p['recurso'] ?? '').trim() !== '' && String(p['policy'] ?? '').trim() !== '')
+      })()
+    })
+    checks.push({
+      codigo: 'FTR-005',
+      descricao: 'Tela sem estados loading/vazio/erro/sucesso',
+      severidade: 'aviso',
+      ok: (() => {
+        const telas = Array.isArray(ff['telas_estados']) ? (ff['telas_estados'] as Record<string, unknown>[]) : []
+        if (telasIds.length === 0) return true
+        return telas.some((t) => t['loading'] && t['vazio'] != null && t['erro'] && t['sucesso'])
+      })()
+    })
+    checks.push({
+      codigo: 'FTR-006',
+      descricao: 'Integração externa tem timeout, falha e indisponibilidade',
+      severidade: 'bloqueante',
+      ok: (() => {
+        if (integ.length === 0) return true
+        return integ.every((x) => {
+          if (typeof x === 'string') {
+            const s = x.toLowerCase()
+            return s.includes('timeout') || s.includes('falha') || s.includes('indispon')
+          }
+          const xi = x as Record<string, unknown>
+          return xi['timeout_ms'] != null && xi['falha'] != null && xi['indisponibilidade'] != null
+        })
+      })()
+    })
+    checks.push({
+      codigo: 'FTR-007',
+      descricao: 'Critério BDD com Given/When/Then verificável',
+      severidade: 'bloqueante',
+      ok: bdds.some((b) => String(b['given'] ?? '').trim() !== '' && String(b['when'] ?? '').trim() !== '' && String(b['then'] ?? '').trim() !== '')
     })
     checks.push({
       codigo: 'FTR-008',
       descricao: 'Ação sensível/financeira possui cenário de abuso/erro',
       severidade: 'aviso',
       ok: ((): boolean => {
-        const ff = objeto as unknown as Record<string, unknown>
         const alt = Array.isArray(ff['alternativos']) ? (ff['alternativos'] as unknown[]) : []
         return alt.length >= 1
       })()
