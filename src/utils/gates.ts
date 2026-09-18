@@ -247,6 +247,74 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
       severidade: 'bloqueante',
       ok: (f['adr_id'] as string | undefined) != null && String(f['adr_id'] ?? '') !== ''
     })
+    checks.push({
+      codigo: 'ARC-003',
+      descricao: 'OpenAPI detalhada (2xx/4xx/5xx, auth, compatibilidade, consumidor)',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const api = f['openapi'] as Record<string, unknown> | undefined
+        if (!api) return String(f['contrato_dispensa'] ?? '') !== ''
+        return ['v2xx', 'v4xx', 'v5xx', 'auth', 'compat', 'consumidor'].every((k) => String(api[k] ?? '').trim() !== '')
+      })()
+    })
+    checks.push({
+      codigo: 'ARC-004',
+      descricao: 'Persistência: entidade + validações + migration + índice + plano de dados',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const p = f['persistencia'] as Record<string, unknown> | undefined
+        if (!p) return false
+        return ['entidade', 'validacoes', 'migration', 'indice', 'plano_dados'].every((k) => String(p[k] ?? '').trim() !== '')
+      })()
+    })
+    checks.push({
+      codigo: 'ARC-005',
+      descricao: 'Integração estruturada (owner, timeout, retry, idempotência, indisponibilidade)',
+      severidade: 'bloqueante',
+      ok: (() => {
+        if (integ.length === 0) return String(f['contrato_dispensa'] ?? '') !== ''
+        return integ.every((x) => {
+          if (typeof x === 'string') return x.toLowerCase().includes('timeout')
+          const xi = x as Record<string, unknown>
+          return xi['owner_externo'] != null && xi['timeout_ms'] != null && xi['indisponibilidade'] != null
+        })
+      })()
+    })
+    checks.push({
+      codigo: 'ARC-006',
+      descricao: 'Dado pessoal: classificação + finalidade + retenção + acesso',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const d = f['dado_pessoal'] as Record<string, unknown> | undefined
+        if (!d) return true
+        return ['classificacao', 'finalidade', 'retencao', 'acesso'].every((k) => String(d[k] ?? '').trim() !== '')
+      })()
+    })
+    checks.push({
+      codigo: 'ARC-007',
+      descricao: 'NFR com medida + alvo + observabilidade',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const nfrs = Array.isArray(f['nfrs']) ? (f['nfrs'] as Record<string, unknown>[]) : []
+        if (nfrs.length === 0) return false
+        return nfrs.some((n) => String(n['medida'] ?? '').trim() !== '' && String(n['alvo'] ?? '').trim() !== '' && String(n['observabilidade'] ?? '').trim() !== '')
+      })()
+    })
+    checks.push({
+      codigo: 'ARC-008',
+      descricao: 'Segurança: threat model + matriz; exceção expirada BLOQUEIA',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const seg = f['seguranca'] as Record<string, unknown> | undefined
+        const exc = f['excecao_seg'] as Record<string, unknown> | undefined
+        if (exc && String(exc['prazo'] ?? '') !== '') {
+          if (new Date(String(exc['prazo'])).getTime() <= Date.now()) return false
+          return String(exc['owner'] ?? '').trim() !== '' && String(exc['aceite'] ?? '').trim() !== ''
+        }
+        if (!seg) return false
+        return String(seg['threat'] ?? '').trim() !== '' && String(seg['matriz'] ?? '').trim() !== ''
+      })()
+    })
   }
 
   if (gate === 'G4') {
