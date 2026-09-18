@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Breadcrumb from '@/components/layout/Breadcrumb.vue'
 import ImpactBanner from '@/components/layout/ImpactBanner.vue'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 import NexoLogo from '@/components/common/NexoLogo.vue'
 import { useUI } from '@/stores/useUI'
 import { useGraph } from '@/stores/useGraph'
@@ -74,11 +75,7 @@ function abrirBusca() {
         aria-label="Abrir menu"
         @click="ui.alternarSidebar()"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-          <line x1="4" y1="6" x2="20" y2="6" />
-          <line x1="4" y1="12" x2="20" y2="12" />
-          <line x1="4" y1="18" x2="20" y2="18" />
-        </svg>
+        <LucideIcon name="menu" :size="18" />
       </button>
       <RouterLink
         to="/"
@@ -109,10 +106,7 @@ function abrirBusca() {
         aria-label="Buscar no NEXO (Ctrl+K)"
         @click="abrirBusca()"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <line x1="16.5" y1="16.5" x2="21" y2="21" />
-        </svg>
+        <LucideIcon name="search" :size="16" />
         <span>Buscar no NEXO</span>
         <kbd class="ml-auto rounded bg-slate-100 px-1.5 py-0.5 text-xs text-nexo-muted">⌘K</kbd>
       </button>

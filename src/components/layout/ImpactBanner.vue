@@ -23,11 +23,7 @@ function ir() {
     aria-label="Impacto alto detectado — ir para Status de pagamento"
     @click="ir()"
   >
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M12 3 2.5 19.5h19L12 3z" />
-      <line x1="12" y1="9" x2="12" y2="13.5" />
-      <circle cx="12" cy="16.5" r="0.5" fill="currentColor" />
-    </svg>
+    <LucideIcon name="alert-circle" :size="16" />
     Impacto alto detectado
     <span class="inline-flex" aria-hidden="true"><LucideIcon name="chevR" :size="14" /></span>
   </button>
