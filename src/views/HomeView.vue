@@ -8,6 +8,7 @@ import { useUsers } from '@/stores/useUsers'
 import type { Classificacao } from '@/types/nexo'
 import IngestaoDialog from '@/components/projects/IngestaoDialog.vue'
 import { getProviderPadrao, saveConfig, type ProvedorIaLocal } from '@/ai/ollamaClient'
+import { PASSOS_WIZARD_CRIACAO } from '@/ai/gateSkills'
 
 const projects = useProjects()
 const graph = useGraph()
@@ -98,18 +99,21 @@ function aoIngestaoCancelar() {
 }
 
 function criar() {
-  const r = projects.criarProjeto(
+  // Item5 FIXGERAL-TELA: usa criarProjetoComIA do MOTOR (não criarProjeto
+  // direto) — título/campos confirmados no wizard; G0-001 sem título vazio.
+  const tituloFinal = titulo.value.trim() || sugestaoTituloIa.value.trim()
+  if (!tituloFinal) {
+    erros.value = [{ campo: 'titulo', codigo: 'G0-001', mensagem: 'Título é obrigatório (G0-001). Confirme a sugestão da IA ou digite o título.' }]
+    return
+  }
+  const r = projects.criarProjetoComIA(
     {
-      titulo: titulo.value.trim(),
-      contexto: contexto.value,
-      publico: publico.value,
+      problema: contexto.value,
       objetivo: objetivo.value,
-      metricaNome: metrica.value,
-      restricoes: restricoesTxt.value.split('\n').map((s) => s.trim()).filter(Boolean),
-      naoObjetivos: naoObjetivosTxt.value.split('\n').map((s) => s.trim()).filter(Boolean),
-      // W1 CRIACAOIA2-TELA: owner sempre = usuário logado (atorId).
-      owner: users.state.currentUserId,
-      classificacao: classificacao.value
+      usuarios: publico.value,
+      escopo: restricoesTxt.value,
+      metrica: metrica.value,
+      naoObjetivos: naoObjetivosTxt.value
     },
     users.state.currentUserId
   )
@@ -124,20 +128,22 @@ function criar() {
   router.push('/backlog')
 }
 
-// CRIACAOIA2-TELA: wizard IA — 4 passos (problema, objetivo, usuários,
-// escopo); responsável sempre = usuário logado (W1, sem passo owner).
-// Sugestão de título via IA (W2): confirma/ajusta antes de criar.
-const PASSOS_WIZARD = [
-  { id: 'problema', titulo: 'Qual problema será resolvido?', ajuda: 'Descreva a dor observável (mín. 10 caracteres; o G0 exige 30).', tipo: 'texto' },
-  { id: 'objetivo', titulo: 'Qual o objetivo?', ajuda: 'O que se espera alcançar com o projeto.', tipo: 'texto' },
-  { id: 'usuarios', titulo: 'Quem são os usuários?', ajuda: 'Público afetado pelo problema.', tipo: 'texto' },
-  { id: 'escopo', titulo: 'O que fica fora do escopo?', ajuda: 'Restrições, uma por linha (opcional).', tipo: 'texto' }
-] as const
+// Item5 FIXGERAL-TELA: 5 passos SEM passo usuário (problema, objetivo,
+// usuários, escopo, métrica) — consome PASSOS_WIZARD_CRIACAO do MOTOR, sem
+// duplicar; métrica usa criarProjetoComIA; preenche TODOS (métrica +
+// naoObjetivos); responsável sempre = usuário logado. Sugestão de título
+// via IA (W2): confirma/ajusta antes de criar.
 const passoWizard = ref(0)
 const respostaPasso = ref('')
 const erroPasso = ref('')
 const wizardConcluidoNovo = ref(false)
-const passoAtualWizard = computed(() => PASSOS_WIZARD[passoWizard.value])
+// Título do passo vem do MOTOR (pergunta); ajuda local só complementa.
+// Métrica tem ajuda própria; demais usam a ajuda do MOTOR.
+const passoAtualWizard = computed(() => PASSOS_WIZARD_CRIACAO[passoWizard.value])
+const ajudaPassoAtual = computed(() => {
+  if (passoAtualWizard.value.id === 'metrica') return 'Nome da métrica de sucesso (ex.: Adoção inicial).'
+  return passoAtualWizard.value.ajuda
+})
 
 function iniciarWizardNovo() {
   passoWizard.value = 0
@@ -149,10 +155,12 @@ function iniciarWizardNovo() {
 }
 
 function validarPassoAtual(): boolean {
-  const passo = passoAtualWizard.value
-  if (passo.id === 'escopo') return true
+  // Item5: validação espelha o MOTOR (problema/objetivo/usuários mín. 10;
+  // escopo/métrica opcionais); mensagem curta PT-BR na tela.
+  const passoId = passoAtualWizard.value.id
+  if (passoId === 'escopo' || passoId === 'metrica') return true
   if (respostaPasso.value.trim().length < 10) {
-    erroPasso.value = 'Responda com pelo menos 10 caracteres.'
+    erroPasso.value = 'Resposta curta demais: use ao menos 10 caracteres.'
     return false
   }
   return true
@@ -160,14 +168,20 @@ function validarPassoAtual(): boolean {
 
 function avancarWizard() {
   if (!validarPassoAtual()) return
-  const passo = passoAtualWizard.value
+  const passoId = passoAtualWizard.value.id
   const v = respostaPasso.value.trim()
-  if (passo.id === 'problema') contexto.value = v
-  if (passo.id === 'objetivo') objetivo.value = v
-  if (passo.id === 'usuarios') publico.value = v
-  if (passo.id === 'escopo') restricoesTxt.value = v
+  // Item5: preenche TODOS — métrica + naoObjetivos (G0-001 exige título;
+  // métrica alimenta criarProjetoComIA; naoObjetivos evita G0 vazio).
+  if (passoId === 'problema') contexto.value = v
+  if (passoId === 'objetivo') objetivo.value = v
+  if (passoId === 'usuarios') publico.value = v
+  if (passoId === 'escopo') restricoesTxt.value = v
+  if (passoId === 'metrica') {
+    metrica.value = v || 'Adoção inicial'
+    naoObjetivosTxt.value = naoObjetivosTxt.value || ''
+  }
   erroPasso.value = ''
-  if (passoWizard.value < PASSOS_WIZARD.length - 1) {
+  if (passoWizard.value < PASSOS_WIZARD_CRIACAO.length - 1) {
     passoWizard.value += 1
     respostaPasso.value = ''
   } else {
@@ -294,24 +308,24 @@ const temProjetos = computed(() => projects.state.projetos.length > 0)
           >Existente</button>
         </div>
         <form v-if="tipoProjeto === 'novo'" @submit.prevent="criar">
-        <!-- CRIACAOIA-TELA: wizard IA 5 passos — pergunta por vez, pré-preenche campos ao final -->
+        <!-- Item5 FIXGERAL-TELA: wizard IA 5 passos do MOTOR — pergunta por vez, pré-preenche ao final -->
         <div class="mt-3 space-y-2 text-sm" aria-label="Assistente de criação">
           <div class="flex items-center justify-between text-xs text-nexo-muted">
-            <span class="font-semibold text-nexo-text">Passo {{ passoWizard + 1 }} de {{ PASSOS_WIZARD.length }} — {{ passoAtualWizard.titulo }}</span>
-            <span>{{ Math.round(((passoWizard + (wizardConcluidoNovo ? 1 : 0)) / PASSOS_WIZARD.length) * 100) }}%</span>
+            <span class="font-semibold text-nexo-text">Passo {{ passoWizard + 1 }} de {{ PASSOS_WIZARD_CRIACAO.length }} — {{ passoAtualWizard.pergunta }}</span>
+            <span>{{ Math.round(((passoWizard + (wizardConcluidoNovo ? 1 : 0)) / PASSOS_WIZARD_CRIACAO.length) * 100) }}%</span>
           </div>
-          <div class="h-1.5 w-full overflow-hidden rounded-full bg-nexo-canvas" role="progressbar" :aria-valuenow="passoWizard + 1" aria-valuemin="1" :aria-valuemax="PASSOS_WIZARD.length">
-            <div class="h-full rounded-full bg-nexo-primary transition-all" :style="{ width: `${((passoWizard + (wizardConcluidoNovo ? 1 : 0)) / PASSOS_WIZARD.length) * 100}%` }" />
+          <div class="h-1.5 w-full overflow-hidden rounded-full bg-nexo-canvas" role="progressbar" :aria-valuenow="passoWizard + 1" aria-valuemin="1" :aria-valuemax="PASSOS_WIZARD_CRIACAO.length">
+            <div class="h-full rounded-full bg-nexo-primary transition-all" :style="{ width: `${((passoWizard + (wizardConcluidoNovo ? 1 : 0)) / PASSOS_WIZARD_CRIACAO.length) * 100}%` }" />
           </div>
-          <p class="text-xs text-nexo-muted">{{ passoAtualWizard.ajuda }}</p>
+          <p class="text-xs text-nexo-muted">{{ ajudaPassoAtual }}</p>
           <p class="rounded-badge bg-nexo-canvas px-2 py-1 text-xs text-nexo-muted">Responsável: usuário logado ({{ usuarioResponsavel }})</p>
-          <label class="block">{{ passoAtualWizard.titulo }}
+          <label class="block">{{ passoAtualWizard.pergunta }}
             <textarea v-model="respostaPasso" rows="3" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
           </label>
           <p v-if="erroPasso" class="text-xs text-nexo-blocked">{{ erroPasso }}</p>
           <div class="flex gap-2">
             <button v-if="passoWizard > 0" type="button" class="min-h-[32px] rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="voltarWizard()">Voltar</button>
-            <button v-if="!wizardConcluidoNovo" type="button" class="min-h-[32px] flex-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white" @click="avancarWizard()">{{ passoWizard < PASSOS_WIZARD.length - 1 ? 'Responder e avançar' : 'Concluir respostas' }}</button>
+            <button v-if="!wizardConcluidoNovo" type="button" class="min-h-[32px] flex-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white" @click="avancarWizard()">{{ passoWizard < PASSOS_WIZARD_CRIACAO.length - 1 ? 'Responder e avançar' : 'Concluir respostas' }}</button>
           </div>
           <p v-if="wizardConcluidoNovo" class="rounded-badge bg-nexo-approved-bg px-2 py-1 text-xs text-nexo-approved">Respostas aplicadas aos campos abaixo. Revise e clique em Criar projeto.</p>
         </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ingerirWikiDados, type AnaliseIngestao } from '@/ai/ingestao'
 import { wizardCriacaoIterativo } from '@/ai/gateSkills'
 import { useProjects } from '@/stores/useProjects'
@@ -20,7 +20,11 @@ const sugestaoIa = ref('')
 const arquivoNome = ref('')
 const repoUrl = ref('')
 const wikiUrl = ref('')
-const owner = ref(users.currentUser?.id ?? users.state.usuarios[0]?.id ?? '')
+// Item6 FIXGERAL-TELA: sem select owner — responsável sempre = usuário logado.
+const usuarioResponsavel = computed(() => {
+  const u = users.state.usuarios.find((x) => x.id === users.state.currentUserId)
+  return u ? `${u.nome} — ${u.papel}` : users.state.currentUserId
+})
 const titulo = ref('')
 const problemaManual = ref('')
 const objetivoManual = ref('')
@@ -86,11 +90,12 @@ function criar() {
   if (arquivoNome.value) ingestao.arquivoNome = arquivoNome.value
   if (repoUrl.value.trim()) ingestao.repoUrl = repoUrl.value.trim()
   if (wikiUrl.value.trim()) ingestao.wikiUrl = wikiUrl.value.trim()
-  const atorId = users.currentUser?.id ?? owner.value
+  // Item6 FIXGERAL-TELA: owner sempre = usuário logado (sem select owner).
+  const atorId = users.state.currentUserId
   const res = projects.criarProjetoExistente(
     {
       titulo: titulo.value,
-      owner: owner.value,
+      owner: atorId,
       ingestao,
       contextoParcial: {
         titulo: titulo.value.trim(),
@@ -151,14 +156,8 @@ function criar() {
             <button type="button" class="text-xs text-nexo-muted underline" @click="limparArquivo()">remover</button>
           </span>
         </label>
-        <label class="block text-xs font-semibold text-nexo-text">Quem é o usuário (owner)
-          <select v-model="owner" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5 text-sm text-nexo-text">
-            <option value="" disabled>Selecione</option>
-            <option v-for="u in users.state.usuarios" :key="u.id" :value="u.id">
-              {{ u.nome }} ({{ u.papel }})
-            </option>
-          </select>
-        </label>
+        <!-- Item6 FIXGERAL-TELA: sem select owner — responsável sempre = usuário logado -->
+        <p class="rounded-btn border border-nexo-border bg-nexo-canvas px-2 py-1.5 text-xs text-nexo-muted">Responsável: usuário logado ({{ usuarioResponsavel }})</p>
       </div>
 
       <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">

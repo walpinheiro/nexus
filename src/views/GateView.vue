@@ -204,7 +204,10 @@ function corrigirNoObjeto(id: string) {
 
 function abrirStudioParaFeature() {
   const id = alvoId.value || alvos.value[0]?.id || ''
-  router.push({ path: '/studio-full', query: { feature: id, from: `gates/${props.id}` } })
+  // Item3 FIXGERAL-TELA: propaga query modo=wizard (padrão linhas 112/189/201)
+  const query: Record<string, string> = { feature: id, from: `gates/${props.id}` }
+  if (route.query.modo === 'wizard') query['modo'] = 'wizard'
+  router.push({ path: '/studio-full', query })
 }
 
 // Ações W4 por feature no G2
