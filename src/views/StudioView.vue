@@ -24,6 +24,8 @@ const previewAberto = ref(false)
 const dialogNovaTela = ref(false)
 const menuAberto = ref(false)
 const menuBtn = ref<HTMLButtonElement | null>(null)
+const itemMenuAberto = ref<number>(0)
+const itensMenu = ['voltar', 'backlog', 'gates', 'canvas', 'fechar'] as const
 const stageRef = ref<{ $el: HTMLElement } | null>(null)
 
 const fromRaw = computed(() => (typeof route.query.from === 'string' ? route.query.from : ''))
@@ -59,6 +61,46 @@ function abrirPreview() {
 function voltar() {
   menuAberto.value = false
   router.push(origemRota.value)
+  nextTick(() => {
+    const alvo = document.querySelector('a[href="/backlog"], a[href="/canvas"], main a, main button') as HTMLElement | null
+    ;(alvo ?? document.querySelector('main'))?.focus?.()
+  })
+}
+
+function abrirMenu() {
+  menuAberto.value = true
+  itemMenuAberto.value = 0
+  nextTick(() => focarItemMenu(0))
+}
+
+function fecharMenu(focarBotao = true) {
+  menuAberto.value = false
+  if (focarBotao) menuBtn.value?.focus()
+}
+
+function focarItemMenu(i: number) {
+  const n = itensMenu.length
+  itemMenuAberto.value = ((i % n) + n) % n
+  nextTick(() => {
+    const el = document.querySelector(`[data-menuitem="${itensMenu[itemMenuAberto.value]}"]`) as HTMLElement | null
+    el?.focus?.()
+  })
+}
+
+function onKeyMenu(e: KeyboardEvent) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    focarItemMenu(itemMenuAberto.value + 1)
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    focarItemMenu(itemMenuAberto.value - 1)
+  } else if (e.key === 'Home') {
+    e.preventDefault()
+    focarItemMenu(0)
+  } else if (e.key === 'End') {
+    e.preventDefault()
+    focarItemMenu(itensMenu.length - 1)
+  }
 }
 
 function onKey(e: KeyboardEvent) {
@@ -77,8 +119,10 @@ function onKey(e: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', onKey)
   nextTick(() => {
-    const el = (stageRef.value?.$el ?? document.querySelector('[role="application"]')) as HTMLElement | null
-    el?.focus?.()
+    setTimeout(() => {
+      const el = (stageRef.value?.$el ?? document.querySelector('[role="application"]')) as HTMLElement | null
+      el?.focus?.()
+    }, 320)
   })
 })
 onUnmounted(() => window.removeEventListener('keydown', onKey))
@@ -95,7 +139,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           aria-haspopup="menu"
           :aria-expanded="menuAberto"
           class="rounded-btn p-2 hover:bg-nexo-canvas"
-          @click="menuAberto = !menuAberto"
+          @click="menuAberto ? fecharMenu() : abrirMenu()"
         >
           <LucideIcon name="menu" :size="20" />
         </button>
@@ -104,15 +148,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           role="menu"
           aria-label="Voltar para"
           class="absolute left-0 top-11 z-50 w-56 rounded-card border border-nexo-border bg-white p-1 shadow-card"
-          @keydown.escape="menuAberto = false; menuBtn?.focus()"
+          @keydown="onKeyMenu"
+          @keydown.escape="fecharMenu(true)"
         >
-          <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded-badge px-3 py-2 text-left text-sm hover:bg-nexo-canvas" @click="voltar()">
+          <button type="button" data-menuitem="voltar" role="menuitem" class="flex w-full items-center gap-2 rounded-badge px-3 py-2 text-left text-sm hover:bg-nexo-canvas" @click="voltar()">
             <LucideIcon name="chevL" :size="14" /> Voltar para {{ origemLabel }}
           </button>
-          <RouterLink role="menuitem" to="/backlog" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Backlog</RouterLink>
-          <RouterLink role="menuitem" to="/gates/G2" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Gates G2</RouterLink>
-          <RouterLink role="menuitem" to="/canvas?view=canvas" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Canvas</RouterLink>
-          <button type="button" class="flex w-full items-center gap-1 rounded-badge px-3 py-2 text-left text-sm text-nexo-muted hover:bg-nexo-canvas" @click="menuAberto = false">
+          <RouterLink data-menuitem="backlog" role="menuitem" to="/backlog" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Backlog</RouterLink>
+          <RouterLink data-menuitem="gates" role="menuitem" to="/gates/G2" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Gates G2</RouterLink>
+          <RouterLink data-menuitem="canvas" role="menuitem" to="/canvas?view=canvas" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Canvas</RouterLink>
+          <button type="button" data-menuitem="fechar" class="flex w-full items-center gap-1 rounded-badge px-3 py-2 text-left text-sm text-nexo-muted hover:bg-nexo-canvas" @click="fecharMenu(true)">
             <LucideIcon name="x" :size="14" /> Fechar menu
           </button>
         </div>
