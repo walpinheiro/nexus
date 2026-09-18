@@ -1413,7 +1413,7 @@ export function processarMensagemGate(
       msg.includes('ajuda') ||
       msg.includes('como aprovar')
     const dicaPara = (codigo: string): string | undefined => {
-      if (codigo === 'ENQ-005') return `Nao-objetivos: ${listaCurta(sugerirNaoObjetivos(`${objeto.titulo} ${objeto.descricao ?? ''}`))}`
+      if (codigo === 'ENQ-005') return `Não-objetivos: ${listaCurta(sugerirNaoObjetivos(`${objeto.titulo} ${objeto.descricao ?? ''}`))}`
       if (codigo === 'ENQ-006') return `Riscos: ${listaCurta(sugerirRiscos(`${objeto.titulo} ${objeto.descricao ?? ''}`))}`
       if (codigo === 'ENQ-003') return inferirProblemaObjetivo(mensagem || objeto.titulo, objeto.titulo).objetivo
       if (codigo === 'ENQ-001') return inferirProblemaObjetivo(mensagem || objeto.titulo, objeto.titulo).problema
@@ -1423,9 +1423,9 @@ export function processarMensagemGate(
       if (diag.aprovado) {
         const linhas = [
           `Gate G0 - "${objeto.titulo}": checks OK.`,
-          gov.sequenciaOk ? 'Sequencia liberada.' : `Sequencia bloqueada: ${gov.motivoSequencia}`.slice(0, 160),
-          gov.papelOk ? 'Papel apto a aprovar.' : `Papel atual sem permissao. Exige: ${gov.aprovadoresExigidos.join(', ')}.`,
-          'Solicite a aprovacao da baseline.'
+          gov.sequenciaOk ? 'Sequência liberada.' : `Sequência bloqueada: ${gov.motivoSequencia}`.slice(0, 160),
+          gov.papelOk ? 'Papel apto a aprovar.' : `Papel atual sem permissão. Exige: ${gov.aprovadoresExigidos.join(', ')}.`,
+          'Solicite a aprovação da baseline.'
         ]
         return { texto: linhas.slice(0, 8).join('\n') }
       }

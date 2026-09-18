@@ -25,6 +25,7 @@ import type { GateId, NexoObject, PatchMudanca, Role } from '@/types/nexo'
 import {
   diagnosticarFaltasGate,
   gerarPropostaPatch,
+  gerarSugestaoG0,
   obterSkillsDoGate,
   type FaltaGate
 } from '@/ai/gateSkills'
@@ -102,7 +103,8 @@ function montarSystemGrill(
     '2. Quando o usuário responder, extraia o valor para o campoAlvo e CONFIRME ("Anotei X para [CODIGO]") antes de avançar.',
     '3. NUNCA responda com menu/lista de comandos como "experimente pedir: ..." — isso é proibido.',
     '4. Para cada falta cite o código do check, o campoAlvo e o valor sugerido entre aspas.',
-    '5. Se perguntarem "qual o seu modelo?", responda apenas com fatos da conversa; nunca invente nome de modelo.'
+    '5. Se perguntarem "qual o seu modelo?", responda apenas com fatos da conversa; nunca invente nome de modelo.',
+    '6. Resposta com no máximo 8 linhas,PT-BR,zero emoji (sem pictogramas).'
   ].join('\n')
 }
 
@@ -330,7 +332,7 @@ export async function executarSkill(
       const resto = faltasRoteiro.length > 5 ? ` (+${faltasRoteiro.length - 5})` : ''
       linhas.push(`Faltas: ${vis}${resto}.`)
       linhas.push(`Falta atual: [${proxima.codigo}] ${proxima.pergunta}`.slice(0, 200))
-      linhas.push(`Responda com: "${proxima.exemplo}"`.slice(0, 200))
+      linhas.push(`Responda com: "${gerarSugestaoG0(proxima.codigo, objeto)}"`.slice(0, 200))
       linhas.push('Responda em texto livre que eu registro a pendencia.')
     }
     const outputParcial = linhas.slice(0, 8).join('\n')
