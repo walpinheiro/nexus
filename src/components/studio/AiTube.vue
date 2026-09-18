@@ -21,7 +21,17 @@ interface TubeUndoEntry {
   at: number
 }
 
+const props = withDefaults(
+  defineProps<{
+    aberto?: boolean
+  }>(),
+  {
+    aberto: false
+  }
+)
+
 const emit = defineEmits<{
+  (e: 'update:aberto', val: boolean): void
   (e: 'abrir-prompt'): void
   (e: 'abrir-ai-settings'): void
   (e: 'atividade', info: { autor: string; provider: string; prompt: string; at: number }): void
@@ -45,7 +55,14 @@ const selectedProvider = computed<StudioProvider>({
   }
 })
 
-const aberto = ref(false)
+const internoAberto = ref(false)
+const aberto = computed({
+  get: () => props.aberto || internoAberto.value,
+  set: (val: boolean) => {
+    internoAberto.value = val
+    emit('update:aberto', val)
+  }
+})
 const texto = ref('')
 const preview = ref<DraftSpec[]>([])
 const pilhaUndo = ref<TubeUndoEntry[]>([])
@@ -186,21 +203,9 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
 </script>
 
 <template>
-  <div class="pointer-events-none absolute bottom-4 left-4 z-30 flex">
-    <div class="pointer-events-auto flex items-center gap-2 rounded-full border border-nexo-border bg-white px-3 py-1.5 text-xs shadow-card">
-      <M3Icon name="auto_awesome" :size="14" label="Assistente de tela" />
-      <button type="button" class="flex items-center gap-1.5 rounded-full bg-nexo-primary px-3 py-1 font-semibold text-white hover:opacity-95" title="Descreva a tela e gere um rascunho" @click="aberto = true">
-        <span>Ask an AI</span>
-        <span class="rounded-full bg-white/20 px-1 py-0.2 text-[9px] font-bold uppercase tracking-wider text-white">BETA</span>
-      </button>
-      <button v-if="pilhaUndo.length > 0" type="button" class="rounded-full border border-nexo-border px-2 py-0.5 text-xs font-medium text-nexo-text hover:bg-slate-50" :title="'Desfazer último rascunho de ' + (ultimoUndo ? ultimoUndo.authorName : '')" @click="desfazerTubo()">
-        Desfazer<template v-if="ultimoUndo"> ({{ ultimoUndo.authorName }})</template>
-      </button>
-    </div>
-
-    <!-- Dialog Ask an AI (M3E §5 fiel) -->
-    <div v-if="aberto" class="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Ask an AI" @click.self="aberto = false">
-      <div class="flex max-h-full w-full max-w-xl flex-col rounded-card bg-white p-5 shadow-card">
+  <!-- Dialog Ask an AI (M3E §5 fiel, aberto via toolbar) -->
+  <div v-if="aberto" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Ask an AI" @click.self="aberto = false">
+    <div class="flex max-h-full w-full max-w-xl flex-col rounded-card bg-white p-5 shadow-card">
         <!-- Header: Ask an AI + BETA + Copy link + Close -->
         <div class="flex items-center justify-between border-b border-nexo-border pb-3">
           <div class="flex items-center gap-2">
@@ -337,6 +342,17 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
             >
               Descartar
             </button>
+            <button
+              v-if="pilhaUndo.length > 0"
+              type="button"
+              class="flex items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 text-xs font-medium text-nexo-text hover:bg-slate-50"
+              :title="'Desfazer último rascunho de ' + (ultimoUndo ? ultimoUndo.authorName : '')"
+              @click="desfazerTubo()"
+            >
+              <M3Icon name="undo" :size="14" />
+              <span>Desfazer</span>
+              <template v-if="ultimoUndo"> ({{ ultimoUndo.authorName }})</template>
+            </button>
           </div>
           <button
             type="button"
@@ -360,5 +376,4 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
         </ul>
       </div>
     </div>
-  </div>
 </template>

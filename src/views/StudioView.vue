@@ -34,6 +34,7 @@ const railTab = ref<RailTab>('parts')
 const abaDir = ref<'edit' | 'prompt'>('edit')
 const previewAberto = ref(false)
 const dialogNovaTela = ref(false)
+const askAiAberto = ref(false)
 const promptEscopo = ref<string>('tudo')
 const promptTexto = ref('')
 const promptCopiado = ref('')
@@ -235,7 +236,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <div class="relative min-h-0 flex-1">
       <div class="pointer-events-none absolute left-0 right-0 top-2 z-30 flex justify-center">
         <div class="pointer-events-auto" style="border-radius: 28px">
-          <StudioToolbar @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" />
+          <StudioToolbar @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" @abrir-ask="askAiAberto = true" />
         </div>
       </div>
       <div class="pointer-events-none absolute bottom-4 right-4 z-30 flex justify-end">
@@ -331,7 +332,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     </div>
     <PreviewModal v-if="previewAberto" :inicio-id="studio.screenId" @fechar="previewAberto = false" />
     <NewFrameDialog v-if="dialogNovaTela" @fechar="dialogNovaTela = false" @criar="criarDoDialog" />
-    <AiTube @abrir-prompt="abrirPromptPainel()" />
+    <AiTube v-model:aberto="askAiAberto" @abrir-prompt="abrirPromptPainel()" />
 
     <!-- Modal Edit Full Screen do Prompt (M3E paridade) -->
     <div

@@ -4,7 +4,11 @@ import { useStudio } from '@/stores/useStudio'
 import { encodeDoc } from '@/utils/studioShare'
 import M3Icon from './m3/M3Icon.vue'
 
-const emit = defineEmits<{ (e: 'preview'): void; (e: 'abrir-prompt'): void }>()
+const emit = defineEmits<{
+  (e: 'preview'): void
+  (e: 'abrir-prompt'): void
+  (e: 'abrir-ask'): void
+}>()
 
 const studio = useStudio()
 const aviso = ref('')
@@ -89,6 +93,7 @@ function esc(s: string): string {
 
 function abrirPrompt() {
   emit('abrir-prompt')
+  emit('abrir-ask')
 }
 </script>
 
