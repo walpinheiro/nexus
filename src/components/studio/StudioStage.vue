@@ -4,9 +4,15 @@ import { useStudio } from '@/stores/useStudio'
 import { paletteOf } from './m3/theme'
 import { limitesDe, specOf } from './m3/tokens'
 import M3Node from './m3/M3Node.vue'
+import StudioToolbar from './StudioToolbar.vue'
 
 const studio = useStudio()
-const emit = defineEmits<{ (e: 'preview'): void }>()
+const emit = defineEmits<{
+  (e: 'preview'): void
+  (e: 'abrir-prompt'): void
+  (e: 'abrir-ask'): void
+  (e: 'update:ferramenta', v: 'select' | 'hand'): void
+}>()
 const props = defineProps<{ ferramenta?: 'select' | 'hand' }>()
 const caixa = ref<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 let panAtivo = false
@@ -19,7 +25,10 @@ function iniciarPan(ev: PointerEvent) {
   panStart = { x: ev.clientX, y: ev.clientY, px: studio.pan[0], py: studio.pan[1] }
   ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
 }
-const ferramenta = computed<'select' | 'hand'>(() => props.ferramenta ?? 'select')
+const ferramenta = computed<'select' | 'hand'>({
+  get: () => props.ferramenta ?? 'select',
+  set: (v) => emit('update:ferramenta', v)
+})
 const modo = ref<'edit' | 'preview'>('edit')
 const historico = ref<string[]>([])
 const guides = ref<{ v: number[]; h: number[] }>({ v: [], h: [] })
@@ -301,6 +310,11 @@ defineExpose({ alternarPreview })
         : (studio.pan = [studio.pan[0] - $event.deltaX, studio.pan[1] - $event.deltaY])
     "
   >
+    <div class="pointer-events-none absolute left-2 right-2 top-2 z-20 flex justify-center">
+      <div class="pointer-events-auto max-w-full overflow-x-auto" style="border-radius: 28px">
+        <StudioToolbar v-model:ferramenta="ferramenta" @preview="emit('preview')" @abrir-prompt="emit('abrir-prompt')" @abrir-ask="emit('abrir-ask')" />
+      </div>
+    </div>
     <div
       class="absolute left-0 top-0"
       :style="{ transform, transformOrigin: '0 0', width: '3000px', height: '1600px' }"
