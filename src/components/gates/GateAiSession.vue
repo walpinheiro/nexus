@@ -52,7 +52,6 @@ const patchPendente = ref<{
 const usarOllama = ref(true)
 const ollamaStatus = ref<'online' | 'offline'>('offline')
 const modeloEfetivo = ref('Ternary-Bonsai-2-27B')
-const ollamaModel = modeloEfetivo
 const provedorEfetivo = ref<SkillRunnerProvider>('local-fallback')
 
 // Streaming / Output ao vivo
@@ -403,16 +402,18 @@ function rejeitarPatch() {
         </button>
       </div>
 
-      <!-- Barra de Status do Motor: Badge Ollama online/offline queen + Toggle Local/Ollama -->
+      <!-- Barra de Status do Motor: Badge honesto online: <model-efetivo> | offline — resposta local (R4) -->
       <div class="flex items-center justify-between rounded border border-nexo-border/80 bg-white px-2.5 py-1.5 text-[11px]">
         <div class="flex items-center gap-2">
           <span
             class="inline-block h-2 w-2 rounded-full"
             :class="ollamaStatus === 'online' ? 'bg-green-500' : 'bg-nexo-muted'"
           />
-          <span class="font-semibold text-nexo-text">Ollama:</span>
-          <span class="font-mono text-[10px]" :class="ollamaStatus === 'online' ? 'text-green-700 font-bold' : 'text-nexo-muted'">
-            {{ ollamaModel }} ({{ ollamaStatus }})
+          <span v-if="ollamaStatus === 'online'" class="font-mono text-[10px] text-green-700 font-bold">
+            online: {{ modeloEfetivo }}
+          </span>
+          <span v-else class="font-mono text-[10px] text-nexo-muted">
+            offline — resposta local
           </span>
         </div>
 
@@ -420,11 +421,11 @@ function rejeitarPatch() {
           type="button"
           class="flex items-center gap-1 font-semibold focus:outline-none transition-colors"
           :class="usarOllama ? 'text-nexo-primary' : 'text-nexo-muted hover:text-nexo-text'"
-          :title="usarOllama ? 'Usando modelo Ollama local (queen)' : 'Usando motor determinístico local'"
+          :title="usarOllama ? 'Motor LLM ativo (Ollama / llama.cpp)' : 'Motor determinístico local'"
           @click="usarOllama = !usarOllama"
         >
           <LucideIcon :name="usarOllama ? 'toggle-right' : 'toggle-left'" :size="16" />
-          <span>{{ usarOllama ? 'Ollama Ativo' : 'Regras Locais' }}</span>
+          <span>{{ usarOllama ? 'LLM Ativo' : 'Regras Locais' }}</span>
         </button>
       </div>
     </header>
