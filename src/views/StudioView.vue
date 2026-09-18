@@ -278,33 +278,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </div>
         <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden p-3 text-xs">
           <p class="font-semibold">Prompt da tela</p>
-
-          <!-- Plataforma: Radio Android | Web (M3E paridade) -->
-          <div class="mt-2">
-            <span class="mb-1 block font-semibold text-nexo-muted">Plataforma</span>
-            <div class="flex rounded-btn border border-nexo-border p-0.5" role="radiogroup" aria-label="Plataforma de destino">
-              <button
-                type="button"
-                role="radio"
-                :aria-checked="studio.doc.platform === 'android'"
-                class="flex flex-1 items-center justify-center gap-1 rounded-btn py-1 text-xs transition"
-                :class="studio.doc.platform === 'android' ? 'bg-nexo-primary font-semibold text-white' : 'text-nexo-text hover:bg-slate-50'"
-                @click="trocarPlataforma('android')"
-              >
-                <M3Icon name="android" :size="15" label="Android" /> Android
-              </button>
-              <button
-                type="button"
-                role="radio"
-                :aria-checked="studio.doc.platform === 'web'"
-                class="flex flex-1 items-center justify-center gap-1 rounded-btn py-1 text-xs transition"
-                :class="studio.doc.platform === 'web' ? 'bg-nexo-primary font-semibold text-white' : 'text-nexo-text hover:bg-slate-50'"
-                @click="trocarPlataforma('web')"
-              >
-                <M3Icon name="language" :size="15" label="Web" /> Web
-              </button>
-            </div>
-          </div>
+          <p class="mt-1 text-nexo-muted">Destino: Web (Vue 3 + TS + Tailwind).</p>
 
           <!-- Badge do Autor e Modelo da IA -->
           <div v-if="draftHistory.ultimoDraft" class="mt-2 flex items-center gap-1.5 rounded-badge bg-slate-100 px-2 py-1 text-[11px] text-nexo-muted" role="status">
