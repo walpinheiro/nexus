@@ -200,9 +200,13 @@ const passos = computed<PassoGuia[]>(() => {
     case 'G2': {
       const temNarrativa = checkEstaOk('FTR-001')
       const temFluxo = checkEstaOk('FTR-002')
-      const temBdd = checkEstaOk('FTR-007')
+      const temRegras = checkEstaOk('FTR-003')
       const temOwner = checkEstaOk('FTR-004')
-      const todosProntos = temNarrativa && temFluxo && temBdd && temOwner
+      const temEstadosTela = checkEstaOk('FTR-005')
+      const temResiliencia = checkEstaOk('FTR-006')
+      const temBdd = checkEstaOk('FTR-007')
+      const todosProntos =
+        temNarrativa && temFluxo && temRegras && temOwner && temEstadosTela && temResiliencia && temBdd
 
       return [
         {
@@ -225,11 +229,11 @@ const passos = computed<PassoGuia[]>(() => {
         },
         {
           id: 'g2-p3',
-          titulo: '3. Especificar critérios de aceite BDD',
-          descricao: 'Cenários Given / When / Then verificáveis e testáveis.',
-          checkCodigo: 'FTR-007',
-          concluido: temBdd,
-          acaoLabel: 'Criar BDDs',
+          titulo: '3. Regras de negócio vinculadas',
+          descricao: 'Regras de negócio com fonte declarada e status ativo.',
+          checkCodigo: 'FTR-003',
+          concluido: temRegras,
+          acaoLabel: 'Vincular regras',
           tipoAcao: 'corrigir'
         },
         {
@@ -243,7 +247,34 @@ const passos = computed<PassoGuia[]>(() => {
         },
         {
           id: 'g2-p5',
-          titulo: '5. Solicitar aprovação a PM, UX e Representante Técnico',
+          titulo: '5. Estados de tela mapeados',
+          descricao: 'Cobertura de estados de tela (loading, vazio, erro, sucesso).',
+          checkCodigo: 'FTR-005',
+          concluido: temEstadosTela,
+          acaoLabel: 'Mapear telas',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g2-p6',
+          titulo: '6. Resiliência de integrações externas',
+          descricao: 'Políticas de timeout, falha e indisponibilidade para integrações.',
+          checkCodigo: 'FTR-006',
+          concluido: temResiliencia,
+          acaoLabel: 'Definir resiliência',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g2-p7',
+          titulo: '7. Especificar critérios de aceite BDD',
+          descricao: 'Cenários Given / When / Then verificáveis e testáveis.',
+          checkCodigo: 'FTR-007',
+          concluido: temBdd,
+          acaoLabel: 'Criar BDDs',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g2-p8',
+          titulo: '8. Solicitar aprovação a PM, UX e Tech Lead',
           descricao: 'Revisão conjunta de comportamento funcional e story map.',
           concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
           acaoLabel: 'Solicitar approve',
