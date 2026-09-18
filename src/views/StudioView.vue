@@ -11,7 +11,7 @@ import LayersPanel from '@/components/studio/LayersPanel.vue'
 import FramePanel from '@/components/studio/FramePanel.vue'
 import PreviewModal from '@/components/studio/PreviewModal.vue'
 import NewFrameDialog from '@/components/studio/NewFrameDialog.vue'
-import LucideIcon from '@/components/common/LucideIcon.vue'
+import M3Icon from '@/components/studio/m3/M3Icon.vue'
 
 const studio = useStudio()
 const projects = useProjects()
@@ -141,7 +141,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           class="rounded-btn p-2 hover:bg-nexo-canvas"
           @click="menuAberto ? fecharMenu() : abrirMenu()"
         >
-          <LucideIcon name="menu" :size="20" />
+          <M3Icon name="menu" :size="20" label="Menu voltar" />
         </button>
         <div
           v-if="menuAberto"
@@ -152,13 +152,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           @keydown.escape="fecharMenu(true)"
         >
           <button type="button" data-menuitem="voltar" role="menuitem" class="flex w-full items-center gap-2 rounded-badge px-3 py-2 text-left text-sm hover:bg-nexo-canvas" @click="voltar()">
-            <LucideIcon name="chevL" :size="14" /> Voltar para {{ origemLabel }}
+            <M3Icon name="arrow_back" :size="16" label="Voltar" /> Voltar para {{ origemLabel }}
           </button>
           <RouterLink data-menuitem="backlog" role="menuitem" to="/backlog" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Backlog</RouterLink>
           <RouterLink data-menuitem="gates" role="menuitem" to="/gates/G2" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Gates G2</RouterLink>
           <RouterLink data-menuitem="canvas" role="menuitem" to="/canvas?view=canvas" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Canvas</RouterLink>
           <button type="button" data-menuitem="fechar" class="flex w-full items-center gap-1 rounded-badge px-3 py-2 text-left text-sm text-nexo-muted hover:bg-nexo-canvas" @click="fecharMenu(true)">
-            <LucideIcon name="x" :size="14" /> Fechar menu
+            <M3Icon name="close" :size="16" label="Fechar menu" /> Fechar menu
           </button>
         </div>
       </div>
@@ -167,7 +167,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <span class="ml-auto flex items-center gap-2">
         <span class="hidden text-xs text-nexo-muted md:inline">voltando para {{ origemLabel }}</span>
         <button type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="voltar()">
-          <LucideIcon name="chevL" :size="14" /> Voltar
+          <M3Icon name="arrow_back" :size="16" label="Voltar" /> Voltar
         </button>
       </span>
     </header>

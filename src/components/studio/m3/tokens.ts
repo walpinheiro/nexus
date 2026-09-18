@@ -28,12 +28,12 @@ export interface KindSpec {
 }
 
 export const CATEGORIES = [
-  { id: 'actions', rotulo: 'Actions' },
-  { id: 'navigation', rotulo: 'Navigation' },
-  { id: 'containment', rotulo: 'Containment' },
-  { id: 'inputs', rotulo: 'Inputs' },
-  { id: 'content', rotulo: 'Content' },
-  { id: 'progress', rotulo: 'Progress' }
+  { id: 'actions', rotulo: 'Actions', icon: 'smart_button' },
+  { id: 'navigation', rotulo: 'Navigation', icon: 'navigation' },
+  { id: 'containment', rotulo: 'Containment', icon: 'dashboard' },
+  { id: 'inputs', rotulo: 'Inputs', icon: 'input' },
+  { id: 'content', rotulo: 'Content', icon: 'article' },
+  { id: 'progress', rotulo: 'Progress', icon: 'progress_activity' }
 ] as const
 
 export const KIND_ORDER = [

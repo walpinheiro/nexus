@@ -140,10 +140,10 @@ const tiles = computed<Tile[]>(() => {
 })
 
 const porCategoria = computed(() => {
-  const mapa = new Map<string, Tile[]>()
-  for (const c of CATEGORIES) mapa.set(c.id, [])
-  for (const t of tiles.value) mapa.get(t.categoria)?.push(t)
-  return [...mapa.entries()].filter(([, v]) => v.length > 0)
+  const mapa = new Map<string, { id: string; rotulo: string; icon: string; items: Tile[] }>()
+  for (const c of CATEGORIES) mapa.set(c.id, { id: c.id, rotulo: c.rotulo, icon: (c as { icon?: string }).icon ?? 'circle', items: [] })
+  for (const t of tiles.value) mapa.get(t.categoria)?.items.push(t)
+  return [...mapa.values()].filter((v) => v.items.length > 0)
 })
 
 function criarNoCentro(kind: string) {
@@ -167,11 +167,13 @@ onMounted(() => {
       <input v-model="busca" placeholder="Buscar part…" aria-label="Buscar part" class="w-full rounded-btn border border-nexo-border px-2 py-1 text-xs" />
     </div>
     <div class="min-h-0 flex-1 overflow-auto p-2 pt-0">
-      <section v-for="[cat, lista] in porCategoria" :key="cat" :aria-label="cat">
-        <h3 class="px-1 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-nexo-muted">{{ cat }}</h3>
+      <section v-for="cat in porCategoria" :key="cat.id" :aria-label="cat.rotulo">
+        <h3 class="flex items-center gap-1.5 px-1 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-nexo-muted">
+          <M3Icon :name="cat.icon" :size="14" />{{ cat.rotulo }}
+        </h3>
         <div class="grid gap-1.5" style="grid-template-columns: repeat(auto-fill, minmax(78px, 1fr))">
           <div
-            v-for="t in lista"
+            v-for="t in cat.items"
             :key="t.kind"
             draggable="true"
             tabindex="0"

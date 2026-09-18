@@ -4,7 +4,6 @@ import { useStudio } from '@/stores/useStudio'
 import { paletteOf } from './m3/theme'
 import M3Node from './m3/M3Node.vue'
 import M3Icon from './m3/M3Icon.vue'
-import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const props = defineProps<{ inicioId: string | null }>()
 const emit = defineEmits<{ (e: 'fechar'): void }>()
@@ -110,7 +109,7 @@ onMounted(() => window.addEventListener('keydown', onKey))
   >
     <div class="flex max-h-full flex-col items-center gap-2">
       <div class="flex items-center gap-2 text-sm text-white">
-        <button v-if="pilha.length > 1" type="button" class="inline-flex items-center gap-1 rounded-btn bg-white/10 px-3 py-1" @click="voltar()"><LucideIcon name="chevL" :size="14" /> Voltar</button>
+        <button v-if="pilha.length > 1" type="button" class="inline-flex items-center gap-1 rounded-btn bg-white/10 px-3 py-1" @click="voltar()"><M3Icon name="arrow_back" :size="16" label="Voltar" /></button>
         <span>{{ frame?.name }} · {{ anim.t }}{{ anim.back ? ' (back)' : '' }}</span>
         <span class="flex gap-1" role="group" aria-label="Moldura do preview">
           <button type="button" class="rounded-btn px-2 py-1" :class="ehPhone ? 'bg-white/20 font-semibold' : 'bg-white/10'" :aria-pressed="ehPhone" title="Moldura phone 412x892" @click="moldura = 'phone'">Phone</button>

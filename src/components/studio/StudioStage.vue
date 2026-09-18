@@ -3,8 +3,8 @@ import { computed, ref } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { paletteOf } from './m3/theme'
 import { limitesDe, specOf } from './m3/tokens'
+import M3Icon from './m3/M3Icon.vue'
 import M3Node from './m3/M3Node.vue'
-import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const studio = useStudio()
 const emit = defineEmits<{ (e: 'preview'): void }>()
@@ -295,10 +295,10 @@ defineExpose({ alternarPreview })
     "
   >
     <div class="absolute left-2 top-2 z-20 flex gap-1 text-xs">
-      <button type="button" class="rounded-btn border border-nexo-border bg-white px-2 py-1" :class="ferramenta === 'select' ? 'text-nexo-primary font-semibold' : ''" title="Selecionar (V)" @click="ferramenta = 'select'">V</button>
-      <button type="button" class="rounded-btn border border-nexo-border bg-white px-2 py-1" :class="ferramenta === 'hand' ? 'text-nexo-primary font-semibold' : ''" title="Mover (H)" @click="ferramenta = 'hand'">H</button>
-      <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" :class="modo === 'preview' ? 'bg-nexo-approved-bg text-nexo-approved' : 'bg-white'" :title="modo === 'preview' ? 'Sair do preview (P/Esc)' : 'Preview tap-through (P)'" @click="alternarPreview()">P {{ modo === 'preview' ? '• preview' : '' }}</button>
-      <button v-if="modo === 'preview' && historico.length > 0" type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-2 py-1" @click="voltar()"><LucideIcon name="chevL" :size="14" /> Voltar</button>
+      <button type="button" class="rounded-btn border border-nexo-border bg-white px-2 py-1" :class="ferramenta === 'select' ? 'text-nexo-primary font-semibold' : ''" :aria-pressed="ferramenta === 'select'" title="Selecionar (V)" @click="ferramenta = 'select'"><M3Icon name="arrow_selector_tool" :size="16" label="Selecionar" /></button>
+      <button type="button" class="rounded-btn border border-nexo-border bg-white px-2 py-1" :class="ferramenta === 'hand' ? 'text-nexo-primary font-semibold' : ''" :aria-pressed="ferramenta === 'hand'" title="Mover (H)" @click="ferramenta = 'hand'"><M3Icon name="pan_tool" :size="16" label="Mover" /></button>
+      <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" :class="modo === 'preview' ? 'bg-nexo-approved-bg text-nexo-approved' : 'bg-white'" :title="modo === 'preview' ? 'Sair do preview (P/Esc)' : 'Preview tap-through (P)'" @click="alternarPreview()"><M3Icon name="play_arrow" :size="16" label="Preview" /></button>
+      <button v-if="modo === 'preview' && historico.length > 0" type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-2 py-1" @click="voltar()"><M3Icon name="arrow_back" :size="16" label="Voltar" /></button>
     </div>
     <div
       class="absolute left-0 top-0"

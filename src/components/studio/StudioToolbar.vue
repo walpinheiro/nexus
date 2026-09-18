@@ -1,18 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useStudio } from '@/stores/useStudio'
-import { useGraph } from '@/stores/useGraph'
 import { encodeDoc } from '@/utils/studioShare'
-import { gerarPromptStudio } from '@/utils/studioPrompt'
+import M3Icon from './m3/M3Icon.vue'
 
-const emit = defineEmits<{ (e: 'preview'): void }>()
+const emit = defineEmits<{ (e: 'preview'): void; (e: 'abrir-prompt'): void }>()
 
 const studio = useStudio()
-const graph = useGraph()
 const aviso = ref('')
-const promptAberto = ref(false)
-const promptEscopo = ref<string>('tudo')
-const promptTexto = ref('')
 
 function flash(msg: string) {
   aviso.value = msg
@@ -93,13 +88,7 @@ function esc(s: string): string {
 }
 
 function abrirPrompt() {
-  promptTexto.value = gerarPromptStudio(studio.doc, promptEscopo.value, graph.state.selecionadoId ?? undefined)
-  promptAberto.value = true
-}
-
-async function copiarPrompt() {
-  const ok = await copiarTexto(promptTexto.value)
-  flash(ok ? 'Prompt copiado.' : 'Não foi possível copiar — verifique a permissão do navegador.')
+  emit('abrir-prompt')
 }
 </script>
 
@@ -111,39 +100,23 @@ async function copiarPrompt() {
     aria-label="Toolbar do Studio"
   >
     <span class="flex items-center gap-1" role="group" aria-label="Modo">
-      <button type="button" title="Selecionar (V)" aria-label="Selecionar" class="rounded-btn px-2 py-1 font-semibold text-nexo-primary">V</button>
-      <button type="button" title="Mover (H)" aria-label="Mover" class="rounded-btn px-2 py-1">H</button>
+      <button type="button" title="Selecionar (V)" aria-label="Selecionar" class="rounded-btn px-2 py-1 font-semibold text-nexo-primary"><M3Icon name="arrow_selector_tool" :size="18" label="Selecionar" /></button>
+      <button type="button" title="Mover (H)" aria-label="Mover" class="rounded-btn px-2 py-1"><M3Icon name="pan_tool" :size="18" label="Mover" /></button>
     </span>
     <span class="flex items-center gap-1" role="group" aria-label="Zoom">
       <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="rounded-btn px-1.5 py-1" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
       <span class="min-w-12 text-center" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
       <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="rounded-btn px-1.5 py-1" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
-      <button type="button" title="Ajustar (0)" class="rounded-btn px-2 py-1" @click="studio.zoom = 0.7">Fit</button>
+      <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="rounded-btn px-2 py-1" @click="studio.zoom = 0.7"><M3Icon name="fit_screen" :size="18" label="Ajustar" /></button>
     </span>
-    <button type="button" title="Organizar (tidy)" class="rounded-btn px-2 py-1" @click="studio.tidy()">Tidy</button>
-    <button type="button" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" class="rounded-btn px-2 py-1" @click="studio.undo()">Desfazer</button>
-    <button type="button" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" class="rounded-btn px-2 py-1" @click="studio.redo()">Refazer</button>
-    <button type="button" title="Preview modal (P)" aria-label="Abrir preview" class="rounded-btn bg-nexo-primary px-3 py-1 font-semibold text-white" @click="emit('preview')">Preview</button>
-    <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="abrirPrompt()">Prompt</button>
-    <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="copiarShare()">Share-link</button>
+    <button type="button" title="Organizar (tidy)" aria-label="Organizar" class="rounded-btn px-2 py-1" @click="studio.tidy()"><M3Icon name="auto_fix" :size="18" label="Organizar" /></button>
+    <button type="button" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" class="rounded-btn px-2 py-1" @click="studio.undo()"><M3Icon name="undo" :size="18" label="Desfazer" /></button>
+    <button type="button" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" class="rounded-btn px-2 py-1" @click="studio.redo()"><M3Icon name="redo" :size="18" label="Refazer" /></button>
+    <button type="button" title="Preview modal (P)" aria-label="Abrir preview" class="rounded-btn bg-nexo-primary px-3 py-1 font-semibold text-white" @click="emit('preview')"><M3Icon name="play_arrow" :size="18" label="Preview" /></button>
+    <button type="button" title="Prompt (abre painel)" aria-label="Abrir prompt" class="rounded-btn border border-nexo-border px-2 py-1" @click="abrirPrompt()"><M3Icon name="auto_awesome" :size="18" label="Prompt" /></button>
+    <button type="button" title="Compartilhar (copia share-link)" aria-label="Compartilhar" class="rounded-btn border border-nexo-border px-2 py-1" @click="copiarShare()"><M3Icon name="share" :size="18" label="Compartilhar" /></button>
     <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="exportarPNG()">PNG</button>
     <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="exportarJSON()">JSON</button>
     <span v-if="aviso" class="text-nexo-approved" role="status">{{ aviso }}</span>
-    <div v-if="promptAberto" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6" role="dialog" aria-modal="true" aria-label="Prompt do Studio" @click.self="promptAberto = false">
-      <div class="flex max-h-full w-full max-w-2xl flex-col rounded-card bg-white p-4 shadow-card">
-        <div class="flex items-center gap-2 text-xs">
-          <label>Escopo
-            <select v-model="promptEscopo" class="rounded-btn border border-nexo-border px-2 py-1" @change="abrirPrompt()">
-              <option value="tudo">Design inteiro</option>
-              <option v-for="fr in studio.doc.frames" :key="fr.id" :value="fr.id">1 tela: {{ fr.name }}</option>
-            </select>
-          </label>
-          <span class="text-nexo-muted">{{ promptTexto.length }} caracteres</span>
-          <button type="button" class="ml-auto text-nexo-muted" @click="promptAberto = false">× Fechar</button>
-        </div>
-        <textarea v-model="promptTexto" rows="16" class="mt-2 w-full rounded-btn border border-nexo-border p-2 font-mono text-xs" aria-label="Prompt editável" />
-        <button type="button" class="mt-2 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white" @click="copiarPrompt()">Copiar prompt</button>
-      </div>
-    </div>
   </div>
 </template>
