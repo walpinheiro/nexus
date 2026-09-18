@@ -8,14 +8,13 @@ import LucideIcon from '@/components/common/LucideIcon.vue'
 import {
   diagnosticarFaltasGate,
   obterGovernancaGate,
-  obterSkillsDoGate,
   processarMensagemGate,
   gerarPropostaPatch,
   DICIONARIO_PERGUNTAS,
   type FaltaGate
 } from '@/ai/gateSkills'
 import { getConfig, saude, type OllamaMessage } from '@/ai/ollamaClient'
-import { executarSkill, extrairRespostasDoTexto } from '@/ai/skillRunner'
+import { executarSkill, extrairRespostasDoTexto, ordenarFaltasPorPapel } from '@/ai/skillRunner'
 
 interface Props {
   gateId: GateId
@@ -45,13 +44,8 @@ const patchPendente = ref<{
   mudancas: PatchMudanca[]
 } | null>(null)
 
-// Skills ativas para este gate
-const skills = computed(() => obterSkillsDoGate(props.gateId))
-const skillAtivaIndex = ref(0)
-const skillAtiva = computed(() => skills.value[skillAtivaIndex.value] || skills.value[0] || null)
-
-// Estado do motor Ollama / Fallback Local (preservado do 78fc776)
-const usarOllama = ref(false)
+// Estado do motor Ollama / Fallback Local (default Ollama queen; toggle local só se já existir)
+const usarOllama = ref(true)
 const ollamaStatus = ref<'online' | 'offline'>('offline')
 const ollamaModel = ref('queen')
 
@@ -134,12 +128,11 @@ watch(
   [() => props.alvoId, () => props.gateId],
   ([novoId]) => {
     patchPendente.value = null
-    skillAtivaIndex.value = 0
     if (!novoId || !props.alvo) {
       const textoBoasVindas =
         props.gateId === 'G5'
           ? 'Bem-vindo à Sessão de IA do Gate G5 (Definition of Done). Nenhum pacote de entrega está selecionado no momento. Promova um entregável para status "validated" no Canvas ou vincule-o ao Gate G5 para diagnosticar os critérios de DoD.'
-          : `Bem-vindo à Sessão de IA do Gate ${props.gateId}. Selecione um objeto para que as skills conduzam o preenchimento dos critérios.`
+          : `Bem-vindo à Sessão de IA do Gate ${props.gateId}. Selecione um objeto para iniciarmos a interação.`
 
       historicoChat.value = [
         {
@@ -153,17 +146,17 @@ watch(
     }
 
     const diag = diagnosticarFaltasGate(props.alvo, props.gateId, graph.waivers)
-    const skillNome = skillAtiva.value?.nome ?? 'Assistente de Gate'
 
-    let msgInicial = `Olá! Sou a skill **${skillNome}** (${skillAtiva.value?.roles?.join(', ') || 'IA'}) para o **Gate ${props.gateId}**.\n`
-    msgInicial += `Analisando o objeto **"${props.alvo.titulo}"**:\n\n`
+    let msgInicial = `Olá! Sou a IA de apoio para o **Gate ${props.gateId}**.\n`
+    msgInicial += `Analisando o objeto **"${props.alvo.titulo}"** (seu papel atual: **${users.currentUser?.papel || 'Colaborador'}**):\n\n`
 
     if (diag.aprovado) {
       msgInicial += `🎉 Todos os critérios de qualidade estão 100% preenchidos! O objeto está apto para aprovação formal de baseline.`
     } else {
-      const primeira = diag.faltas[0]
+      const faltas = ordenarFaltasPorPapel(diag.faltas, props.gateId, users.currentUser?.papel)
+      const primeira = faltas[0]
       msgInicial += `Identifiquei **${diag.faltas.length} critério(s) pendente(s)**.\n`
-      msgInicial += `Conduzirei uma pergunta por vez via conversa para estruturarmos tudo sem formulários manuais:\n\n`
+      msgInicial += `Vamos preenchê-los por conversa, uma pergunta por vez:\n\n`
       msgInicial += `👉 **[${primeira.codigo}] ${primeira.pergunta}**\n\n`
       msgInicial += `*Exemplo de resposta:* "${primeira.exemplo}"`
     }
@@ -214,7 +207,7 @@ async function enviarMensagem(textoCustom?: string) {
             content: h.texto
           }))
         ]
-        const res = await executarSkill(props.gateId, props.alvo, historico)
+        const res = await executarSkill(props.gateId, props.alvo, historico, users.currentUser?.papel)
         if (res.patchProposto) {
           patchPendente.value = {
             alvoId: props.alvo.id,
@@ -313,7 +306,8 @@ function aceitarPatch() {
     // Recalcula o diagnóstico e avança a IA para a próxima pergunta
     const novoDiag = diagnosticarFaltasGate(props.alvo, props.gateId, graph.waivers)
     if (novoDiag.faltas.length > 0) {
-      const prox = novoDiag.faltas[0]
+      const faltas = ordenarFaltasPorPapel(novoDiag.faltas, props.gateId, users.currentUser?.papel)
+      const prox = faltas[0]
       historicoChat.value.push({
         id: `sys-${Date.now()}`,
         autor: 'ia',
@@ -358,13 +352,9 @@ function rejeitarPatch() {
           </span>
           <div>
             <h2 class="text-sm font-bold text-nexo-text">Sessão IA · Gate {{ props.gateId }}</h2>
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span class="text-xs font-semibold text-nexo-text">{{ skillAtiva?.nome ?? 'Gate Skill' }}</span>
-              <span class="text-[10px] text-nexo-border">|</span>
-              <span class="text-[10px] text-nexo-muted font-medium">
-                {{ skillAtiva?.roles?.join(', ') || 'Engenharia/Produto' }}
-              </span>
-            </div>
+            <p class="text-[11px] text-nexo-muted font-medium">
+              {{ users.currentUser?.nome || 'Usuário' }} ({{ users.currentUser?.papel || 'Colaborador' }})
+            </p>
           </div>
         </div>
 
@@ -496,7 +486,7 @@ function rejeitarPatch() {
             >
               <div v-if="msg.autor === 'ia'" class="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-nexo-primary">
                 <LucideIcon name="sparkles" :size="11" />
-                <span>{{ skillAtiva?.nome ?? 'IA Copilot' }}</span>
+                <span>IA Assistente</span>
                 <span class="text-nexo-muted font-normal ml-auto">{{ msg.timestamp }}</span>
               </div>
               <div v-else class="text-[10px] text-white/80 font-medium mb-0.5 text-right">
