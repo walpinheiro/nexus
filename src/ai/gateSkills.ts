@@ -1234,8 +1234,15 @@ export function processarMensagemGate(
     }
   }
 
-  // Fallback
+  // Fallback HONESTO (FIX-REAL-OLLAMA R2): NUNCA menu de comandos ("experimente pedir...")
+  // — esse era o mock que o dono viu. Faz a pergunta da próxima falta do roteiro + registra.
+  if (diag.faltas.length > 0) {
+    const proxima = diag.faltas[0]
+    return {
+      texto: `Opero em modo local (resposta local — servidor inalcançável) para "${objeto.titulo}".\n\n👉 **[${proxima.codigo}] ${proxima.pergunta}**\n\n*Exemplo de resposta:* "${proxima.exemplo}"\n\nResponda em texto livre que eu registro e avanço para a próxima pendência (${diag.faltas.length} no total).`
+    }
+  }
   return {
-    texto: `Compreendi sua mensagem sobre "${objeto.titulo}".\n\nPara avançar no Gate ${gateId}, experimente pedir:\n- *"O que falta para aprovar este gate?"*\n- *"Estruturar hipótese e dor de enquadramento"* (G0)\n- *"Adicionar KPI e escopo"* (G1)\n- *"Gerar BDD para esta feature"* (G2)\n- *"Declarar integração e vincular ADR"* (G3)\n- *"Completar DoR com estratégia de teste"* (G4)\n- *"Validar DoD e evidências de entrega"* (G5)`
+    texto: `Todos os checks bloqueantes do Gate ${gateId} para "${objeto.titulo}" estão atendidos (resposta local — servidor inalcançável). Você está apto a solicitar a aprovação formal de baseline.`
   }
 }
