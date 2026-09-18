@@ -82,6 +82,7 @@ function aoIngestaoConcluido() {
 
 function aoIngestaoCancelar() {
   dialogAberto.value = false
+  tipoProjeto.value = 'novo'
 }
 
 function criar() {

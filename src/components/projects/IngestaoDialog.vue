@@ -93,15 +93,9 @@ function criar() {
 }
 </script>
 
+<!-- Item A FIXTIPOS: bloco inline sem overlay fixed próprio (o overlay é o do HomeView) -->
 <template>
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Ingestão de projeto existente"
-    @click.self="emit('cancelar')"
-  >
-    <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-card bg-white p-4 shadow-card">
+  <div class="w-full rounded-card border border-nexo-border bg-white p-3">
       <h2 class="text-base font-bold text-slate-900">Ingestão de projeto existente</h2>
       <p class="mt-1 text-xs text-slate-600">Cole texto livre, anexe arquivo ou informe repo/wiki. Analise antes de criar.</p>
 
@@ -219,6 +213,5 @@ function criar() {
           Cancelar
         </button>
       </div>
-    </div>
   </div>
 </template>

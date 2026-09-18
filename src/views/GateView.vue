@@ -108,8 +108,10 @@ const temSolicitacaoPendenteAlvo = computed(() => gates.temSolicitacaoPendente(p
 const solicitacoesAguardandoJulgamento = computed(() => gates.solicitacoesAguardandoMeuJulgamento)
 
 function selecionarAlvoSolicitacao(solAlvoId: string, solGateId?: GateId) {
+  // Item C FIXTIPOS: propaga query modo=wizard (projeto existente) nos router.push
+  const modo = route.query.modo === 'wizard' ? { modo: 'wizard' } : {}
   if (solGateId && solGateId !== props.id) {
-    router.push(`/gates/${solGateId}`)
+    router.push({ path: `/gates/${solGateId}`, query: modo })
     return
   }
   alvoId.value = solAlvoId
@@ -183,17 +185,21 @@ function cancelarNegacao() {
 
 function abrirNoCanvas() {
   const id = alvoId.value || alvos.value[0]?.id
+  // Item C FIXTIPOS: preserva query atual (modo=wizard) nos router.push
+  const q = route.query.modo === 'wizard' ? '&modo=wizard' : ''
   if (!id) {
-    router.push('/canvas?view=canvas')
+    router.push(`/canvas?view=canvas${q}`)
     return
   }
   graph.selecionar(id)
-  router.push(`/canvas?view=canvas&selecionado=${id}`)
+  router.push(`/canvas?view=canvas&selecionado=${id}${q}`)
 }
 
 function corrigirNoObjeto(id: string) {
   graph.selecionar(id)
-  router.push(`/canvas?view=canvas&selecionado=${id}&tab=texto`)
+  // Item C FIXTIPOS: preserva query atual (modo=wizard) nos router.push
+  const q = route.query.modo === 'wizard' ? '&modo=wizard' : ''
+  router.push(`/canvas?view=canvas&selecionado=${id}&tab=texto${q}`)
 }
 
 function abrirStudioParaFeature() {
