@@ -1,12 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AuditEvent, Edge, ImpactPlan, NexoObject, NexoStatus, ProposePatch, Waiver } from '@/types/nexo'
-import { seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedPbis } from '@/data/seed'
+import type { AuditEvent, Edge, ImpactPlan, NexoObject, NexoStatus, OrigemVinculoTela, ProposePatch, TelaVinculo, Waiver } from '@/types/nexo'
+import { seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedPbis, seedVinculosTela } from '@/data/seed'
 import { useProjects } from '@/stores/useProjects'
 
 const KEY = 'nexo.v1.graph'
 const KEY_PATCH = 'nexo.v1.patches'
 const KEY_AUDIT = 'nexo.v1.audit'
+const KEY_VINCULOS = 'nexo.v1.vinculos-tela'
 
 interface GraphState {
   nos: NexoObject[]
@@ -92,6 +93,8 @@ export const useGraph = defineStore('graph', () => {
   const patches = ref<ProposePatch[]>(loadJson<ProposePatch[]>(KEY_PATCH, []))
   const audit = ref<AuditEvent[]>(loadJson<AuditEvent[]>(KEY_AUDIT, []))
   const waivers = ref<Waiver[]>(loadJson<Waiver[]>('nexo.v1.waivers', []))
+  // ONDA1 W1 — tabela de vínculos feature↔tela (declarativa; telas físicas vivem no Studio).
+  const vinculosTela = ref<TelaVinculo[]>(loadJson<TelaVinculo[]>(KEY_VINCULOS, [...seedVinculosTela]))
   const plano = ref<ImpactPlan | null>(null)
 
   // undo/redo — pilha >= 50
@@ -543,11 +546,114 @@ export const useGraph = defineStore('graph', () => {
     return w
   }
 
+  // ONDA1 W1 — vínculo feature↔tela.
+  // vincularTela: idempotente por telaId (revincular a mesma tela sobrescreve o vínculo,
+  // mantendo 1:1 tela→feature); espelha telaId em feature.telas_ids para compat com
+  // gates (FTR-005 lê telas_ids) e incrementa versão da feature para rastreabilidade.
+  // NÃO cria telas físicas — frames vivem no Studio (useStudio); aqui só o vínculo.
+  function vincularTela(
+    featureId: string,
+    telaId: string,
+    origem: OrigemVinculoTela,
+    passoRef?: string,
+    atorId = 'u-pm'
+  ): boolean {
+    const no = porId.value.get(featureId)
+    if (!no || no.tipo !== 'feature') return false
+    const tid = telaId.trim()
+    if (!tid) return false
+    const vinculo: TelaVinculo = {
+      telaId: tid,
+      featureId,
+      origem,
+      ...(passoRef != null && passoRef !== '' ? { passoRef } : {})
+    }
+    const idx = vinculosTela.value.findIndex((v) => v.telaId === tid)
+    if (idx >= 0) {
+      const anterior = vinculosTela.value[idx]
+      vinculosTela.value[idx] = vinculo
+      if (anterior.featureId !== featureId) {
+        removerTelaIdDaFeature(anterior.featureId, tid)
+      }
+    } else {
+      vinculosTela.value.push(vinculo)
+    }
+    adicionarTelaIdNaFeature(featureId, tid)
+    try {
+      localStorage.setItem(KEY_VINCULOS, JSON.stringify(vinculosTela.value))
+    } catch {
+      // segue em memória
+    }
+    registrar('VincularTela', `vinculou tela "${tid}" à feature "${no.titulo}" (origem=${origem}${passoRef ? `, passo=${passoRef}` : ''})`, featureId, atorId)
+    persist()
+    return true
+  }
+
+  function adicionarTelaIdNaFeature(featureId: string, telaId: string): void {
+    const no = porId.value.get(featureId)
+    if (!no || no.tipo !== 'feature') return
+    const atual = Array.isArray((no as unknown as Record<string, unknown>)['telas_ids'])
+      ? ((no as unknown as Record<string, unknown>)['telas_ids'] as string[])
+      : []
+    if (!atual.includes(telaId)) {
+      atual.push(telaId)
+      ;(no as unknown as Record<string, unknown>)['telas_ids'] = [...atual]
+      no.versao += 1
+      no.updated_at = new Date().toISOString()
+    }
+  }
+
+  function removerTelaIdDaFeature(featureId: string, telaId: string): void {
+    const no = porId.value.get(featureId)
+    if (!no || no.tipo !== 'feature') return
+    const atual = Array.isArray((no as unknown as Record<string, unknown>)['telas_ids'])
+      ? ((no as unknown as Record<string, unknown>)['telas_ids'] as string[])
+      : []
+    if (atual.includes(telaId)) {
+      ;(no as unknown as Record<string, unknown>)['telas_ids'] = atual.filter((t) => t !== telaId)
+      no.versao += 1
+      no.updated_at = new Date().toISOString()
+    }
+  }
+
+  /** Telas vinculadas a uma feature (ordem de vínculo; cópia para não vazar reatividade). */
+  function telasDaFeature(featureId: string): TelaVinculo[] {
+    return vinculosTela.value.filter((v) => v.featureId === featureId).map((v) => ({ ...v }))
+  }
+
+  /** Feature dona de uma tela (1:1 tela→feature; undefined quando sem vínculo). */
+  function featureDaTela(telaId: string): string | undefined {
+    return vinculosTela.value.find((v) => v.telaId === telaId)?.featureId
+  }
+
+  /**
+   * ONDA1 W1 — vincula cada tela de uma entrada Studio (montarEntradaStudio) à feature.
+   * Contrato para a StudioView chamar dentro de gerarNoCanvas: origem vem da tela
+   * (fluxo_feliz/alternativo/bdd) e passoRef ancora o índice (t1/t2…/alt1/bdd).
+   * Retorna a quantidade de vínculos criados/atualizados.
+   */
+  function vincularEntradaStudio(
+    entrada: { featureId: string; telas: { id: string; origem: string }[] },
+    atorId = 'u-pm'
+  ): number {
+    let n = 0
+    const origemValida = (o: string): o is OrigemVinculoTela =>
+      o === 'fluxo_feliz' || o === 'alternativo' || o === 'bdd' || o === 'manual'
+    for (const t of entrada.telas) {
+      const origem: OrigemVinculoTela = origemValida(t.origem) ? t.origem : 'manual'
+      const m = t.id.match(/-(t\d+|alt\d+)$/)
+      const passoRef = m ? m[1] : undefined
+      if (vincularTela(entrada.featureId, t.id, origem, passoRef, atorId)) n++
+    }
+    return n
+  }
+
   return {
     state,
     patches,
     audit,
     waivers,
+    vinculosTela,
     plano,
     undoStack,
     redoStack,
@@ -582,6 +688,10 @@ export const useGraph = defineStore('graph', () => {
     trocarProjeto,
     concederDispensa,
     dispensaVigente,
+    vincularTela,
+    telasDaFeature,
+    featureDaTela,
+    vincularEntradaStudio,
     resetSeed
   }
 })

@@ -294,6 +294,22 @@ export interface Waiver {
   em: string
 }
 
+// Vínculo declarativo feature↔tela — ONDA1-MOTOR-VÍNCULO (W1).
+// Resolve o GAP Lupa V5: telas_ids era [] no seed e nada ligava frame Studio à feature.
+// Toda tela gerada no canvas (gerarNoCanvas) ou declarada no seed carrega um vínculo
+// {telaId, featureId, origem, passoRef?} — origem indica de onde a tela derivou:
+// 'fluxo_feliz' | 'alternativo' (passos do montarEntradaStudio), 'bdd' (asserção AC)
+// ou 'manual' (criada à mão no Studio). passoRef ancora o passo/nó de origem
+// (ex.: índice do passo do fluxo, 'alt1', 'AC-001') para rastreabilidade.
+export type OrigemVinculoTela = 'fluxo_feliz' | 'alternativo' | 'bdd' | 'manual'
+
+export interface TelaVinculo {
+  telaId: string
+  featureId: string
+  origem: OrigemVinculoTela
+  passoRef?: string
+}
+
 // Payload gate→Studio (OLLAMA-QUEEN-MOTOR O3): tudo derivado do objeto, sem mock.
 export type OrigemTelaStudio = 'fluxo_feliz' | 'alternativo' | 'bdd'
 
