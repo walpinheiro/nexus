@@ -34,6 +34,13 @@ function loadGraph(): GraphState {
           n.y = c.y
           n.z = typeof n.z === 'number' ? n.z : c.z
         }
+        // migração sem perda GATES-CHECKS: backfill de campos novos
+        const r = n as unknown as Record<string, unknown>
+        if (n.tipo === 'pbi' && !Array.isArray(r['criterios_bdd'])) r['criterios_bdd'] = []
+        if ((n.tipo === 'feature' || n.tipo === 'pbi') && !Array.isArray(r['permissoes'])) r['permissoes'] = []
+        if (n.tipo === 'feature' && !Array.isArray(r['telas_estados'])) r['telas_estados'] = []
+        if (!('evidencia' in r)) r['evidencia'] = {}
+        if (!('nfrs' in r)) r['nfrs'] = []
         i++
       }
       return s

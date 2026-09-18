@@ -209,7 +209,16 @@ export const seedPbis: PBI[] = [
     escopo_in: ['dedup por idTx'],
     escopo_out: ['reprocessamento manual'],
     dependencias: [],
-    estrategia_teste: 'contrato + request'
+    estrategia_teste: 'contrato + request',
+    criterios_bdd: [
+      {
+        id: 'AC-PBI-001',
+        given: 'webhook com idTx já processado',
+        when: 'PSP reenvia a confirmação',
+        then: 'sistema retorna o resultado original sem duplicar',
+        prioridade: 'must'
+      }
+    ]
   },
   {
     ...base,
@@ -232,7 +241,16 @@ export const seedPbis: PBI[] = [
     escopo_in: ['polling de status'],
     escopo_out: ['push realtime'],
     dependencias: ['pbi-idtx'],
-    estrategia_teste: 'componente + e2e'
+    estrategia_teste: 'componente + e2e',
+    criterios_bdd: [
+      {
+        id: 'AC-PBI-010',
+        given: 'confirmação idempotente concluída',
+        when: 'cliente abre a tela de status',
+        then: 'exibe o status atualizado sem recarregar',
+        prioridade: 'must'
+      }
+    ]
   }
 ]
 
@@ -296,6 +314,7 @@ export const seedEdges: Edge[] = [
 
 export const seedUsers: User[] = [
   { id: 'u-pm', nome: 'Paula (PM)', papel: 'PM', projeto_ids: ['proj-cobrancas'] },
+  { id: 'u-po', nome: 'Paulo (PO)', papel: 'PO', projeto_ids: ['proj-cobrancas'] },
   { id: 'u-ux', nome: 'Ursula (UX)', papel: 'UX', projeto_ids: ['proj-cobrancas'] },
   { id: 'u-arq', nome: 'Aldo (Arquiteto)', papel: 'Arquiteto', projeto_ids: ['proj-cobrancas'] },
   { id: 'u-tl', nome: 'Tina (Tech Lead)', papel: 'TechLead', projeto_ids: ['proj-cobrancas'] },
