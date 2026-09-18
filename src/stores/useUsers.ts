@@ -13,7 +13,14 @@ interface UsersState {
 function load(): UsersState {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return JSON.parse(raw) as UsersState
+    if (raw) {
+      const s = JSON.parse(raw) as UsersState
+      // backfill sem perda: garante u-po (PO) em bases antigas
+      if (!s.usuarios.some((u) => u.id === 'u-po')) {
+        s.usuarios.push({ id: 'u-po', nome: 'Paulo (PO)', papel: 'PO', projeto_ids: ['proj-cobrancas'] })
+      }
+      return s
+    }
   } catch {
     // ignora e usa seed
   }

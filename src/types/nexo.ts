@@ -77,6 +77,13 @@ export interface Kpi {
   responsavel: string
 }
 
+export interface RiscoEstruturado {
+  probabilidade: string
+  impacto: string
+  mitigacao: string
+  owner: string
+}
+
 export interface Epic extends NexoObject {
   tipo: 'epico'
   problema: string
@@ -85,7 +92,7 @@ export interface Epic extends NexoObject {
   personas: string[]
   escopo_in: string[]
   escopo_out: string[]
-  riscos: string[]
+  riscos: (string | RiscoEstruturado)[]
 }
 
 export interface CriterioBdd {

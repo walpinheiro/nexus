@@ -39,7 +39,14 @@ export const seedEpico: Epic = {
   personas: ['Cliente com fatura'],
   escopo_in: ['Pagar, criar e confirmar cobrança via Pix'],
   escopo_out: ['Boleto e cartão'],
-  riscos: ['Indisponibilidade do PSP']
+  riscos: [
+    {
+      probabilidade: 'alta',
+      impacto: 'alto',
+      mitigacao: 'retry com idempotência + fallback manual',
+      owner: 'u-dev'
+    }
+  ]
 }
 
 export const seedFeatures: Feature[] = [
