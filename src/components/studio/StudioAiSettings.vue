@@ -4,7 +4,7 @@
  * Chave de armazenamento: nexo.v1.studio.ai
  * Purely local, never makes network calls.
  */
-export type StudioAiProviderId = 'OpenAI' | 'Claude' | 'Gemini' | 'DeepSeek'
+export type StudioAiProviderId = 'OpenAI' | 'Claude' | 'Gemini' | 'DeepSeek' | 'Ollama'
 
 export interface ProviderEndpointMeta {
   id: StudioAiProviderId
@@ -47,6 +47,14 @@ export const AI_PROVIDERS_META: Record<StudioAiProviderId, ProviderEndpointMeta>
     defaultBaseUrl: 'https://api.deepseek.com/v1',
     keyLink: 'https://platform.deepseek.com/api_keys',
     keyPlaceholder: 'sk-...'
+  },
+  Ollama: {
+    id: 'Ollama',
+    label: 'Ollama (local)',
+    defaultModel: 'queen',
+    defaultBaseUrl: 'http://localhost:11434',
+    keyLink: 'http://localhost:11434',
+    keyPlaceholder: '(sem chave — 100% local)'
   }
 }
 
@@ -86,6 +94,11 @@ export function createDefaultAiConfig(): StudioAiSettingsConfig {
         modelId: AI_PROVIDERS_META.DeepSeek.defaultModel,
         baseUrl: AI_PROVIDERS_META.DeepSeek.defaultBaseUrl,
         apiKey: ''
+      },
+      Ollama: {
+        modelId: AI_PROVIDERS_META.Ollama.defaultModel,
+        baseUrl: AI_PROVIDERS_META.Ollama.defaultBaseUrl,
+        apiKey: ''
       }
     }
   }
@@ -108,7 +121,8 @@ export function loadAiConfig(storageKey: string = DEFAULT_AI_STORAGE_KEY): Studi
         OpenAI: { ...defaults.providers.OpenAI, ...(parsed.providers?.OpenAI || {}) },
         Claude: { ...defaults.providers.Claude, ...(parsed.providers?.Claude || {}) },
         Gemini: { ...defaults.providers.Gemini, ...(parsed.providers?.Gemini || {}) },
-        DeepSeek: { ...defaults.providers.DeepSeek, ...(parsed.providers?.DeepSeek || {}) }
+        DeepSeek: { ...defaults.providers.DeepSeek, ...(parsed.providers?.DeepSeek || {}) },
+        Ollama: { ...defaults.providers.Ollama, ...(parsed.providers?.Ollama || {}) }
       }
     }
   } catch (err) {
