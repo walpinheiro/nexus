@@ -59,10 +59,7 @@ function tooltip(gid: string): string {
         :class="$route.path === '/' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
         :aria-current="$route.path === '/' ? 'page' : undefined"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
+        <LucideIcon name="eye" :size="18" />
         Visão
       </RouterLink>
       <RouterLink
@@ -71,12 +68,7 @@ function tooltip(gid: string): string {
         :class="$route.path === '/canvas' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
         :aria-current="$route.path === '/canvas' ? 'page' : undefined"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <rect x="3" y="3" width="7" height="7" rx="1.5" />
-          <rect x="14" y="3" width="7" height="7" rx="1.5" />
-          <rect x="3" y="14" width="7" height="7" rx="1.5" />
-          <rect x="14" y="14" width="7" height="7" rx="1.5" />
-        </svg>
+        <LucideIcon name="layout" :size="18" />
         Canvas
       </RouterLink>
       <RouterLink
@@ -85,27 +77,8 @@ function tooltip(gid: string): string {
         :class="$route.path === '/backlog' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
         :aria-current="$route.path === '/backlog' ? 'page' : undefined"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-          <line x1="8" y1="6" x2="21" y2="6" />
-          <line x1="8" y1="12" x2="21" y2="12" />
-          <line x1="8" y1="18" x2="21" y2="18" />
-          <circle cx="4" cy="6" r="1" fill="currentColor" />
-          <circle cx="4" cy="12" r="1" fill="currentColor" />
-          <circle cx="4" cy="18" r="1" fill="currentColor" />
-        </svg>
+        <LucideIcon name="inbox" :size="18" />
         Backlog
-      </RouterLink>
-      <RouterLink
-        :to="{ path: '/studio-full', query: { from: 'backlog' } }"
-        class="flex h-10 items-center gap-3 rounded-badge px-3 text-sm"
-        :class="$route.path === '/studio-full' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
-        :aria-current="$route.path === '/studio-full' ? 'page' : undefined"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <rect x="7" y="2" width="10" height="20" rx="2" />
-          <line x1="11" y1="19" x2="13" y2="19" />
-        </svg>
-        Studio
       </RouterLink>
     </nav>
 
