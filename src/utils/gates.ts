@@ -33,9 +33,13 @@ function getFeatureFields(o: NexoObject): {
   }
 }
 
-export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; prazo: string }[]): GateEval {
+export function avaliarGate(
+  objeto: NexoObject,
+  waivers?: { codigo: string; prazo: string }[],
+  gateOverride?: GateId
+): GateEval {
   const checks: GateCheck[] = []
-  const gate = objeto.gate
+  const gate = gateOverride ?? objeto.gate
   if (gate === 'G0') {
     const o = objeto as unknown as Record<string, unknown>
     const desc = String(objeto.descricao ?? '')
@@ -178,7 +182,13 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
       codigo: 'FTR-003',
       descricao: 'Regra vinculada tem fonte e não está arquivada',
       severidade: 'bloqueante',
-      ok: regrasIds.length >= 1 && (ff['fonte'] ?? 'stated') !== 'pending_decision'
+      ok: (() => {
+        if (regrasIds.length < 1) return false
+        if ((ff['fonte'] ?? 'stated') === 'pending_decision') return false
+        const regras = Array.isArray(ff['regras']) ? (ff['regras'] as Record<string, unknown>[]) : []
+        if (regras.length === 0) return true
+        return regras.every((r) => r['arquivada'] !== true && String(r['fonte'] ?? '').trim() !== '')
+      })()
     })
     checks.push({
       codigo: 'FTR-004',
@@ -191,7 +201,7 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
     })
     checks.push({
       codigo: 'FTR-005',
-      descricao: 'Tela sem estados loading/vazio/erro/sucesso',
+      descricao: 'Tela com estados loading/vazio/erro/sucesso',
       severidade: 'aviso',
       ok: (() => {
         const telas = Array.isArray(ff['telas_estados']) ? (ff['telas_estados'] as Record<string, unknown>[]) : []
@@ -274,9 +284,13 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
       ok: (() => {
         if (integ.length === 0) return String(f['contrato_dispensa'] ?? '') !== ''
         return integ.every((x) => {
-          if (typeof x === 'string') return x.toLowerCase().includes('timeout')
+          if (typeof x === 'string') {
+            const s = x.toLowerCase()
+            return s.includes('timeout') && (s.includes('retry') || s.includes('tentativa')) && (s.includes('idempot') || s.includes('idtx'))
+          }
           const xi = x as Record<string, unknown>
-          return xi['owner_externo'] != null && xi['timeout_ms'] != null && xi['indisponibilidade'] != null
+          return xi['owner_externo'] != null && xi['timeout_ms'] != null && xi['indisponibilidade'] != null &&
+            xi['retry'] != null && (xi['idempotente'] != null || xi['idempotencia'] != null)
         })
       })()
     })
