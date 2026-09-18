@@ -5,6 +5,7 @@ import { useGraph } from '@/stores/useGraph'
 import { useUsers } from '@/stores/useUsers'
 import { useGate } from '@/stores/useGate'
 import LucideIcon from '@/components/common/LucideIcon.vue'
+import NeChip from '@/components/common/NeChip.vue'
 import ArtefatoDoc from '@/components/gates/ArtefatoDoc.vue'
 import { montarArtefato } from '@/utils/artefatos'
 import {
@@ -605,53 +606,53 @@ function rejeitarPatch() {
         <!-- Quick Chips (Atalhos de Fala da Conversa) -->
         <div class="flex flex-wrap gap-1 pt-2 border-t border-nexo-border/60 shrink-0">
           <template v-if="perguntaAtual">
-            <button
-              type="button"
-              class="rounded-badge border border-nexo-primary/40 bg-nexo-primary/5 px-2 py-0.5 text-[10px] text-nexo-primary hover:bg-nexo-primary/10 max-w-[210px] truncate"
+            <NeChip
+              variant="primary"
+              icon="sparkles"
+              :label="`${perguntaAtual.exemplo.slice(0, 32)}...`"
               :title="perguntaAtual.exemplo"
+              class="max-w-[210px]"
               @click="enviarMensagem(perguntaAtual.exemplo)"
-            >
-              💬 {{ perguntaAtual.exemplo.slice(0, 32) }}...
-            </button>
-            <button
-              type="button"
-              class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
+            />
+            <NeChip
+              variant="neutral"
+              icon="sparkles"
+              :label="perguntaAtual.acaoLabel"
+              :title="perguntaAtual.acaoLabel"
               @click="enviarMensagem(perguntaAtual.acaoLabel)"
-            >
-              💬 {{ perguntaAtual.acaoLabel }}
-            </button>
+            />
           </template>
-          <button
-            type="button"
-            class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
+          <NeChip
+            variant="neutral"
+            icon="sparkles"
+            label="O que falta?"
+            title="O que falta para aprovar este gate?"
             @click="enviarMensagem('O que falta para aprovar este gate?')"
-          >
-            O que falta?
-          </button>
-          <button
-            type="button"
-            class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
+          />
+          <NeChip
+            variant="neutral"
+            icon="eye"
+            label="Ver documento"
+            title="Ver documento"
             @click="tabAtiva = 'faltas'"
-          >
-            Ver documento
-          </button>
+          />
         </div>
 
         <!-- Input de Mensagem -->
-        <form class="flex items-center gap-1.5 shrink-0" @submit.prevent="enviarMensagem()">
+        <form class="flex items-center gap-2 shrink-0" @submit.prevent="enviarMensagem()">
           <input
             v-model="inputMensagem"
             type="text"
             placeholder="Responda em texto livre à IA..."
-            class="flex-1 rounded-btn border border-nexo-border px-3 py-1.5 text-xs text-nexo-text placeholder:text-nexo-muted focus:border-nexo-primary focus:outline-none bg-white"
+            class="flex-1 rounded-[12px] border border-nexo-border bg-white px-4 py-1.5 min-h-[44px] text-sm text-nexo-text placeholder:text-nexo-muted focus:border-nexo-primary focus:outline-none"
           />
           <button
             type="submit"
-            class="rounded-btn bg-nexo-primary p-2 text-white hover:bg-nexo-primary/90 disabled:opacity-40"
+            class="rounded-btn bg-nexo-primary h-10 w-10 shrink-0 flex items-center justify-center text-white hover:bg-nexo-primary/90 disabled:opacity-40"
             :disabled="!inputMensagem.trim() || gerandoOutputAoVivo"
             aria-label="Enviar mensagem"
           >
-            <LucideIcon name="send" :size="14" />
+            <LucideIcon name="send" :size="18" />
           </button>
         </form>
       </div>
