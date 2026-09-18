@@ -89,7 +89,8 @@ const pipelinePassos = computed(() => {
 
 // Artefato normativo do gate (motor src/utils/artefatos.ts — única fonte de verdade
 // das seções; o VUE só visualiza via ArtefatoDoc e mantém export .md secundário).
-// G0/G1 consomem ctx nos+gates; G2 consome também vinculos (telas) e regras.
+// Chamada única para qualquer gate (mesmo padrão de GateAiSession): ctx completo
+// com gates+nos+vinculos+regras; o motor decide as seções por gateId.
 const artefato = computed(() => {
   if (!props.alvo) return null
   const gatesCtx = gatesStore.gates.map((g) => ({
@@ -99,21 +100,12 @@ const artefato = computed(() => {
     aprovadoPor: g.aprovadoPor ?? undefined,
     aprovadoEm: g.aprovadoEm ?? undefined
   }))
-  if (props.gateId === 'G0' || props.gateId === 'G1') {
-    return montarArtefato(props.alvo, props.gateId, { gates: gatesCtx, nos: graph.state.nos })
-  }
-  if (props.gateId === 'G2') {
-    return montarArtefato(props.alvo, props.gateId, {
-      gates: gatesCtx,
-      nos: graph.state.nos,
-      vinculos: graph.vinculosTela,
-      regras: graph.regrasValidacao
-    })
-  }
-  if (props.gateId === 'G4') {
-    return montarArtefato(props.alvo, props.gateId, { gates: gatesCtx, nos: graph.state.nos })
-  }
-  return null
+  return montarArtefato(props.alvo, props.gateId, {
+    gates: gatesCtx,
+    nos: graph.state.nos,
+    vinculos: graph.vinculosTela,
+    regras: graph.regrasValidacao
+  })
 })
 
 // A4: G3/G5 100% motor; G4 motor + ações secundárias (release). Legado removido.
