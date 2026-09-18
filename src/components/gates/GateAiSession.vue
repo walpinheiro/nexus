@@ -442,10 +442,10 @@ function rejeitarPatch() {
             class="inline-block h-2 w-2 rounded-full"
             :class="ollamaStatus === 'online' ? 'bg-green-500' : 'bg-nexo-muted'"
           />
-          <span v-if="ollamaStatus === 'online'" class="font-mono text-[10px] text-green-700 font-bold">
+          <span v-if="ollamaStatus === 'online'" class="font-mono text-xs text-green-700 font-bold">
             online: {{ modeloEfetivo }}
           </span>
-          <span v-else class="font-mono text-[10px] text-nexo-muted">
+          <span v-else class="font-mono text-xs text-nexo-muted">
             offline — resposta local
           </span>
         </div>
@@ -475,7 +475,7 @@ function rejeitarPatch() {
         O que falta
         <span
           v-if="diagnostico && diagnostico.faltas.length > 0"
-          class="ml-1 rounded-full bg-nexo-blocked/10 px-1.5 py-0.2 text-[10px] font-bold text-nexo-blocked"
+          class="ml-1 rounded-full bg-nexo-blocked/10 px-1.5 py-0.2 text-xs font-bold text-nexo-blocked"
         >
           {{ diagnostico.faltas.length }}
         </span>
@@ -491,7 +491,7 @@ function rejeitarPatch() {
         Chat Interativo
         <span
           v-if="patchPendente"
-          class="ml-1 rounded-full bg-nexo-primary px-1.5 py-0.2 text-[10px] font-bold text-white animate-pulse"
+          class="ml-1 rounded-full bg-nexo-primary px-1.5 py-0.2 text-xs font-bold text-white animate-pulse"
         >
           Patch
         </span>
@@ -539,7 +539,7 @@ function rejeitarPatch() {
             icon="file-text"
             :label="exemploCurto"
             :title="perguntaAtual.exemplo"
-            class="max-w-full min-h-[32px] text-sm"
+            class="max-w-full min-h-[32px]"
             @click="enviarMensagem(perguntaAtual.exemplo)"
           />
         </div>
@@ -554,17 +554,17 @@ function rejeitarPatch() {
         >
           <div class="flex items-center justify-between text-[11px]">
             <span class="font-bold text-nexo-primary flex items-center gap-1">
-              <LucideIcon name="help-circle" :size="13" />
+              <LucideIcon name="help-circle" :size="14" />
               Pergunta Atual da IA do Gate (1 por vez)
             </span>
-            <span class="rounded bg-nexo-primary/10 text-nexo-primary px-1.5 py-0.2 font-mono text-[9px] font-bold">
+            <span class="rounded bg-nexo-primary/10 text-nexo-primary px-1.5 py-0.2 font-mono text-xs font-bold">
               {{ perguntaAtual.codigo }}
             </span>
           </div>
           <p class="text-xs font-semibold text-nexo-text leading-snug">
             {{ perguntaAtual.pergunta }}
           </p>
-          <p class="text-[10px] text-nexo-muted italic truncate" :title="perguntaAtual.exemplo">
+          <p class="text-xs text-nexo-muted italic truncate" :title="perguntaAtual.exemplo">
             Exemplo: {{ perguntaAtual.exemplo }}
           </p>
         </div>
@@ -583,12 +583,12 @@ function rejeitarPatch() {
                 ? 'bg-nexo-primary text-white rounded-br-none'
                 : 'bg-white border border-nexo-border/80 text-nexo-text rounded-bl-none'"
             >
-              <div v-if="msg.autor === 'ia'" class="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-nexo-primary">
-                <LucideIcon name="sparkles" :size="11" />
+              <div v-if="msg.autor === 'ia'" class="flex items-center gap-1.5 mb-1 text-xs font-bold text-nexo-primary">
+                <LucideIcon name="sparkles" :size="14" />
                 <span>IA Assistente</span>
                 <span class="text-nexo-muted font-normal ml-auto">{{ msg.timestamp }}</span>
               </div>
-              <div v-else class="text-[10px] text-white/80 font-medium mb-0.5 text-right">
+              <div v-else class="text-xs text-white/80 font-medium mb-0.5 text-right">
                 Você · {{ msg.timestamp }}
               </div>
               <div>{{ msg.texto }}</div>
@@ -619,8 +619,8 @@ function rejeitarPatch() {
                 class="border-b border-nexo-border/40 pb-1.5 last:border-none last:pb-0 font-mono text-[11px]"
               >
                 <div class="font-bold text-nexo-text">Campo: {{ m.campo }}</div>
-                <div class="text-red-700 line-through truncate max-h-12 overflow-hidden text-[10px]">- {{ m.de || '(vazio)' }}</div>
-                <div class="text-green-700 whitespace-pre-wrap max-h-24 overflow-y-auto text-[10px]">+ {{ m.para }}</div>
+                <div class="text-red-700 line-through truncate max-h-12 overflow-hidden text-xs">- {{ m.de || '(vazio)' }}</div>
+                <div class="text-green-700 whitespace-pre-wrap max-h-24 overflow-y-auto text-xs">+ {{ m.para }}</div>
               </div>
             </div>
 
@@ -713,7 +713,7 @@ function rejeitarPatch() {
                 <LucideIcon name="alert-circle" :size="14" class="text-red-600" />
                 Faltando (Códigos Bloqueantes)
               </span>
-              <span class="rounded bg-red-100 text-red-800 px-1.5 py-0.2 text-[10px] font-bold">
+              <span class="rounded bg-red-100 text-red-800 px-1.5 py-0.2 text-xs font-bold">
                 {{ diagnostico?.faltas.length ?? 0 }} pendência(s)
               </span>
             </div>
@@ -725,13 +725,13 @@ function rejeitarPatch() {
                 class="rounded bg-nexo-canvas/40 p-2 border border-nexo-border/50 text-[11px] space-y-0.5"
               >
                 <div class="flex items-center justify-between">
-                  <span class="font-bold text-nexo-text font-mono text-[10px]">{{ falta.codigo }}</span>
-                  <span class="text-[9px] uppercase font-semibold text-red-700 bg-red-50 px-1 py-0.2 rounded">
+                  <span class="font-bold text-nexo-text font-mono text-xs">{{ falta.codigo }}</span>
+                  <span class="text-xs uppercase font-semibold text-red-700 bg-red-50 px-1 py-0.2 rounded">
                     {{ falta.severidade }}
                   </span>
                 </div>
                 <p class="text-nexo-text font-medium">{{ falta.descricao }}</p>
-                <p class="text-[10px] text-nexo-muted leading-tight">{{ falta.pergunta }}</p>
+                <p class="text-xs text-nexo-muted leading-tight">{{ falta.pergunta }}</p>
               </div>
             </div>
             <p v-else class="text-xs text-green-700 italic">
@@ -746,7 +746,7 @@ function rejeitarPatch() {
                 <LucideIcon name="check-circle-2" :size="14" class="text-green-600" />
                 Preenchido (Requisito: Valor)
               </span>
-              <span class="rounded bg-green-100 text-green-800 px-1.5 py-0.2 text-[10px] font-bold">
+              <span class="rounded bg-green-100 text-green-800 px-1.5 py-0.2 text-xs font-bold">
                 {{ itensPreenchidos.length }} atendido(s)
               </span>
             </div>
@@ -757,11 +757,11 @@ function rejeitarPatch() {
                 :key="it.codigo"
                 class="rounded bg-green-50/30 p-2 border border-green-200/60 text-[11px] space-y-0.5"
               >
-                <div class="flex items-center justify-between text-[10px]">
+                <div class="flex items-center justify-between text-xs">
                   <span class="font-bold text-green-900 font-mono">{{ it.codigo }}</span>
                   <span class="text-nexo-muted font-mono">{{ it.campoAlvo }}</span>
                 </div>
-                <div class="text-nexo-text text-[10px] whitespace-pre-wrap font-mono max-h-20 overflow-y-auto bg-white p-1 rounded border border-green-200/40">
+                <div class="text-nexo-text text-xs whitespace-pre-wrap font-mono max-h-20 overflow-y-auto bg-white p-1 rounded border border-green-200/40">
                   {{ it.valor }}
                 </div>
               </div>

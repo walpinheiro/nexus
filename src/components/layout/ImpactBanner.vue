@@ -23,8 +23,8 @@ function ir() {
     aria-label="Impacto alto detectado — ir para Status de pagamento"
     @click="ir()"
   >
-    <LucideIcon name="alert-circle" :size="16" />
+    <LucideIcon name="alert-circle" :size="18" />
     Impacto alto detectado
-    <span class="inline-flex" aria-hidden="true"><LucideIcon name="chevR" :size="14" /></span>
+    <span class="inline-flex" aria-hidden="true"><LucideIcon name="chevR" :size="18" /></span>
   </button>
 </template>

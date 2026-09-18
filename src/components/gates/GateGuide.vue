@@ -651,14 +651,14 @@ function executarAcao(passo: PassoGuia) {
         <div class="shrink-0 flex items-center">
           <span
             v-if="passo.concluido && passo.tipoAcao !== 'solicitar'"
-            class="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded"
+            class="text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded"
           >
             Concluído
           </span>
           <button
             v-else
             type="button"
-            class="rounded-btn px-2.5 py-1 text-xs font-semibold transition-colors"
+            class="rounded-btn px-3 py-1.5 text-sm font-semibold transition-colors min-h-[32px]"
             :class="passo.tipoAcao === 'solicitar'
               ? 'bg-nexo-primary text-white hover:bg-nexo-primary/90'
               : 'border border-nexo-border bg-white text-nexo-text hover:bg-nexo-canvas'"

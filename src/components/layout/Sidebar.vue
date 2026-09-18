@@ -106,8 +106,8 @@ function tooltip(gid: string): string {
           </span>
           {{ rotulos[gid] }}
           <span class="ml-auto inline-flex" aria-hidden="true">
-            <LucideIcon v-if="estadoGate(gid) === 'bloqueado'" name="lock" :size="14" />
-            <LucideIcon v-else-if="estadoGate(gid) === 'aprovado'" name="check" :size="14" />
+            <LucideIcon v-if="estadoGate(gid) === 'bloqueado'" name="lock" :size="18" />
+            <LucideIcon v-else-if="estadoGate(gid) === 'aprovado'" name="check" :size="18" />
           </span>
         </RouterLink>
       </nav>
@@ -129,7 +129,7 @@ function tooltip(gid: string): string {
         aria-label="Recolher barra lateral"
         @click="ui.alternarSidebar()"
       >
-        <LucideIcon name="chevL" :size="14" />
+        <LucideIcon name="chevL" :size="18" />
       </button>
     </div>
   </aside>

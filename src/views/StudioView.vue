@@ -461,10 +461,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       class="flex flex-wrap items-center justify-between gap-3 border-b border-nexo-primary/30 bg-nexo-primary/5 px-4 py-2 text-xs"
     >
       <div class="flex items-center gap-2 flex-wrap">
-        <span class="rounded bg-nexo-primary text-white px-2 py-0.5 text-[10px] font-bold">Gate G2 Pré-load</span>
+        <span class="rounded bg-nexo-primary text-white px-2 py-0.5 text-xs font-bold">Gate G2 Pré-load</span>
         <span class="font-bold text-nexo-text">{{ entradaStudio.titulo }}</span>
         <span class="text-nexo-muted">({{ entradaStudio.ator }})</span>
-        <span class="rounded bg-nexo-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-nexo-primary">
+        <span class="rounded bg-nexo-primary/10 px-1.5 py-0.5 text-xs font-medium text-nexo-primary">
           {{ entradaStudio.telas.length }} telas · {{ entradaStudio.navegacao.length }} transições BDD
         </span>
       </div>
@@ -521,20 +521,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <div class="pt-2 flex items-center justify-center gap-2">
             <RouterLink
               to="/gates/G2"
-              class="inline-flex items-center gap-1.5 rounded-btn border border-nexo-border px-3 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-canvas"
+              class="inline-flex items-center gap-1.5 rounded-btn border border-nexo-border px-3 py-1.5 text-sm min-h-[32px] font-semibold text-nexo-text hover:bg-nexo-canvas"
             >
               Ir para Gate G2
             </RouterLink>
             <button
+              v-if="featureId"
               type="button"
-              class="rounded-btn border border-nexo-border px-3 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-canvas"
+              class="rounded-btn border border-nexo-border px-3 py-1.5 text-sm min-h-[32px] font-semibold text-nexo-text hover:bg-nexo-canvas"
               @click="usuarioTrabalhouNoCanvas = true"
             >
               Continuar no canvas seed
             </button>
             <button
+              v-if="featureId"
               type="button"
-              class="rounded-btn bg-nexo-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-nexo-primary/90"
+              class="rounded-btn bg-nexo-primary px-3 py-1.5 text-sm min-h-[32px] font-semibold text-white hover:bg-nexo-primary/90"
               @click="dialogNovaTela = true; usuarioTrabalhouNoCanvas = true"
             >
               Criar tela em branco
@@ -567,7 +569,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
                 </button>
                 <span
                   v-if="origemDaTela(fr.id)"
-                  class="rounded-full px-1.5 py-0.2 text-[9px] font-mono font-medium shrink-0"
+                  class="rounded-full px-1.5 py-0.2 text-xs font-mono font-medium shrink-0"
                   :class="badgeOrigemClass(origemDaTela(fr.id))"
                   :title="`Origem da tela: ${origemDaTela(fr.id)}`"
                 >

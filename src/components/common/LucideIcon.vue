@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+  Activity,
+  ArrowLeft,
   Check,
   ChevronLeft,
   ChevronRight,
+  Circle,
   CircleAlert,
   CircleCheck,
   Clock,
@@ -13,10 +16,13 @@ import {
   Eye,
   FileDiff,
   FileText,
+  HelpCircle,
   Image as ImageIcon,
   Inbox,
   LayoutDashboard,
+  ListChecks,
   Lock,
+  LockOpen,
   Maximize2,
   Menu,
   MessageCircle,
@@ -30,6 +36,8 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  ToggleLeft,
+  ToggleRight,
   Trash2,
   TriangleAlert,
   Undo2,
@@ -77,7 +85,26 @@ const mapa: Record<string, unknown> = {
   fileDiff: FileDiff,
   'shield-check': ShieldCheck,
   shieldCheck: ShieldCheck,
-  message: MessageCircle
+  message: MessageCircle,
+  'help-circle': HelpCircle,
+  helpCircle: HelpCircle,
+  'toggle-right': ToggleRight,
+  toggleRight: ToggleRight,
+  'toggle-left': ToggleLeft,
+  toggleLeft: ToggleLeft,
+  left: ArrowLeft,
+  'arrow-left': ArrowLeft,
+  activity: Activity,
+  unlock: LockOpen,
+  'alert-triangle': TriangleAlert,
+  alertTriangle: TriangleAlert,
+  'check-circle-2': CircleCheck,
+  checkCircle2: CircleCheck,
+  'list-checks': ListChecks,
+  listChecks: ListChecks,
+  circle: Circle,
+  auto_awesome: Sparkles,
+  autoAwesome: Sparkles
 }
 
 const comp = computed(() => mapa[props.name] ?? X)

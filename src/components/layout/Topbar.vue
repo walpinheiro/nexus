@@ -106,7 +106,7 @@ function abrirBusca() {
         aria-label="Buscar no NEXO (Ctrl+K)"
         @click="abrirBusca()"
       >
-        <LucideIcon name="search" :size="16" />
+        <LucideIcon name="search" :size="18" />
         <span>Buscar no NEXO</span>
         <kbd class="ml-auto rounded bg-slate-100 px-1.5 py-0.5 text-xs text-nexo-muted">⌘K</kbd>
       </button>
