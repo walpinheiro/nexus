@@ -73,7 +73,9 @@ export const DEFAULT_AI_STORAGE_KEY = 'nexo.v1.studio.ai'
 
 export function createDefaultAiConfig(): StudioAiSettingsConfig {
   return {
-    activeProvider: 'OpenAI',
+    // O5 (Bússola): default Ollama local {http://localhost:11434, model queen} —
+    // ordem MOTOR: tenta Ollama primeiro, fallback local silencioso (local-fallback).
+    activeProvider: 'Ollama',
     providers: {
       OpenAI: {
         modelId: AI_PROVIDERS_META.OpenAI.defaultModel,
