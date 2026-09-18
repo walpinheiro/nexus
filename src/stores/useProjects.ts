@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AuditEvent, Classificacao, Edge, Epic, IngestaoDoc, NexoObject, Projeto } from '@/types/nexo'
-import { gatesZerados, seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedGates, seedPbis, seedProjeto } from '@/data/seed'
+import { gatesZerados, seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedGates, seedParcialExistente, seedPbis, seedProjeto } from '@/data/seed'
 import type { GateInfo } from '@/stores/useGate'
 
 const KEY = 'nexo.v1.projects'
@@ -398,6 +398,80 @@ export const useProjects = defineStore('projects', () => {
     return { ok: true, erros: [], projeto }
   }
 
+  // FIXTIPOS-MOTOR (fora de VUE): conclusão do fluxo Existente a partir do
+  // payload do IngestaoDialog { projetoId, epicoId }. Usa seedParcialExistente
+  // de seed.ts (épico+feature parciais com fonte ingestão, sem renomear ids
+  // atuais), persiste a análise da ingestão no namespace isolado do projeto
+  // (graphKey/gatesKey próprios, sem zerar banco), troca o projeto atual e
+  // devolve a rota do Gate G0 com alvo=epicoId e modo=wizard. criarProjeto
+  // atual NÃO é alterado.
+  interface ConcluirIngestaoPayload {
+    projetoId: string
+    epicoId: string
+  }
+
+  interface ConcluirIngestaoResult {
+    ok: boolean
+    erros: CriarProjetoResult['erros']
+    projetoId?: string
+    epicoId?: string
+    rotaGate?: string
+  }
+
+  function concluirIngestaoExistente(payload: ConcluirIngestaoPayload, atorId: string): ConcluirIngestaoResult {
+    const projetoId = payload.projetoId?.trim() ?? ''
+    const epicoId = payload.epicoId?.trim() ?? ''
+    if (!projetoId || !epicoId) {
+      return { ok: false, erros: [{ campo: 'ingestao', codigo: 'G0-004', mensagem: 'Payload de ingestão sem projetoId/epicoId (G0-004).' }] }
+    }
+    const projeto = state.value.projetos.find((p) => p.id === projetoId)
+    if (!projeto) {
+      return { ok: false, erros: [{ campo: 'projeto', codigo: 'G0-001', mensagem: 'Projeto da ingestão não encontrado.' }] }
+    }
+    if (projeto.epicoId !== epicoId) {
+      return { ok: false, erros: [{ campo: 'epico', codigo: 'G0-001', mensagem: 'epicoId do payload diverge do projeto.' }] }
+    }
+    // Persiste a análise da ingestão: épico+feature parciais no namespace
+    // isolado do projeto (sem tocar nos namespaces dos demais projetos).
+    const epicoParcial = {
+      ...seedParcialExistente.epico,
+      project_id: projetoId,
+      id: epicoId,
+      owner: projeto.owner,
+      contribuidores: [projeto.owner]
+    }
+    const featureParcial = {
+      ...seedParcialExistente.feature,
+      project_id: projetoId,
+      parent_id: epicoId
+    }
+    try {
+      const raw = ler<{ nos: NexoObject[]; arestas: Edge[]; selecionadoId: string | null }>(graphKey(projetoId))
+      const nosAtuais = Array.isArray(raw?.nos) ? raw!.nos : []
+      const semEpico = nosAtuais.filter((n) => n.id !== epicoId)
+      const semFeature = semEpico.filter((n) => n.id !== featureParcial.id)
+      const nos = [...semFeature, epicoParcial as NexoObject, featureParcial as NexoObject]
+      const ok = escrever(graphKey(projetoId), { nos, arestas: Array.isArray(raw?.arestas) ? raw!.arestas : [], selecionadoId: epicoId })
+      if (!ok) {
+        return { ok: false, erros: [{ campo: 'ingestao', codigo: 'G0-004', mensagem: 'Falha ao persistir análise da ingestão no projeto.' }] }
+      }
+      if (!ler(gatesKey(projetoId))) escrever(gatesKey(projetoId), gatesZerados())
+    } catch {
+      return { ok: false, erros: [{ campo: 'ingestao', codigo: 'G0-004', mensagem: 'Falha ao persistir análise da ingestão no projeto.' }] }
+    }
+    // Troca para o projeto (namespace isolado) e monta a rota do Gate G0
+    // com alvo=epicoId e modo=wizard.
+    state.value.atualId = projetoId
+    registrarGlobal('ProjectSelected', `projeto atual: ${projetoId} (ingestão concluída)`, atorId)
+    return {
+      ok: true,
+      erros: [],
+      projetoId,
+      epicoId,
+      rotaGate: `/gates/G0?alvo=${encodeURIComponent(epicoId)}&modo=wizard`
+    }
+  }
+
   function removerProjeto(id: string, confirmacao: string, atorId: string): { ok: boolean; motivo: string } {
     const p = state.value.projetos.find((x) => x.id === id)
     if (!p) return { ok: false, motivo: 'Projeto não encontrado.' }
@@ -444,5 +518,5 @@ export const useProjects = defineStore('projects', () => {
     persist()
   }
 
-  return { state, atual, persist, selecionar, criarProjeto, criarProjetoExistente, removerProjeto, resetCobrancas, graphKey, gatesKey, patchesKey, auditKey, tentKey }
+  return { state, atual, persist, selecionar, criarProjeto, criarProjetoExistente, concluirIngestaoExistente, removerProjeto, resetCobrancas, graphKey, gatesKey, patchesKey, auditKey, tentKey }
 })
