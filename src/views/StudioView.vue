@@ -259,10 +259,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <div class="flex h-full min-h-0">
       <StudioIconRail :ativo="railTab" @selecionar="(t) => { railTab = t; if (t === 'parts' || t === 'layers') abaEsq = t }" />
       <aside class="flex w-60 shrink-0 flex-col border-r border-nexo-border bg-white" aria-label="Paleta e layers">
-        <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas da esquerda">
-          <button type="button" role="tab" :aria-selected="abaEsq === 'parts'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'parts' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaEsq = 'parts'; railTab = 'parts'">Parts</button>
-          <button type="button" role="tab" :aria-selected="abaEsq === 'layers'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'layers' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaEsq = 'layers'; railTab = 'layers'">Layers</button>
-        </div>
+        <p class="border-b border-nexo-border p-2 text-xs font-semibold" aria-live="polite">{{ abaEsq === 'parts' ? 'Parts' : 'Layers' }}</p>
         <PartsPalette v-if="abaEsq === 'parts'" class="min-h-0 flex-1 border-r-0" />
         <LayersPanel v-else class="min-h-0 flex-1" />
       </aside>
