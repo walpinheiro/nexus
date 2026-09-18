@@ -7,6 +7,7 @@ import { useGate } from '@/stores/useGate'
 import { useUsers } from '@/stores/useUsers'
 import type { Classificacao } from '@/types/nexo'
 import IngestaoDialog from '@/components/projects/IngestaoDialog.vue'
+import { getProviderPadrao, saveConfig, type ProvedorIaLocal } from '@/ai/ollamaClient'
 
 const projects = useProjects()
 const graph = useGraph()
@@ -22,7 +23,7 @@ const objetivo = ref('')
 const metrica = ref('')
 const restricoesTxt = ref('')
 const naoObjetivosTxt = ref('')
-const owner = ref('u-pm')
+// W1 CRIACAOIA2-TELA: sem campo owner — responsável sempre = usuário logado.
 const classificacao = ref<Classificacao>('internal')
 const erros = ref<{ campo: string; codigo: string; mensagem: string }[]>([])
 const avisoG0002 = ref('')
@@ -106,7 +107,8 @@ function criar() {
       metricaNome: metrica.value,
       restricoes: restricoesTxt.value.split('\n').map((s) => s.trim()).filter(Boolean),
       naoObjetivos: naoObjetivosTxt.value.split('\n').map((s) => s.trim()).filter(Boolean),
-      owner: owner.value,
+      // W1 CRIACAOIA2-TELA: owner sempre = usuário logado (atorId).
+      owner: users.state.currentUserId,
       classificacao: classificacao.value
     },
     users.state.currentUserId
@@ -122,10 +124,10 @@ function criar() {
   router.push('/backlog')
 }
 
-// CRIACAOIA-TELA: wizard IA do form Novo — 5 passos (usuário, problema,
-// objetivo, usuários, escopo), 1 pergunta por vez, pré-preenche ao final.
+// CRIACAOIA2-TELA: wizard IA — 4 passos (problema, objetivo, usuários,
+// escopo); responsável sempre = usuário logado (W1, sem passo owner).
+// Sugestão de título via IA (W2): confirma/ajusta antes de criar.
 const PASSOS_WIZARD = [
-  { id: 'usuario', titulo: 'Quem é você?', ajuda: 'Selecione o responsável pelo projeto (owner).', tipo: 'owner' },
   { id: 'problema', titulo: 'Qual problema será resolvido?', ajuda: 'Descreva a dor observável (mín. 10 caracteres; o G0 exige 30).', tipo: 'texto' },
   { id: 'objetivo', titulo: 'Qual o objetivo?', ajuda: 'O que se espera alcançar com o projeto.', tipo: 'texto' },
   { id: 'usuarios', titulo: 'Quem são os usuários?', ajuda: 'Público afetado pelo problema.', tipo: 'texto' },
@@ -139,20 +141,15 @@ const passoAtualWizard = computed(() => PASSOS_WIZARD[passoWizard.value])
 
 function iniciarWizardNovo() {
   passoWizard.value = 0
-  respostaPasso.value = owner.value
+  respostaPasso.value = ''
   erroPasso.value = ''
   wizardConcluidoNovo.value = false
+  sugestaoTituloIa.value = ''
+  tituloConfirmadoIa.value = false
 }
 
 function validarPassoAtual(): boolean {
   const passo = passoAtualWizard.value
-  if (passo.tipo === 'owner') {
-    if (!respostaPasso.value) {
-      erroPasso.value = 'Selecione o responsável.'
-      return false
-    }
-    return true
-  }
   if (passo.id === 'escopo') return true
   if (respostaPasso.value.trim().length < 10) {
     erroPasso.value = 'Responda com pelo menos 10 caracteres.'
@@ -165,7 +162,6 @@ function avancarWizard() {
   if (!validarPassoAtual()) return
   const passo = passoAtualWizard.value
   const v = respostaPasso.value.trim()
-  if (passo.id === 'usuario') owner.value = respostaPasso.value
   if (passo.id === 'problema') contexto.value = v
   if (passo.id === 'objetivo') objetivo.value = v
   if (passo.id === 'usuarios') publico.value = v
@@ -173,10 +169,32 @@ function avancarWizard() {
   erroPasso.value = ''
   if (passoWizard.value < PASSOS_WIZARD.length - 1) {
     passoWizard.value += 1
-    respostaPasso.value = PASSOS_WIZARD[passoWizard.value].id === 'usuario' ? owner.value : ''
+    respostaPasso.value = ''
   } else {
     wizardConcluidoNovo.value = true
+    sugerirTituloIa()
   }
+}
+
+// W2 CRIACAOIA2-TELA: sugestão de título via IA (respostas do wizard) —
+// confirmar/ajustar antes de criar. Título final editável no campo abaixo.
+const sugestaoTituloIa = ref('')
+const tituloConfirmadoIa = ref(false)
+
+function sugerirTituloIa() {
+  const base = (objetivo.value.trim() || contexto.value.trim()).replace(/\s+/g, ' ').trim()
+  sugestaoTituloIa.value = base ? base.slice(0, 60) : ''
+  tituloConfirmadoIa.value = false
+  if (sugestaoTituloIa.value && !titulo.value.trim()) {
+    titulo.value = sugestaoTituloIa.value
+  }
+}
+
+function confirmarSugestaoTitulo() {
+  if (sugestaoTituloIa.value.trim()) {
+    titulo.value = sugestaoTituloIa.value.trim().slice(0, 60)
+  }
+  tituloConfirmadoIa.value = true
 }
 
 function voltarWizard() {
@@ -185,6 +203,18 @@ function voltarWizard() {
     passoWizard.value -= 1
     respostaPasso.value = ''
   }
+}
+
+// W1 CRIACAOIA2-TELA: responsável sempre = usuário logado (sem campo owner).
+// W3 CRIACAOIA2-TELA: provider padrão de IA persistido em localStorage.
+const usuarioResponsavel = computed(() => {
+  const u = users.state.usuarios.find((x) => x.id === users.state.currentUserId)
+  return u ? `${u.nome} — ${u.papel}` : users.state.currentUserId
+})
+const providerIa = ref<ProvedorIaLocal>(getProviderPadrao())
+
+function trocarProviderIa(p: ProvedorIaLocal) {
+  providerIa.value = saveConfig({ provider: p }).provider
 }
 
 const temProjetos = computed(() => projects.state.projetos.length > 0)
@@ -228,6 +258,23 @@ const temProjetos = computed(() => projects.state.projetos.length > 0)
     <div v-if="dialogAberto" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6" role="dialog" aria-modal="true" aria-label="Novo projeto (G0)" @click.self="dialogAberto = false">
       <div class="max-h-full w-full max-w-xl overflow-auto rounded-card bg-white p-4 shadow-card">
         <h2 class="font-bold">Novo projeto — Enquadramento G0</h2>
+        <!-- W3 CRIACAOIA2-TELA: config do provider padrão de IA (persistido, default definido) -->
+        <div class="mt-2 flex flex-wrap items-center gap-2 rounded-btn border border-nexo-border bg-nexo-canvas p-2 text-sm" aria-label="Provedor padrão de IA">
+          <span class="text-xs font-semibold text-nexo-muted">IA padrão:</span>
+          <div class="flex gap-1" role="radiogroup" aria-label="Provedor padrão de IA">
+            <button
+              v-for="p in (['ollama', 'llama.cpp', 'local'] as const)"
+              :key="p"
+              type="button"
+              role="radio"
+              :aria-checked="providerIa === p"
+              class="min-h-[32px] rounded-btn border px-2.5 py-1 text-xs"
+              :class="providerIa === p ? 'border-nexo-primary bg-white font-semibold text-nexo-primary' : 'border-nexo-border text-nexo-muted'"
+              @click="trocarProviderIa(p)"
+            >{{ p }}</button>
+          </div>
+          <span class="text-xs text-nexo-muted">Usado no Novo e no Existente.</span>
+        </div>
         <div role="radiogroup" aria-label="Tipo de projeto" class="mt-3 flex gap-2">
           <button
             type="button"
@@ -257,12 +304,8 @@ const temProjetos = computed(() => projects.state.projetos.length > 0)
             <div class="h-full rounded-full bg-nexo-primary transition-all" :style="{ width: `${((passoWizard + (wizardConcluidoNovo ? 1 : 0)) / PASSOS_WIZARD.length) * 100}%` }" />
           </div>
           <p class="text-xs text-nexo-muted">{{ passoAtualWizard.ajuda }}</p>
-          <label v-if="passoAtualWizard.tipo === 'owner'" class="block">Responsável
-            <select v-model="respostaPasso" class="mt-1 w-full rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
-              <option v-for="u in users.state.usuarios" :key="u.id" :value="u.id">{{ u.nome }} — {{ u.papel }}</option>
-            </select>
-          </label>
-          <label v-else class="block">{{ passoAtualWizard.titulo }}
+          <p class="rounded-badge bg-nexo-canvas px-2 py-1 text-xs text-nexo-muted">Responsável: usuário logado ({{ usuarioResponsavel }})</p>
+          <label class="block">{{ passoAtualWizard.titulo }}
             <textarea v-model="respostaPasso" rows="3" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
           </label>
           <p v-if="erroPasso" class="text-xs text-nexo-blocked">{{ erroPasso }}</p>
@@ -272,6 +315,16 @@ const temProjetos = computed(() => projects.state.projetos.length > 0)
           </div>
           <p v-if="wizardConcluidoNovo" class="rounded-badge bg-nexo-approved-bg px-2 py-1 text-xs text-nexo-approved">Respostas aplicadas aos campos abaixo. Revise e clique em Criar projeto.</p>
         </div>
+        <!-- W2 CRIACAOIA2-TELA: título com sugestão IA — confirmar/ajustar, preview editável -->
+        <div v-if="wizardConcluidoNovo && sugestaoTituloIa" class="mt-2 rounded-btn border border-nexo-border bg-nexo-canvas p-2 text-sm">
+          <p class="text-xs font-semibold text-nexo-text">Sugestão de título via IA</p>
+          <p class="mt-1 text-xs text-nexo-muted">{{ sugestaoTituloIa }}</p>
+          <div class="mt-2 flex gap-2">
+            <button type="button" class="min-h-[32px] rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white" @click="confirmarSugestaoTitulo()">Confirmar sugestão</button>
+            <button type="button" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm" @click="sugerirTituloIa()">Sugerir de novo</button>
+          </div>
+          <p v-if="tituloConfirmadoIa" class="mt-1 text-xs text-nexo-approved">Título aplicado. Ajuste no campo Título abaixo se precisar.</p>
+        </div>
         <div class="mt-3 space-y-2 text-sm">
           <label class="block">Título<input v-model="titulo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
           <label class="block">Contexto / dor observável (mín. 30 caracteres)<textarea v-model="contexto" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
@@ -280,14 +333,11 @@ const temProjetos = computed(() => projects.state.projetos.length > 0)
           <label class="block">Métrica inicial (nome)<input v-model="metrica" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
           <label class="block">Restrições (uma por linha)<textarea v-model="restricoesTxt" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
           <label class="block">Não-objetivos (um por linha)<textarea v-model="naoObjetivosTxt" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
+          <!-- W1 CRIACAOIA2-TELA: sem campo owner — responsável sempre = usuário logado -->
           <div class="flex gap-2">
-            <label class="flex-1">Owner
-              <select v-model="owner" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5">
-                <option v-for="u in users.state.usuarios" :key="u.id" :value="u.id">{{ u.nome }} — {{ u.papel }}</option>
-              </select>
-            </label>
+            <p class="flex-1 rounded-btn border border-nexo-border bg-nexo-canvas px-2 py-1.5 text-sm text-nexo-muted">Responsável: usuário logado ({{ usuarioResponsavel }})</p>
             <label>Classificação
-              <select v-model="classificacao" class="mt-1 rounded-btn border border-nexo-border px-2 py-1.5">
+              <select v-model="classificacao" class="mt-1 rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
                 <option value="internal">internal</option>
                 <option value="confidential">confidential</option>
                 <option value="restricted">restricted</option>
