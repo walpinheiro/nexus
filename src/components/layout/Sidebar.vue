@@ -96,10 +96,10 @@ function tooltip(gid: string): string {
         Backlog
       </RouterLink>
       <RouterLink
-        to="/studio"
+        :to="{ path: '/studio-full', query: { from: 'backlog' } }"
         class="flex h-10 items-center gap-3 rounded-badge px-3 text-sm"
-        :class="$route.path === '/studio' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
-        :aria-current="$route.path === '/studio' ? 'page' : undefined"
+        :class="$route.path === '/studio-full' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
+        :aria-current="$route.path === '/studio-full' ? 'page' : undefined"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <rect x="7" y="2" width="10" height="20" rx="2" />

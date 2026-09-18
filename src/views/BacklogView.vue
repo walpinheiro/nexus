@@ -81,6 +81,7 @@ function verChecklist(id: string) {
   <div class="space-y-4">
     <h1 class="text-xl font-bold">Backlog — Épico → Feature → PBI</h1>
     <div class="flex gap-2 text-sm">
+      <RouterLink :to="{ path: '/studio-full', query: { from: 'backlog' } }" class="rounded-btn border border-nexo-border px-3 py-1.5">Abrir Studio</RouterLink>
       <input v-model="filtro" placeholder="Filtrar por título…" aria-label="Filtrar backlog" class="rounded-btn border border-nexo-border px-3 py-1.5" />
       <select v-model="filtroEstado" aria-label="Filtrar por estado" class="rounded-btn border border-nexo-border px-2 py-1.5">
         <option value="">Todos</option>

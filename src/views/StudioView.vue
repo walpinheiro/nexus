@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useStudio } from '@/stores/useStudio'
+import { useProjects } from '@/stores/useProjects'
 import PartsPalette from '@/components/studio/PartsPalette.vue'
 import StudioStage from '@/components/studio/StudioStage.vue'
 import StudioInspector from '@/components/studio/StudioInspector.vue'
@@ -9,13 +11,36 @@ import LayersPanel from '@/components/studio/LayersPanel.vue'
 import FramePanel from '@/components/studio/FramePanel.vue'
 import PreviewModal from '@/components/studio/PreviewModal.vue'
 import NewFrameDialog from '@/components/studio/NewFrameDialog.vue'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const studio = useStudio()
+const projects = useProjects()
+const route = useRoute()
+const router = useRouter()
 const renomeando = ref('')
 const abaEsq = ref<'parts' | 'layers'>('parts')
 const abaDir = ref<'edit' | 'prompt'>('edit')
 const previewAberto = ref(false)
 const dialogNovaTela = ref(false)
+const menuAberto = ref(false)
+const menuBtn = ref<HTMLButtonElement | null>(null)
+const stageRef = ref<{ $el: HTMLElement } | null>(null)
+
+const fromRaw = computed(() => (typeof route.query.from === 'string' ? route.query.from : ''))
+const origemLabel = computed(() => {
+  if (fromRaw.value === 'backlog') return 'Backlog'
+  if (fromRaw.value === 'canvas') return 'Canvas'
+  if (fromRaw.value.startsWith('gates/')) return `Gates ${fromRaw.value.split('/')[1] ?? ''}`.trim()
+  if (fromRaw.value === 'studio') return 'Studio'
+  return 'Backlog'
+})
+const origemRota = computed(() => {
+  if (fromRaw.value === 'canvas') return '/canvas?view=canvas'
+  if (fromRaw.value.startsWith('gates/')) return `/${fromRaw.value}`
+  if (fromRaw.value === 'backlog') return '/backlog'
+  return '/backlog'
+})
+const projetoNome = computed(() => projects.atual?.titulo ?? 'Sem projeto')
 
 function criarDoDialog(v: { nome: string; preset: 'phone' | 'desktop' }) {
   if (v.preset === 'phone') studio.adicionarFrame(412, 892, v.nome || 'Nova tela')
@@ -30,11 +55,78 @@ function confirmarRemocao(id: string) {
 function abrirPreview() {
   previewAberto.value = true
 }
+
+function voltar() {
+  menuAberto.value = false
+  router.push(origemRota.value)
+}
+
+function onKey(e: KeyboardEvent) {
+  const tag = (e.target as HTMLElement)?.tagName
+  const digitando = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable
+  if (e.key === 'Escape') {
+    if (menuAberto.value) {
+      menuAberto.value = false
+      menuBtn.value?.focus()
+      return
+    }
+    if (!previewAberto.value && !dialogNovaTela.value && !digitando) voltar()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  nextTick(() => {
+    const el = (stageRef.value?.$el ?? document.querySelector('[role="application"]')) as HTMLElement | null
+    el?.focus?.()
+  })
+})
+onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="relative flex h-full min-h-[560px] flex-col">
-    <div class="pointer-events-none absolute left-0 right-0 top-2 z-30 flex justify-center">
+  <div class="studio-panel relative flex h-full min-h-[560px] flex-col bg-nexo-canvas">
+    <header class="flex h-12 shrink-0 items-center gap-2 border-b border-nexo-border bg-nexo-surface px-3">
+      <div class="relative">
+        <button
+          ref="menuBtn"
+          type="button"
+          aria-label="Menu voltar"
+          aria-haspopup="menu"
+          :aria-expanded="menuAberto"
+          class="rounded-btn p-2 hover:bg-nexo-canvas"
+          @click="menuAberto = !menuAberto"
+        >
+          <LucideIcon name="menu" :size="20" />
+        </button>
+        <div
+          v-if="menuAberto"
+          role="menu"
+          aria-label="Voltar para"
+          class="absolute left-0 top-11 z-50 w-56 rounded-card border border-nexo-border bg-white p-1 shadow-card"
+          @keydown.escape="menuAberto = false; menuBtn?.focus()"
+        >
+          <button type="button" role="menuitem" class="flex w-full items-center gap-2 rounded-badge px-3 py-2 text-left text-sm hover:bg-nexo-canvas" @click="voltar()">
+            <LucideIcon name="chevL" :size="14" /> Voltar para {{ origemLabel }}
+          </button>
+          <RouterLink role="menuitem" to="/backlog" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Backlog</RouterLink>
+          <RouterLink role="menuitem" to="/gates/G2" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Gates G2</RouterLink>
+          <RouterLink role="menuitem" to="/canvas?view=canvas" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Canvas</RouterLink>
+          <button type="button" class="flex w-full items-center gap-1 rounded-badge px-3 py-2 text-left text-sm text-nexo-muted hover:bg-nexo-canvas" @click="menuAberto = false">
+            <LucideIcon name="x" :size="14" /> Fechar menu
+          </button>
+        </div>
+      </div>
+      <span class="flex items-baseline text-[18px] font-extrabold tracking-tight" aria-label="NEXO Studio">NEXO <span class="ml-1 text-sm font-semibold text-nexo-muted">Studio</span></span>
+      <span class="hidden text-sm text-nexo-muted sm:inline">{{ projetoNome }}</span>
+      <span class="ml-auto flex items-center gap-2">
+        <span class="hidden text-xs text-nexo-muted md:inline">voltando para {{ origemLabel }}</span>
+        <button type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="voltar()">
+          <LucideIcon name="chevL" :size="14" /> Voltar
+        </button>
+      </span>
+    </header>
+    <div class="pointer-events-none absolute left-0 right-0 top-14 z-30 flex justify-center">
       <div class="pointer-events-auto" style="border-radius: 28px">
         <StudioToolbar @preview="abrirPreview()" />
       </div>
@@ -48,7 +140,7 @@ function abrirPreview() {
         <PartsPalette v-if="abaEsq === 'parts'" class="min-h-0 flex-1 border-r-0" />
         <LayersPanel v-else class="min-h-0 flex-1" />
       </aside>
-      <StudioStage class="m-2" @preview="abrirPreview()" />
+      <StudioStage ref="stageRef" class="m-2" @preview="abrirPreview()" />
       <aside class="flex w-72 shrink-0 flex-col border-l border-nexo-border bg-white" aria-label="Painel direito">
         <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas da direita">
           <button type="button" role="tab" :aria-selected="abaDir === 'edit'" class="flex-1 rounded-btn px-2 py-1" :class="abaDir === 'edit' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaDir = 'edit'">Editar</button>

@@ -56,6 +56,7 @@ function corrigirNoObjeto(id: string) {
     <div class="flex items-center gap-3">
       <h1 class="text-xl font-bold">Gate {{ props.id }}</h1>
       <button type="button" class="ml-auto rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="abrirNoCanvas()">Abrir no Canvas</button>
+      <RouterLink :to="{ path: '/studio-full', query: { from: `gates/${props.id}` } }" class="rounded-btn border border-nexo-border px-3 py-1.5 text-sm">Abrir Studio</RouterLink>
     </div>
     <p v-if="gate" class="text-sm text-nexo-muted">{{ gate.titulo }} · {{ gate.status }}<span v-if="gate.baselineVersao"> · baseline v{{ gate.baselineVersao }} por {{ gate.aprovadoPor }}</span></p>
     <p v-else class="text-sm text-nexo-blocked">Gate desconhecido.</p>
