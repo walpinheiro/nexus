@@ -4,7 +4,6 @@
 
 import type { GateId, NexoObject, PatchMudanca } from '@/types/nexo'
 import {
-  DICIONARIO_PERGUNTAS,
   diagnosticarFaltasGate,
   gerarPropostaPatch,
   obterSkillsDoGate,
@@ -40,10 +39,7 @@ function montarSystem(gateId: GateId): string {
 function montarUser(objeto: NexoObject, gateId: GateId, historico: OllamaMessage[]): string {
   const diag = diagnosticarFaltasGate(objeto, gateId)
   const linhas = diag.faltas
-    .map((f) => {
-      const dic = DICIONARIO_PERGUNTAS[f.codigo]
-      return `- ${f.codigo} [${f.severidade}] campoAlvo=${f.campoAlvo}: ${f.descricao} Pergunta: ${f.pergunta}`
-    })
+    .map((f) => `- ${f.codigo} [${f.severidade}] campoAlvo=${f.campoAlvo}: ${f.descricao} Pergunta: ${f.pergunta}`)
     .join('\n')
   const hist = (historico ?? [])
     .filter((m) => m.role !== 'system')
