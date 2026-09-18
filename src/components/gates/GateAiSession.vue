@@ -5,6 +5,8 @@ import { useGraph } from '@/stores/useGraph'
 import { useUsers } from '@/stores/useUsers'
 import { useGate } from '@/stores/useGate'
 import LucideIcon from '@/components/common/LucideIcon.vue'
+import ArtefatoDoc from '@/components/gates/ArtefatoDoc.vue'
+import { montarArtefato } from '@/utils/artefatos'
 import {
   diagnosticarFaltasGate,
   obterGovernancaGate,
@@ -91,6 +93,23 @@ const perguntaAtual = computed<FaltaGate | null>(() => {
   return diagnostico.value.faltas[0]
 })
 
+
+// A4: "Ver documento" abre o ARTEFATO normativo do gate (motor montarArtefato,
+// mesma fonte do GateOutput) — sem tocar em gates/seed/engine/exportWiki.
+const artefatoDocumento = computed(() => {
+  if (!props.alvo) return null
+  const gatesCtx = gates.gates.map((g) => ({
+    id: g.id,
+    status: g.status,
+    baselineVersao: g.baselineVersao,
+    aprovadoPor: g.aprovadoPor ?? undefined,
+    aprovadoEm: g.aprovadoEm ?? undefined
+  }))
+  const ctx = { gates: gatesCtx, nos: graph.state.nos, vinculos: graph.vinculosTela, regras: graph.regrasValidacao }
+  return montarArtefato(props.alvo, props.gateId, ctx)
+})
+
+const gateDoDocumento = computed(() => gates.gates.find((g) => g.id === props.gateId) ?? null)
 
 // Helper para formatar valores no painel Preenchido (somente-leitura)
 function obterValorPreenchido(campo: string, objeto: NexoObject | null): string {
@@ -711,73 +730,9 @@ function rejeitarPatch() {
             </p>
           </div>
 
-          <!-- Área SOMENTE-LEITURA: 'Documento' do Gate (one-pager/PRD/fluxo+BDD/artefato/DoR/stepper) -->
-          <div class="rounded-card border border-nexo-border bg-white p-3 space-y-2">
-            <div class="flex items-center justify-between border-b border-nexo-border/50 pb-1.5">
-              <span class="font-bold text-xs text-nexo-text flex items-center gap-1.5">
-                <LucideIcon name="file-text" :size="14" class="text-nexo-primary" />
-                Documento Sintetizado do Gate (Somente Leitura)
-              </span>
-              <span class="text-[10px] text-nexo-muted font-mono">v{{ props.alvo.versao }}</span>
-            </div>
-
-            <!-- G0: One-Pager -->
-            <div v-if="props.gateId === 'G0'" class="space-y-1.5 text-[11px]">
-              <div><strong>Dor:</strong> <span class="text-nexo-muted">{{ props.alvo.descricao || '(vazio)' }}</span></div>
-              <div><strong>Hipótese:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).hipotese || '(vazio)' }}</span></div>
-              <div><strong>Owner:</strong> <span class="text-nexo-muted">{{ props.alvo.owner || '(não definido)' }}</span></div>
-              <div><strong>Personas:</strong> <span class="text-nexo-muted">{{ ((props.alvo as any).personas || []).join(', ') || '(vazio)' }}</span></div>
-              <div><strong>Escopo In:</strong> <span class="text-nexo-muted">{{ ((props.alvo as any).escopo_in || []).join(', ') || '(vazio)' }}</span></div>
-              <div><strong>Escopo Out:</strong> <span class="text-nexo-muted">{{ ((props.alvo as any).escopo_out || []).join(', ') || '(vazio)' }}</span></div>
-            </div>
-
-            <!-- G1: PRD -->
-            <div v-else-if="props.gateId === 'G1'" class="space-y-1.5 text-[11px]">
-              <div><strong>Problema:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).problema || props.alvo.descricao }}</span></div>
-              <div><strong>Objetivo:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).objetivo || '(vazio)' }}</span></div>
-              <div><strong>Escopo In:</strong> <span class="text-nexo-muted">{{ ((props.alvo as any).escopo_in || []).join(', ') || '(vazio)' }}</span></div>
-              <div><strong>Escopo Out:</strong> <span class="text-nexo-muted">{{ ((props.alvo as any).escopo_out || []).join(', ') || '(vazio)' }}</span></div>
-              <div><strong>KPIs:</strong> <span class="text-nexo-muted">{{ JSON.stringify((props.alvo as any).kpis || []) }}</span></div>
-            </div>
-
-            <!-- G2: Fluxo + BDD -->
-            <div v-else-if="props.gateId === 'G2'" class="space-y-1.5 text-[11px]">
-              <div><strong>Ator / Narrativa:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).ator || props.alvo.descricao }}</span></div>
-              <div><strong>Fluxo Feliz:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).fluxo_feliz || '(vazio)' }}</span></div>
-              <div><strong>Estados de Tela:</strong> <span class="text-nexo-muted">{{ ((props.alvo as any).telas_estados || []).join(', ') || '(vazio)' }}</span></div>
-              <div><strong>Cenários BDD:</strong></div>
-              <div v-if="(props.alvo as any).criterios_bdd?.length" class="space-y-1 pl-2 border-l border-nexo-border">
-                <div v-for="(ac, idx) in (props.alvo as any).criterios_bdd" :key="idx" class="text-[10px] text-nexo-text">
-                  <span class="font-bold">[{{ ac.id || idx + 1 }}]</span> Given {{ ac.given }} | When {{ ac.when }} | Then {{ ac.then }}
-                </div>
-              </div>
-              <div v-else class="text-nexo-muted italic text-[10px] pl-2">(Nenhum cenário BDD cadastrado)</div>
-            </div>
-
-            <!-- G3: Arquitetura & ADR -->
-            <div v-else-if="props.gateId === 'G3'" class="space-y-1.5 text-[11px]">
-              <div><strong>OpenAPI / Contratos:</strong> <span class="text-nexo-muted font-mono text-[10px]">{{ JSON.stringify((props.alvo as any).openapi || {}) }}</span></div>
-              <div><strong>ADR Vinculada:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).adr_id || '(nenhuma)' }}</span></div>
-              <div><strong>Persistência:</strong> <span class="text-nexo-muted font-mono text-[10px]">{{ JSON.stringify((props.alvo as any).persistencia || {}) }}</span></div>
-              <div><strong>Integrações:</strong> <span class="text-nexo-muted">{{ ((props.alvo as any).integracoes || []).join(', ') || '(nenhuma)' }}</span></div>
-            </div>
-
-            <!-- G4: DoR & PBIs -->
-            <div v-else-if="props.gateId === 'G4'" class="space-y-1.5 text-[11px]">
-              <div><strong>Owner:</strong> <span class="text-nexo-muted">{{ props.alvo.owner || '(não atribuído)' }}</span></div>
-              <div><strong>Estratégia de Teste:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).estrategia_teste || '(vazio)' }}</span></div>
-              <div><strong>Escopo Delimitado:</strong> <span class="text-nexo-muted">{{ ((props.alvo as any).escopo_in || []).join(', ') || '(vazio)' }}</span></div>
-            </div>
-
-            <!-- G5: Stepper do Gate & Evidências DoD -->
-            <div v-else-if="props.gateId === 'G5'" class="space-y-1.5 text-[11px]">
-              <div><strong>Status de Entrega:</strong> <span class="font-bold text-green-700">{{ props.alvo.status }}</span></div>
-              <div><strong>Pull Request:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).evidencia?.pr_url || '(não vinculado)' }}</span></div>
-              <div><strong>Pipeline CI:</strong> <span class="text-nexo-muted">{{ ((props.alvo as any).evidencia?.checks_ci || []).join(', ') || '(não executada)' }}</span></div>
-              <div><strong>Testes Automatizados:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).evidencia?.testes_verdes ? 'Verdes (100%)' : 'Pendentes' }}</span></div>
-              <div><strong>Aceite Registrado:</strong> <span class="text-nexo-muted">{{ (props.alvo as any).evidencia?.aceite_registrado ? 'Sim (PO/QA)' : 'Pendente' }}</span></div>
-            </div>
-          </div>
+          <!-- Área: 'Documento' = artefato normativo do gate (motor, somente leitura).
+               Export .md fica secundário dentro do artefato (mostrarExportar=false no chat). -->
+          <ArtefatoDoc :artefato="artefatoDocumento" :gate-info="gateDoDocumento" :mostrar-exportar="false" />
         </template>
       </div>
 
