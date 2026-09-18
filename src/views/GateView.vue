@@ -98,6 +98,8 @@ const checklistAlvo = computed(() => {
   return avaliarGate(objetoAlvo.value, graph.waivers, props.id as GateId).checks
 })
 
+const codigosFaltantes = computed(() => checklistAlvo.value.filter((c) => !c.ok).map((c) => c.codigo))
+
 // Solicitações pendentes para este Gate
 const solicitacoesDesteGate = computed(() => gates.pendentesPorGate(props.id as GateId))
 const temSolicitacaoPendenteAlvo = computed(() => gates.temSolicitacaoPendente(props.id as GateId, alvoId.value))
@@ -342,7 +344,7 @@ function baixarFeatureWiki(featureId: string) {
           <div class="flex flex-wrap items-center justify-between gap-3">
             <label class="flex items-center gap-2 text-sm font-semibold text-nexo-text">
               Objeto do gate:
-              <select v-model="alvoId" class="rounded-btn border border-nexo-border px-2.5 py-1.5 min-h-[32px] bg-white text-sm font-normal">
+              <select v-model="alvoId" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-normal text-nexo-text">
                 <option value="">{{ alvos.length === 0 ? '(nenhum item elegível para este gate)' : '(selecionar)' }}</option>
                 <option v-for="n in alvos" :key="n.id" :value="n.id">
                   {{ n.titulo }} ({{ n.status }} v{{ n.versao }})
@@ -556,15 +558,18 @@ function baixarFeatureWiki(featureId: string) {
           <button
             type="button"
             class="rounded-btn bg-nexo-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 hover:bg-nexo-primary/90 transition-colors"
-            :disabled="bloqueado || ehProponente"
-            :aria-disabled="bloqueado || ehProponente"
-            :title="bloqueado ? motivoBloqueio : ehProponente ? 'Proponente não pode ser o único aprovador (SoD).' : 'Aprovar gate'"
+            :disabled="bloqueado || ehProponente || pendenciasCount > 0"
+            :aria-disabled="bloqueado || ehProponente || pendenciasCount > 0"
+            :title="bloqueado ? motivoBloqueio : ehProponente ? 'Proponente não pode ser o único aprovador (SoD).' : pendenciasCount > 0 ? `Faltam ${pendenciasCount} critérios: ${codigosFaltantes.join(', ')}` : 'Aprovar gate'"
             @click="aprovar()"
           >
             Aprovar gate
           </button>
           <span v-if="ehProponente" class="ml-3 text-xs text-amber-700 font-medium">
             (SoD: Proponente não pode aprovar diretamente; submeta solicitação para outro aprovador)
+          </span>
+          <span v-if="pendenciasCount > 0" class="ml-3 text-xs text-amber-700 font-medium">
+            (Pendente: {{ pendenciasCount }} critérios — {{ codigosFaltantes.join(', ') }})
           </span>
           <p v-if="resultado" class="mt-2 text-sm" :class="resultado.includes('aprovado') ? 'text-nexo-approved font-semibold' : 'text-nexo-blocked'">
             {{ resultado }}
@@ -590,6 +595,18 @@ function baixarFeatureWiki(featureId: string) {
             </li>
           </ul>
         </div>
+
+        <!-- Como testar por gate (guia manual) -->
+        <details class="rounded-card border border-nexo-border bg-white p-3 text-xs text-nexo-muted">
+          <summary class="cursor-pointer text-sm font-semibold text-nexo-text">Como testar por gate (passo a passo manual)</summary>
+          <ol class="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed">
+            <li>Em Usuários, clique em "Usar este papel" conforme o gate: PM para G0, G1 ou G2; Arquiteto para G3; QA para G5.</li>
+            <li>Abra o gate correspondente e selecione o objeto do gate no seletor.</li>
+            <li>Responda as perguntas da IA no chat da Sessão IA até concluir a coleta.</li>
+            <li>Verifique o progresso no checklist bloqueante e o artefato gerado no painel de saída.</li>
+            <li>Clique em "Solicitar approve" e, com outro papel aprovador, julgue na fila (SoD: proponente não aprova o próprio item).</li>
+          </ol>
+        </details>
       </div>
 
       <!-- Coluna da Sessão IA -->

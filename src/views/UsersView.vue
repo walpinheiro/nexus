@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useUsers } from '@/stores/useUsers'
 import LucideIcon from '@/components/common/LucideIcon.vue'
 import type { Role } from '@/types/nexo'
@@ -11,6 +11,10 @@ const editId = ref('')
 const editNome = ref('')
 const editPapel = ref<Role>('Dev')
 const msg = ref('')
+
+const usuarioAtual = computed(() =>
+  users.state.usuarios.find((x) => x.id === users.state.currentUserId),
+)
 
 function criar() {
   if (!nome.value.trim()) {
@@ -42,6 +46,15 @@ function remover(id: string) {
 <template>
   <div class="space-y-4">
     <h1 class="text-xl font-bold">Usuários — CRUD + role switcher (permissão real)</h1>
+    <section class="rounded-card border border-nexo-primary bg-nexo-primary-soft/40 p-4 text-sm" aria-live="polite">
+      <h2 class="text-base font-semibold">Usuário atual</h2>
+      <p v-if="usuarioAtual" class="mt-1">
+        <span class="font-semibold">{{ usuarioAtual.nome }}</span>
+        <span class="text-nexo-muted"> (id: {{ usuarioAtual.id }} · papel: {{ usuarioAtual.papel }})</span>
+      </p>
+      <p v-else class="mt-1 text-nexo-muted">Nenhum usuário selecionado.</p>
+      <p class="mt-1 text-nexo-muted">A troca de papel para teste é feita aqui: use o botão "Usar este papel" na linha do usuário desejado.</p>
+    </section>
     <p v-if="msg" class="text-sm text-nexo-approved">{{ msg }}</p>
     <form class="flex gap-2 text-sm" @submit.prevent="criar">
       <input v-model="nome" placeholder="Nome" aria-label="Nome do usuário" class="rounded-btn border border-nexo-border px-3 py-1.5" />
@@ -53,7 +66,7 @@ function remover(id: string) {
     <ul class="space-y-2">
       <li v-for="u in users.state.usuarios" :key="u.id" class="flex flex-wrap items-center gap-2 text-sm">
         <span class="w-64">{{ u.nome }} — {{ u.papel }}</span>
-        <button type="button" class="rounded-btn border border-nexo-border px-2 py-1 text-xs" :disabled="u.id === users.state.currentUserId" @click="users.trocarUsuario(u.id)">
+        <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 text-sm min-h-[32px]" :disabled="u.id === users.state.currentUserId" @click="users.trocarUsuario(u.id)">
           {{ u.id === users.state.currentUserId ? 'Atual' : 'Usar este papel' }}
         </button>
         <button type="button" class="rounded-btn border border-nexo-border px-2 py-1 text-xs" @click="iniciarEdicao(u.id)">Editar</button>

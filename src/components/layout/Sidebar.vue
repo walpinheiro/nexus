@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { useUI } from '@/stores/useUI'
-import { useUsers } from '@/stores/useUsers'
 import { useGate } from '@/stores/useGate'
 import { gateAnterior, gateDesbloqueado, ORDEM_GATES } from '@/utils/gates'
 import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const $route = useRoute()
 const ui = useUI()
-const users = useUsers()
 const gates = useGate()
 
 const rotulos: Record<string, string> = {
@@ -118,11 +116,6 @@ function tooltip(gid: string): string {
     </div>
 
     <div class="mt-auto space-y-2 p-3">
-      <label class="block text-[11px] font-semibold uppercase tracking-wider text-nexo-muted" for="role-switch">Papel atual
-        <select id="role-switch" :value="users.state.currentUserId" class="mt-1 w-full rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-xs normal-case" @change="users.trocarUsuario(($event.target as HTMLSelectElement).value)">
-          <option v-for="u in users.state.usuarios" :key="u.id" :value="u.id">{{ u.nome }} — {{ u.papel }}</option>
-        </select>
-      </label>
       <button
         type="button"
         class="flex h-7 w-7 items-center justify-center rounded-full border border-nexo-border text-nexo-muted hover:text-nexo-primary"
