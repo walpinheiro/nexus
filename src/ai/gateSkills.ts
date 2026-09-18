@@ -997,6 +997,11 @@ export function processarMensagemGate(
   const { objeto, gateId, user, gates, waivers } = contexto
 
   if (!objeto) {
+    if (gateId === 'G5') {
+      return {
+        texto: 'Nenhum entregável selecionado no Gate G5. O Gate G5 avalia a Definition of Done (DoD) de itens que completaram o ciclo. Promova uma Feature ou PBI para o status "validated" no Canvas ou vincule um nó ao Gate G5 para que a IA possa validar as evidências de entrega.'
+      }
+    }
     return {
       texto: `Nenhum objeto selecionado no Gate ${gateId}. Por favor, selecione um objeto na lista ao lado para iniciar o diagnóstico e a sessão interativa.`
     }

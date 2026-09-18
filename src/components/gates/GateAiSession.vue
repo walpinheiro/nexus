@@ -61,11 +61,16 @@ watch(
   ([novoId]) => {
     patchPendente.value = null
     if (!novoId || !props.alvo) {
+      const textoBoasVindas =
+        props.gateId === 'G5'
+          ? 'Bem-vindo à Sessão de IA do **Gate G5 (Definition of Done)**. Nenhum pacote de entrega está selecionado no momento. Promova um entregável para status "validated" no Canvas ou vincule-o ao Gate G5 para diagnosticar os critérios de DoD.'
+          : `Bem-vindo à Sessão de IA do **Gate ${props.gateId}**. Selecione um objeto para que as skills especializadas analisem os critérios de qualidade.`
+
       historicoChat.value = [
         {
           id: 'init-empty',
           autor: 'ia',
-          texto: `Bem-vindo à Sessão de IA do **Gate ${props.gateId}**. Selecione um objeto para que as skills especializadas analisem os critérios de qualidade.`,
+          texto: textoBoasVindas,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]
@@ -399,8 +404,11 @@ function rejeitarPatch() {
           >
             ⚠️ O proponente não pode ser o único aprovador. Chame um segundo membro com papel de aprovação para registrar a baseline.
           </p>
-          <p v-else class="mt-1 text-[11px] text-green-700">
+          <p v-else-if="props.alvo" class="mt-1 text-[11px] text-green-700">
             ✓ Segregação atendida (você não é o único proponente deste objeto).
+          </p>
+          <p v-else class="mt-1 text-[11px] text-nexo-muted italic">
+            Selecione um objeto para verificar a regra de segregação de funções.
           </p>
         </div>
       </div>

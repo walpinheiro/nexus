@@ -178,7 +178,10 @@ function cancelarNegacao() {
 
 function abrirNoCanvas() {
   const id = alvoId.value || alvos.value[0]?.id
-  if (!id) return
+  if (!id) {
+    router.push('/canvas?view=canvas')
+    return
+  }
   graph.selecionar(id)
   router.push(`/canvas?view=canvas&selecionado=${id}`)
 }
@@ -308,11 +311,21 @@ function corrigirNoObjeto(id: string) {
             </div>
           </div>
 
-          <div v-if="props.id === 'G5' && alvos.length === 0" class="rounded border border-dashed border-nexo-border/80 bg-nexo-canvas/40 p-3 text-center space-y-1">
+          <div v-if="props.id === 'G5' && alvos.length === 0" class="rounded border border-dashed border-nexo-border/80 bg-nexo-canvas/40 p-4 text-center space-y-2">
             <p class="text-xs font-semibold text-nexo-text">Nenhum pacote de entrega pronto para o Gate G5</p>
             <p class="text-[11px] text-nexo-muted max-w-md mx-auto">
-              O Gate G5 valida a Definition of Done (DoD) de itens que completaram o ciclo nos gates anteriores (G0 a G4). Conclua os critérios dos itens ou use o chat da IA para preparar o pacote de release.
+              O Gate G5 valida a Definition of Done (DoD) de itens que completaram o ciclo nos gates anteriores (G0 a G4). Para qualificar um entregável sem mocks, selecione uma Feature ou PBI no Canvas e promova seu status para 'validated' ou vincule o nó ao Gate G5.
             </p>
+            <div class="pt-1">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-btn bg-nexo-primary text-white hover:bg-nexo-primary/90 transition-colors"
+                @click="abrirNoCanvas()"
+              >
+                <LucideIcon name="external-link" :size="13" />
+                Criar / Promover item no Canvas
+              </button>
+            </div>
           </div>
 
           <p v-if="mensagemSolicitacao" class="text-xs text-nexo-primary font-medium">

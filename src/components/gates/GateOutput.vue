@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { GateId, NexoObject, Epic, Feature, PBI, IntegracaoSpec, NfrSpec, EvidenciaEntrega, ExcecaoSeguranca } from '@/types/nexo'
+import type { GateId, NexoObject, Epic, Feature, PBI, IntegracaoSpec, NfrSpec, EvidenciaEntrega, ExcecaoSeguranca, RiscoEstruturado } from '@/types/nexo'
 import type { GateInfo } from '@/stores/useGate'
 import { useGraph } from '@/stores/useGraph'
 import { avaliarGate } from '@/utils/gates'
@@ -49,9 +49,10 @@ const personas = computed(() => {
 
 const objetivo = computed(() => (alvoObj.value['objetivo'] as string) || '')
 
-const riscos = computed(() => {
+const riscos = computed<(string | RiscoEstruturado)[]>(() => {
   const r = alvoObj.value['riscos']
-  return Array.isArray(r) ? (r as string[]) : []
+  if (!Array.isArray(r)) return []
+  return r as (string | RiscoEstruturado)[]
 })
 
 const criteriosBdd = computed(() => {
@@ -201,9 +202,16 @@ const pipelinePassos = computed(() => {
 
           <div class="border-t border-nexo-border/60 pt-2 text-[11px]">
             <span class="font-semibold text-nexo-text">Riscos Iniciais & Fronteiras:</span>
-            <div v-if="riscos.length > 0" class="mt-1 flex flex-wrap gap-1">
-              <span v-for="r in riscos" :key="r" class="rounded bg-red-100 text-red-800 px-2 py-0.5 text-[10px]">
-                {{ r }}
+            <div v-if="riscos.length > 0" class="mt-1 flex flex-wrap gap-1.5">
+              <span
+                v-for="(r, idx) in riscos"
+                :key="idx"
+                class="rounded bg-red-100 text-red-800 px-2 py-0.5 text-[10px]"
+              >
+                <template v-if="typeof r === 'string'">{{ r }}</template>
+                <template v-else>
+                  <strong>{{ r.mitigacao || 'Risco' }}:</strong> Impacto {{ r.impacto || 'médio' }} · Prob. {{ r.probabilidade || 'média' }} ({{ r.owner || 'sem owner' }})
+                </template>
               </span>
             </div>
             <p v-else class="text-nexo-muted mt-0.5 italic">
@@ -213,7 +221,7 @@ const pipelinePassos = computed(() => {
         </div>
 
         <div>
-          <p class="font-semibold text-nexo-text text-xs mb-1.5">Candidatas a Épico (Descoberta):</p>
+          <p class="font-semibold text-nexo-text text-xs mb-1.5">Features Vinculadas (Descoberta):</p>
           <ul v-if="featuresDoEpico.length > 0" class="space-y-1">
             <li v-for="f in featuresDoEpico" :key="f.id" class="flex items-center justify-between rounded border border-nexo-border/60 bg-white p-2">
               <span class="font-medium text-nexo-text">{{ f.titulo }}</span>
@@ -221,7 +229,7 @@ const pipelinePassos = computed(() => {
             </li>
           </ul>
           <p v-else class="text-nexo-muted italic text-[11px]">
-            Nenhuma candidata a épico vinculada no momento.
+            Nenhuma feature vinculada no momento.
           </p>
         </div>
       </div>
@@ -334,19 +342,19 @@ const pipelinePassos = computed(() => {
             <div v-if="openapi" class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 text-[10px]">
               <div class="rounded bg-nexo-canvas/40 p-1.5 border border-nexo-border/40">
                 <span class="font-semibold text-nexo-text">Respostas HTTP:</span>
-                <p class="text-nexo-muted font-mono mt-0.5">2xx: {{ openapi['v2xx'] || '200 OK, 201 Created' }} · 4xx: {{ openapi['v4xx'] || '400, 404, 422' }} · 5xx: {{ openapi['v5xx'] || '500, 503' }}</p>
+                <p class="text-nexo-muted font-mono mt-0.5">2xx: {{ openapi['v2xx'] || 'Não informado' }} · 4xx: {{ openapi['v4xx'] || 'Não informado' }} · 5xx: {{ openapi['v5xx'] || 'Não informado' }}</p>
               </div>
               <div class="rounded bg-nexo-canvas/40 p-1.5 border border-nexo-border/40">
                 <span class="font-semibold text-nexo-text">Autenticação & Escopo:</span>
-                <p class="text-nexo-muted mt-0.5">{{ openapi['auth'] || 'OAuth 2.0 / Bearer JWT com RBAC' }}</p>
+                <p class="text-nexo-muted mt-0.5">{{ openapi['auth'] || 'Não informado' }}</p>
               </div>
               <div class="rounded bg-nexo-canvas/40 p-1.5 border border-nexo-border/40">
                 <span class="font-semibold text-nexo-text">Compatibilidade & Versão:</span>
-                <p class="text-nexo-muted mt-0.5">{{ openapi['compat'] || 'Retrocompatível · Sem breaking changes' }}</p>
+                <p class="text-nexo-muted mt-0.5">{{ openapi['compat'] || 'Não informado' }}</p>
               </div>
               <div class="rounded bg-nexo-canvas/40 p-1.5 border border-nexo-border/40">
                 <span class="font-semibold text-nexo-text">Consumidores Homologados:</span>
-                <p class="text-nexo-muted mt-0.5">{{ openapi['consumidor'] || 'Web Portal, Mobile App, API Gateway' }}</p>
+                <p class="text-nexo-muted mt-0.5">{{ openapi['consumidor'] || 'Não informado' }}</p>
               </div>
             </div>
             <p v-else-if="!contratoDispensa" class="text-nexo-muted italic text-[10px] pt-1">
@@ -361,10 +369,10 @@ const pipelinePassos = computed(() => {
               Modelagem de Persistência & Migrations (ARC-004)
             </strong>
             <div v-if="persistencia" class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px]">
-              <div><strong class="text-nexo-text">Entidade:</strong> <span class="text-nexo-muted">{{ persistencia['entidade'] || 'N/A' }}</span></div>
-              <div><strong class="text-nexo-text">Migration:</strong> <span class="text-nexo-muted font-mono">{{ persistencia['migration'] || 'Pendente' }}</span></div>
-              <div><strong class="text-nexo-text">Índices:</strong> <span class="text-nexo-muted">{{ persistencia['indice'] || 'Chaves primárias e estrangeiras' }}</span></div>
-              <div><strong class="text-nexo-text">Plano de Dados:</strong> <span class="text-nexo-muted">{{ persistencia['plano_dados'] || 'Volumetria projetada padrão' }}</span></div>
+              <div><strong class="text-nexo-text">Entidade:</strong> <span class="text-nexo-muted">{{ persistencia['entidade'] || 'Não informada' }}</span></div>
+              <div><strong class="text-nexo-text">Migration:</strong> <span class="text-nexo-muted font-mono">{{ persistencia['migration'] || 'Não informada' }}</span></div>
+              <div><strong class="text-nexo-text">Índices:</strong> <span class="text-nexo-muted">{{ persistencia['indice'] || 'Não informado' }}</span></div>
+              <div><strong class="text-nexo-text">Plano de Dados:</strong> <span class="text-nexo-muted">{{ persistencia['plano_dados'] || 'Não informado' }}</span></div>
             </div>
             <p v-else class="text-nexo-muted italic text-[10px]">
               Persistência não detalhada ou operação sem estado persistido declarada.
@@ -385,13 +393,13 @@ const pipelinePassos = computed(() => {
               >
                 <div class="flex items-center justify-between">
                   <span class="font-bold text-nexo-text">{{ item.nome }}</span>
-                  <span class="text-nexo-muted">Owner: {{ item.owner_externo || 'Squad Integrações' }}</span>
+                  <span class="text-nexo-muted">Owner: {{ item.owner_externo || 'Não informado' }}</span>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-nexo-muted">
-                  <span>Timeout: <strong class="text-nexo-text">{{ item.timeout_ms ? `${item.timeout_ms}ms` : '3000ms' }}</strong></span>
-                  <span>Retry: <strong class="text-nexo-text">{{ item.retry !== false ? 'Sim (exponencial)' : 'Não' }}</strong></span>
-                  <span>Idempotência: <strong class="text-nexo-text">{{ item.idempotente !== false ? 'Sim (Idempotency-Key)' : 'Não' }}</strong></span>
-                  <span>SLA Indisponível: <strong class="text-nexo-text">{{ item.indisponibilidade || 'Degradação graciosa' }}</strong></span>
+                  <span>Timeout: <strong class="text-nexo-text">{{ item.timeout_ms ? `${item.timeout_ms}ms` : 'Não informado' }}</strong></span>
+                  <span>Retry: <strong class="text-nexo-text">{{ item.retry !== false && item.retry != null ? 'Sim' : (item.retry === false ? 'Não' : 'Não informado') }}</strong></span>
+                  <span>Idempotência: <strong class="text-nexo-text">{{ item.idempotente !== false && item.idempotente != null ? 'Sim' : (item.idempotente === false ? 'Não' : 'Não informado') }}</strong></span>
+                  <span>SLA Indisponível: <strong class="text-nexo-text">{{ item.indisponibilidade || 'Não informado' }}</strong></span>
                 </div>
               </div>
             </div>
@@ -428,7 +436,7 @@ const pipelinePassos = computed(() => {
               <div class="rounded bg-nexo-canvas/40 p-2 border border-nexo-border/40">
                 <span class="font-semibold text-nexo-text">Threat Model & Riscos:</span>
                 <p class="text-nexo-muted mt-0.5">
-                  {{ seguranca?.threat || 'STRIDE: Spoofing, Tampering, Information Disclosure mitigados' }}
+                  {{ seguranca?.threat || 'Não informado' }}
                 </p>
                 <span v-if="excecaoSeg" class="mt-1 inline-block text-[9px] text-amber-800 font-semibold">
                   Exceção Segurança vigente até {{ excecaoSeg.prazo }} (aprovado por {{ excecaoSeg.owner }})
@@ -437,7 +445,7 @@ const pipelinePassos = computed(() => {
               <div class="rounded bg-nexo-canvas/40 p-2 border border-nexo-border/40">
                 <span class="font-semibold text-nexo-text">Classificação LGPD / Dado Pessoal:</span>
                 <p class="text-nexo-muted mt-0.5">
-                  {{ dadoPessoal?.classificacao ? `${dadoPessoal.classificacao} · Retenção: ${dadoPessoal.retencao || '5 anos'}` : 'Sem dados pessoais sensíveis identificados' }}
+                  {{ dadoPessoal?.classificacao ? `${dadoPessoal.classificacao} · Retenção: ${dadoPessoal.retencao || 'Não informada'}` : 'Não informado' }}
                 </p>
               </div>
             </div>
