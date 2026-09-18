@@ -6,6 +6,7 @@ import type {
   GateId,
   Kpi,
   NexoObject,
+  NexoStatus,
   PBI,
   PatchMudanca,
   Role,
@@ -103,6 +104,22 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
     exemplo: 'u-pm (Paula - Product Manager)',
     acaoLabel: 'Definir Owner'
   },
+  'ENQ-005': {
+    codigo: 'ENQ-005',
+    campoAlvo: 'escopo_in',
+    pergunta: 'Quais são as restrições e não-objetivos declarados para esta iniciativa (escopo_in e escopo_out)?',
+    porQueBloqueia: 'Enquadramentos sem fronteiras claras expandem escopo prematuramente.',
+    exemplo: 'Escopo In: Pix cobrança imediata. Escopo Out: Pix crédito ou agendamento parcelado.',
+    acaoLabel: 'Definir Restrições'
+  },
+  'ENQ-006': {
+    codigo: 'ENQ-006',
+    campoAlvo: 'riscos',
+    pergunta: 'Quais são as suposições críticas e riscos de descoberta identificados no enquadramento?',
+    porQueBloqueia: 'Riscos não explicitados no G0 geram impasses nas fases de arquitetura e entrega.',
+    exemplo: 'Risco: Dependência da disponibilidade da API do Bacen e latência do PSP parceiro.',
+    acaoLabel: 'Adicionar Riscos'
+  },
   'EPC-001': {
     codigo: 'EPC-001',
     campoAlvo: 'problema',
@@ -127,6 +144,30 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
     exemplo: 'Dentro: Geração dinâmica de QR Code. Fora: Estorno manual via painel de atendimento.',
     acaoLabel: 'Definir Escopo In/Out'
   },
+  'EPC-004': {
+    codigo: 'EPC-004',
+    campoAlvo: 'objetivo',
+    pergunta: 'Cadê o resultado de negócio observável declarado (focado em outcome e benefício, não em solução técnica)?',
+    porQueBloqueia: 'Épicos que definem solução em vez de outcome prejudicam a autonomia do time de produto.',
+    exemplo: 'Reduzir em 30% o tempo médio de liquidação financeira de faturas de clientes corporativos.',
+    acaoLabel: 'Ajustar Outcome'
+  },
+  'EPC-005': {
+    codigo: 'EPC-005',
+    campoAlvo: 'riscos',
+    pergunta: 'Cadê o risco crítico mapeado com probabilidade, impacto, estratégia de mitigação e owner nominal?',
+    porQueBloqueia: 'Riscos sem responsável ou mitigação impedem a aprovação de governança em G1.',
+    exemplo: 'Risco: Indisponibilidade de webhook (probabilidade média, impacto alto, mitigação: fila com DLQ, owner: u-techlead).',
+    acaoLabel: 'Mapear Risco Crítico'
+  },
+  'EPC-006': {
+    codigo: 'EPC-006',
+    campoAlvo: 'fonte',
+    pergunta: 'Cadê o preenchimento afirmativo de pelo menos 80% dos campos essenciais do PRD do épico?',
+    porQueBloqueia: 'O épico precisa estar suficientemente maduro com problema, objetivo, personas e KPIs preenchidos.',
+    exemplo: 'Preencha problema, objetivo, personas, escopo_in, escopo_out e KPIs.',
+    acaoLabel: 'Completar Campos do Épico'
+  },
   'FTR-001': {
     codigo: 'FTR-001',
     campoAlvo: 'ator',
@@ -143,6 +184,14 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
     exemplo: '1. Usuário clica em Pagar Pix. 2. Sistema exibe QR Code e código copia-e-cola com cronômetro.',
     acaoLabel: 'Estruturar Fluxo Feliz'
   },
+  'FTR-003': {
+    codigo: 'FTR-003',
+    campoAlvo: 'regras_ids',
+    pergunta: 'Quais regras de negócio estão vinculadas a esta feature com fonte declarada e status ativo?',
+    porQueBloqueia: 'Features sem regras de negócio associadas geram comportamento divergente em produção.',
+    exemplo: 'Regras vinculadas: reg-pix-validade-qrcode, reg-pix-limite-noturno.',
+    acaoLabel: 'Vincular Regras'
+  },
   'FTR-004': {
     codigo: 'FTR-004',
     campoAlvo: 'owner',
@@ -150,6 +199,22 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
     porQueBloqueia: 'Nenhum gate pode ser aprovado com objetos anônimos ou sem liderança.',
     exemplo: 'u-pm (Paula)',
     acaoLabel: 'Atribuir Owner'
+  },
+  'FTR-005': {
+    codigo: 'FTR-005',
+    campoAlvo: 'telas_estados',
+    pergunta: 'As telas vinculadas contemplam explicitamente os 4 estados de UI: loading, vazio, erro e sucesso?',
+    porQueBloqueia: 'Telas sem tratamento de estados de erro e loading geram experiência degradada ao usuário.',
+    exemplo: 'Estados mapeados: Skeleton no loading, EmptyState no vazio, Toast/Banner no erro e Tela de Sucesso no OK.',
+    acaoLabel: 'Documentar Estados de UI'
+  },
+  'FTR-006': {
+    codigo: 'FTR-006',
+    campoAlvo: 'integracoes',
+    pergunta: 'As integrações externas declaram timeout explícito, estratégia de falha e tratamento de indisponibilidade?',
+    porQueBloqueia: 'Chamadas síncronas sem timeout podem travar threads e degradar toda a plataforma.',
+    exemplo: 'PSP Pix com timeout de 3000ms, retry exponencial até 3x e fallback com mensagem amigável.',
+    acaoLabel: 'Configurar Resiliência'
   },
   'FTR-007': {
     codigo: 'FTR-007',
@@ -183,6 +248,54 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
     exemplo: 'adr-pix-idempotencia (Idempotência via Redis e banco relacional ACID)',
     acaoLabel: 'Vincular ADR'
   },
+  'ARC-003': {
+    codigo: 'ARC-003',
+    campoAlvo: 'openapi',
+    pergunta: 'Cadê a especificação detalhada do OpenAPI com retornos 2xx/4xx/5xx, modelo de auth e contrato versionado?',
+    porQueBloqueia: 'Serviços sem contrato formal geram quebra de integração em cascata entre times.',
+    exemplo: 'OpenAPI 3.0 com 200 OK, 400 Bad Request, 401 Unauthorized, 503 Service Unavailable e Bearer JWT.',
+    acaoLabel: 'Especificar OpenAPI'
+  },
+  'ARC-004': {
+    codigo: 'ARC-004',
+    campoAlvo: 'persistencia',
+    pergunta: 'Cadê a modelagem de dados: entidade, validações, migration versionada, índices e plano de dados?',
+    porQueBloqueia: 'Alterações em banco de dados sem migration ou plano de volumetria e índices causam degradação e incidentes.',
+    exemplo: 'Tabela cobrancas_pix com chave primária UUID, índice em (status, created_at) e migration Flyway.',
+    acaoLabel: 'Modelar Persistência'
+  },
+  'ARC-005': {
+    codigo: 'ARC-005',
+    campoAlvo: 'integracoes',
+    pergunta: 'As integrações externas possuem owner externo, timeout em milissegundos, política de retry e idempotência?',
+    porQueBloqueia: 'A integridade financeira depende de chave de idempotência e timeouts estritos.',
+    exemplo: 'Header X-Idempotency-Key obrigatório, timeout de 2500ms e retry com jitter.',
+    acaoLabel: 'Estruturar Integração'
+  },
+  'ARC-006': {
+    codigo: 'ARC-006',
+    campoAlvo: 'dado_pessoal',
+    pergunta: 'Cadê a classificação de privacidade e LGPD: categorias de dados pessoais, finalidade de uso, tempo de retenção e controle de acesso?',
+    porQueBloqueia: 'Tratamento de dados sem base legal ou controle de retenção viola normas de conformidade e segurança.',
+    exemplo: 'Classificação restrita para CPF/chave Pix, retenção por 5 anos (Bacen), acesso restrito à squad de pagamentos.',
+    acaoLabel: 'Classificar Dados LGPD'
+  },
+  'ARC-007': {
+    codigo: 'ARC-007',
+    campoAlvo: 'nfrs',
+    pergunta: 'Quais são os Requisitos Não-Funcionais (NFRs) mensuráveis com medida, alvo numérico e ferramenta de observabilidade?',
+    porQueBloqueia: 'Sistemas sem metas de latência, disponibilidade ou vazão não têm garantias de escalabilidade.',
+    exemplo: 'Latência p95 <= 200ms, disponibilidade 99.95%, monitorados via OpenTelemetry e Prometheus.',
+    acaoLabel: 'Definir NFRs'
+  },
+  'ARC-008': {
+    codigo: 'ARC-008',
+    campoAlvo: 'seguranca',
+    pergunta: 'Cadê o Threat Model estruturado, matriz de riscos de segurança e análise de vulnerabilidades (ou exceção com prazo vigente)?',
+    porQueBloqueia: 'Exceções de segurança expiradas ou ausência de modelo de ameaças impedem aprovação de arquitetura.',
+    exemplo: 'Threat model STRIDE documentado cobrindo spoofing de webhook e tampering de payloads.',
+    acaoLabel: 'Registrar Threat Model'
+  },
   'PBI-001': {
     codigo: 'PBI-001',
     campoAlvo: 'estrategia_teste',
@@ -191,6 +304,70 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
     exemplo: 'Estratégia de teste: "contrato OpenAPI + teste de integração de webhook + unitário"',
     acaoLabel: 'Completar DoR do PBI'
   },
+  'PBI-ACEITE': {
+    codigo: 'PBI-ACEITE',
+    campoAlvo: 'criterios_bdd',
+    pergunta: 'Cadê o critério de aceite BDD verificável no formato Given / When / Then deste PBI?',
+    porQueBloqueia: 'Itens de backlog sem aceite objetivo não cumprem a Definition of Ready.',
+    exemplo: 'Dado um payload válido de cobrança, quando a API é chamada, então retorna status 201 com o QR Code gerado.',
+    acaoLabel: 'Adicionar BDD ao PBI'
+  },
+  'PBI-ORIGEM': {
+    codigo: 'PBI-ORIGEM',
+    campoAlvo: 'feature_id',
+    pergunta: 'Qual é a feature de origem vinculada e quem é o owner responsável por este PBI?',
+    porQueBloqueia: 'PBIs órfãos sem rastreabilidade com feature ou sem liderança não entram na sprint.',
+    exemplo: 'Feature: ft-confirmar (Confirmação de Pagamento), Owner: u-dev (Dev Squad)',
+    acaoLabel: 'Vincular Feature e Owner'
+  },
+  'PBI-ESCOPO': {
+    codigo: 'PBI-ESCOPO',
+    campoAlvo: 'escopo_in',
+    pergunta: 'O que está explicitamente dentro e fora do escopo deste entregável na sprint?',
+    porQueBloqueia: 'Falta de fronteiras de PBI causa desvios durante o desenvolvimento da sprint.',
+    exemplo: 'Dentro: Endpoint POST /v1/cobrancas. Fora: Interface gráfica do operador.',
+    acaoLabel: 'Definir Escopo do PBI'
+  },
+  'PBI-DEP': {
+    codigo: 'PBI-DEP',
+    campoAlvo: 'dependencias',
+    pergunta: 'Existem dependências técnicas ou bloqueadores abertos impedindo o início deste PBI?',
+    porQueBloqueia: 'Entregar itens bloqueados na sprint causa paradas e afeta o comprometimento de entrega.',
+    exemplo: 'Dependências resolvidas: Credenciais sandbox PSP liberadas e fila SQS provisionada.',
+    acaoLabel: 'Resolver Dependências'
+  },
+  'PBI-OWNER': {
+    codigo: 'PBI-OWNER',
+    campoAlvo: 'owner',
+    pergunta: 'Quem é o desenvolvedor ou responsável pela entrega deste PBI?',
+    porQueBloqueia: 'Todo entregável de sprint deve possuir responsável formal atribuído.',
+    exemplo: 'u-dev (Diego - Dev)',
+    acaoLabel: 'Definir Owner'
+  },
+  'PBI-TESTE': {
+    codigo: 'PBI-TESTE',
+    campoAlvo: 'estrategia_teste',
+    pergunta: 'Qual é a estratégia de testes automatizados definida (unitários, integração, contrato)?',
+    porQueBloqueia: 'PBI sem estratégia de testes não cumpre o DoR e é rejeitado para entrada em sprint.',
+    exemplo: 'Testes de unidade com Jest (cobertura 85%) + teste de integração com Testcontainers.',
+    acaoLabel: 'Definir Estratégia de Testes'
+  },
+  'PBI-CONTRATO': {
+    codigo: 'PBI-CONTRATO',
+    campoAlvo: 'contrato',
+    pergunta: 'Os contratos de interface/API consumidos ou expostos foram aprovados ou formalmente dispensados?',
+    porQueBloqueia: 'Contratos não aprovados colocam em risco o acoplamento e compatibilidade de versão.',
+    exemplo: 'Contrato OpenAPI v1.2 aprovado pela engenharia de plataforma.',
+    acaoLabel: 'Validar Contrato'
+  },
+  'PBI-BLOQ': {
+    codigo: 'PBI-BLOQ',
+    campoAlvo: 'flag',
+    pergunta: 'Existe alguma flag bloqueadora pendente sobre este PBI?',
+    porQueBloqueia: 'Flags bloqueadoras abertas impedem o avanço para sprint.',
+    exemplo: 'Remover flag ou resolver o impedimento apontado.',
+    acaoLabel: 'Limpar Bloqueadores'
+  },
   'DON-001': {
     codigo: 'DON-001',
     campoAlvo: 'status',
@@ -198,6 +375,46 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
     porQueBloqueia: 'O gate G5 consolida a publicação apenas com validação técnica e documental concluída.',
     exemplo: 'Status atualizado para validated/published com pull request aprovado e suite verde.',
     acaoLabel: 'Validar Entrega'
+  },
+  'DON-002': {
+    codigo: 'DON-002',
+    campoAlvo: 'evidencia',
+    pergunta: 'Cadê a evidência de Pull Request merged com aprovação humana e link rastreável?',
+    porQueBloqueia: 'O gate G5 consolida entrega formal com revisão de código concluída por pares.',
+    exemplo: 'PR #142 aprovado por 2 revisores sênior com link para o repositório.',
+    acaoLabel: 'Registrar Evidência de PR'
+  },
+  'DON-003': {
+    codigo: 'DON-003',
+    campoAlvo: 'evidencia',
+    pergunta: 'A pipeline de Integração Contínua (CI) está 100% verde com SAST e suíte de testes aprovada?',
+    porQueBloqueia: 'Falhas em linters, testes automatizados ou escaneamento SAST impedem publicação.',
+    exemplo: 'Pipeline CI verde com 145 testes passando, zero vulnerabilidades críticas no SonarQube.',
+    acaoLabel: 'Registrar Pipeline CI'
+  },
+  'DON-004': {
+    codigo: 'DON-004',
+    campoAlvo: 'evidencia',
+    pergunta: 'O aceite funcional foi concluído com evidências e testes ponta-a-ponta validados pelo QA/PO?',
+    porQueBloqueia: 'G5 exige validação funcional formal dos critérios BDD antes da disponibilização.',
+    exemplo: 'Roteiro de homologação executado em staging com aprovação do QA.',
+    acaoLabel: 'Registrar Aceite Funcional'
+  },
+  'DON-005': {
+    codigo: 'DON-005',
+    campoAlvo: 'evidencia',
+    pergunta: 'A segurança da informação foi homologada ou possui exceção formal vigente com prazo cadastrado?',
+    porQueBloqueia: 'Riscos de segurança sem aprovação técnica impedem o fechamento do gate de entrega.',
+    exemplo: 'Análise DAST executada e aprovada pelo time de segurança corporativa.',
+    acaoLabel: 'Homologar Segurança'
+  },
+  'DON-006': {
+    codigo: 'DON-006',
+    campoAlvo: 'evidencia',
+    pergunta: 'A telemetria, observabilidade (métricas, logs, traces) e rastreabilidade fim-a-fim foram implementadas?',
+    porQueBloqueia: 'A publicação em produção requer monitoramento operacional ativo desde o primeiro minuto.',
+    exemplo: 'Dashboards no Grafana e alertas no PagerDuty configurados.',
+    acaoLabel: 'Configurar Observabilidade'
   }
 }
 
@@ -211,12 +428,14 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
       roles: ['PM'],
       descricao: 'Estrutura hipóteses, dores observáveis e enquadramento de novas oportunidades de negócio.',
       autonomia: 'Não define orçamento nem prioridade corporativa isoladamente.',
-      checks: ['ENQ-001', 'ENQ-002', 'ENQ-003', 'ENQ-004'],
+      checks: ['ENQ-001', 'ENQ-002', 'ENQ-003', 'ENQ-004', 'ENQ-005', 'ENQ-006'],
       perguntas: [
         DICIONARIO_PERGUNTAS['ENQ-001'],
         DICIONARIO_PERGUNTAS['ENQ-002'],
         DICIONARIO_PERGUNTAS['ENQ-003'],
-        DICIONARIO_PERGUNTAS['ENQ-004']
+        DICIONARIO_PERGUNTAS['ENQ-004'],
+        DICIONARIO_PERGUNTAS['ENQ-005'],
+        DICIONARIO_PERGUNTAS['ENQ-006']
       ]
     }
   ],
@@ -228,11 +447,14 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
       roles: ['PM'],
       descricao: 'Mapeia capacidades de negócio, metas de impacto mensuráveis e fronteiras de escopo.',
       autonomia: 'Não inventa metas sem owner e não altera prioridades do portfólio.',
-      checks: ['EPC-001', 'EPC-002', 'EPC-003'],
+      checks: ['EPC-001', 'EPC-002', 'EPC-003', 'EPC-004', 'EPC-005', 'EPC-006'],
       perguntas: [
         DICIONARIO_PERGUNTAS['EPC-001'],
         DICIONARIO_PERGUNTAS['EPC-002'],
-        DICIONARIO_PERGUNTAS['EPC-003']
+        DICIONARIO_PERGUNTAS['EPC-003'],
+        DICIONARIO_PERGUNTAS['EPC-004'],
+        DICIONARIO_PERGUNTAS['EPC-005'],
+        DICIONARIO_PERGUNTAS['EPC-006']
       ]
     }
   ],
@@ -254,11 +476,14 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
       roles: ['PM', 'UX'],
       descricao: 'Especifica fluxos felizes, narrativas de benefício e tratamento de estados de interface.',
       autonomia: 'Não aprova design final sem validação do designer responsável.',
-      checks: ['FTR-001', 'FTR-002', 'FTR-004'],
+      checks: ['FTR-001', 'FTR-002', 'FTR-003', 'FTR-004', 'FTR-005', 'FTR-006'],
       perguntas: [
         DICIONARIO_PERGUNTAS['FTR-001'],
         DICIONARIO_PERGUNTAS['FTR-002'],
-        DICIONARIO_PERGUNTAS['FTR-004']
+        DICIONARIO_PERGUNTAS['FTR-003'],
+        DICIONARIO_PERGUNTAS['FTR-004'],
+        DICIONARIO_PERGUNTAS['FTR-005'],
+        DICIONARIO_PERGUNTAS['FTR-006']
       ]
     }
   ],
@@ -270,8 +495,14 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
       roles: ['Arquiteto', 'TechLead'],
       descricao: 'Garante contratos de integração, modelos de dados, idempotência e vínculos com ADRs.',
       autonomia: 'Não quebra contratos públicos nem fecha trade-offs sem consentimento técnico.',
-      checks: ['ARC-001', 'ARC-002'],
-      perguntas: [DICIONARIO_PERGUNTAS['ARC-001'], DICIONARIO_PERGUNTAS['ARC-002']]
+      checks: ['ARC-001', 'ARC-002', 'ARC-003', 'ARC-004', 'ARC-005'],
+      perguntas: [
+        DICIONARIO_PERGUNTAS['ARC-001'],
+        DICIONARIO_PERGUNTAS['ARC-002'],
+        DICIONARIO_PERGUNTAS['ARC-003'],
+        DICIONARIO_PERGUNTAS['ARC-004'],
+        DICIONARIO_PERGUNTAS['ARC-005']
+      ]
     },
     {
       id: 'security.threat_reviewer',
@@ -280,8 +511,12 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
       roles: ['Seguranca', 'TechLead'],
       descricao: 'Avalia resiliência, proteção de dados e exceções de conformidade.',
       autonomia: 'Não aprova exceções críticas de segurança sem waiver formalizado.',
-      checks: ['ARC-001'],
-      perguntas: [DICIONARIO_PERGUNTAS['ARC-001']]
+      checks: ['ARC-006', 'ARC-007', 'ARC-008'],
+      perguntas: [
+        DICIONARIO_PERGUNTAS['ARC-006'],
+        DICIONARIO_PERGUNTAS['ARC-007'],
+        DICIONARIO_PERGUNTAS['ARC-008']
+      ]
     }
   ],
   G4: [
@@ -292,8 +527,18 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
       roles: ['Dev', 'QA', 'TechLead'],
       descricao: 'Decompõe entregáveis em Definition of Ready com estratégias de testes automatizados.',
       autonomia: 'Não fecha estimativas de squad e não divide itens sem aceite verificável.',
-      checks: ['PBI-001'],
-      perguntas: [DICIONARIO_PERGUNTAS['PBI-001']]
+      checks: ['PBI-001', 'PBI-ACEITE', 'PBI-ORIGEM', 'PBI-ESCOPO', 'PBI-DEP', 'PBI-OWNER', 'PBI-TESTE', 'PBI-CONTRATO', 'PBI-BLOQ'],
+      perguntas: [
+        DICIONARIO_PERGUNTAS['PBI-001'],
+        DICIONARIO_PERGUNTAS['PBI-ACEITE'],
+        DICIONARIO_PERGUNTAS['PBI-ORIGEM'],
+        DICIONARIO_PERGUNTAS['PBI-ESCOPO'],
+        DICIONARIO_PERGUNTAS['PBI-DEP'],
+        DICIONARIO_PERGUNTAS['PBI-OWNER'],
+        DICIONARIO_PERGUNTAS['PBI-TESTE'],
+        DICIONARIO_PERGUNTAS['PBI-CONTRATO'],
+        DICIONARIO_PERGUNTAS['PBI-BLOQ']
+      ]
     }
   ],
   G5: [
@@ -304,8 +549,15 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
       roles: ['Dev', 'QA', 'TechLead'],
       descricao: 'Inspeciona evidências de testes, pipelines verdes e critérios de Definition of Done.',
       autonomia: 'Não realiza merge ou deploy sem validação de testes automatizados.',
-      checks: ['DON-001'],
-      perguntas: [DICIONARIO_PERGUNTAS['DON-001']]
+      checks: ['DON-001', 'DON-002', 'DON-003', 'DON-004', 'DON-005', 'DON-006'],
+      perguntas: [
+        DICIONARIO_PERGUNTAS['DON-001'],
+        DICIONARIO_PERGUNTAS['DON-002'],
+        DICIONARIO_PERGUNTAS['DON-003'],
+        DICIONARIO_PERGUNTAS['DON-004'],
+        DICIONARIO_PERGUNTAS['DON-005'],
+        DICIONARIO_PERGUNTAS['DON-006']
+      ]
     }
   ]
 }
@@ -597,7 +849,15 @@ export function gerarPropostaPatch(
       }
     }
 
-    case 'PBI-001': {
+    case 'PBI-001':
+    case 'PBI-ACEITE':
+    case 'PBI-TESTE':
+    case 'PBI-ORIGEM':
+    case 'PBI-ESCOPO':
+    case 'PBI-DEP':
+    case 'PBI-OWNER':
+    case 'PBI-CONTRATO':
+    case 'PBI-BLOQ': {
       // DoR PBI
       const p = objeto as unknown as PBI & { criterios_bdd?: CriterioBdd[] }
       const deBdd = JSON.stringify(p.criterios_bdd ?? [])
@@ -624,7 +884,23 @@ export function gerarPropostaPatch(
       mudancas.push({ campo: 'criterios_bdd', de: deBdd, para: JSON.stringify(novoBdd, null, 2) })
 
       return {
-        justificativa: `[IA Gate G4] Preencher DoR completa: BDD, owner e estratégia de testes para resolver PBI-001`,
+        justificativa: `[IA Gate G4] Preencher DoR completa: BDD, owner e estratégia de testes para resolver ${codigoCheck}`,
+        mudancas
+      }
+    }
+
+    case 'DON-001':
+    case 'DON-002':
+    case 'DON-003':
+    case 'DON-004':
+    case 'DON-005':
+    case 'DON-006': {
+      // DoD G5 - promover status para validated e registrar aceite
+      const de = objeto.status
+      const para: NexoStatus = 'validated'
+      mudancas.push({ campo: 'status', de, para })
+      return {
+        justificativa: `[IA Gate G5] Promover status para validated e consolidar conformidade de DoD para ${codigoCheck}`,
         mudancas
       }
     }
@@ -817,7 +1093,54 @@ export function processarMensagemGate(
     }
   }
 
-  // 7. Se houver falha pendente na primeira posição, tentar gerar patch para ela usando a entrada do usuário
+  // 7. Pedidos de Enquadramento (G0)
+  if (
+    msg.includes('hipotese') ||
+    msg.includes('hipótese') ||
+    msg.includes('dor') ||
+    msg.includes('problema') ||
+    msg.includes('enquadramento')
+  ) {
+    const prop = gerarPropostaPatch(objeto, 'ENQ-001', mensagem)
+    if (prop) {
+      return {
+        texto: `**Proposta Gerada (G0):** Estruturei o problema e a hipótese de enquadramento para "${objeto.titulo}". Aceite o patch abaixo para aplicar.`,
+        propostaPatch: {
+          alvoId: objeto.id,
+          justificativa: prop.justificativa,
+          mudancas: prop.mudancas
+        },
+        checksAfetados: ['ENQ-001', 'ENQ-003']
+      }
+    }
+  }
+
+  // 8. Pedidos de DoD / Release (G5)
+  if (
+    msg.includes('dod') ||
+    msg.includes('done') ||
+    msg.includes('entrega') ||
+    msg.includes('release') ||
+    msg.includes('validar') ||
+    msg.includes('publicar') ||
+    msg.includes('evidencia') ||
+    msg.includes('evidência')
+  ) {
+    const prop = gerarPropostaPatch(objeto, 'DON-001', mensagem)
+    if (prop) {
+      return {
+        texto: `**Proposta Gerada (G5):** Consolidei a Definition of Done promovendo o status de "${objeto.titulo}" para validated com conformidade de testes e evidências.`,
+        propostaPatch: {
+          alvoId: objeto.id,
+          justificativa: prop.justificativa,
+          mudancas: prop.mudancas
+        },
+        checksAfetados: ['DON-001']
+      }
+    }
+  }
+
+  // 9. Se houver falha pendente na primeira posição, tentar gerar patch para ela usando a entrada do usuário
   if (diag.faltas.length > 0) {
     const primeiraFalta = diag.faltas[0]
     const prop = gerarPropostaPatch(objeto, primeiraFalta.codigo, mensagem)
@@ -836,6 +1159,6 @@ export function processarMensagemGate(
 
   // Fallback
   return {
-    texto: `Compreendi sua mensagem sobre "${objeto.titulo}".\n\nPara avançar no Gate ${gateId}, experimente pedir:\n- *"O que falta para aprovar este gate?"*\n- *"Gerar BDD para esta feature"*\n- *"Adicionar KPI e escopo"* (G1)\n- *"Declarar integração e vincular ADR"* (G3)\n- *"Completar DoR com estratégia de teste"* (G4)`
+    texto: `Compreendi sua mensagem sobre "${objeto.titulo}".\n\nPara avançar no Gate ${gateId}, experimente pedir:\n- *"O que falta para aprovar este gate?"*\n- *"Estruturar hipótese e dor de enquadramento"* (G0)\n- *"Adicionar KPI e escopo"* (G1)\n- *"Gerar BDD para esta feature"* (G2)\n- *"Declarar integração e vincular ADR"* (G3)\n- *"Completar DoR com estratégia de teste"* (G4)\n- *"Validar DoD e evidências de entrega"* (G5)`
   }
 }

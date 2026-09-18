@@ -479,12 +479,12 @@ function rejeitarPatch() {
             O que falta?
           </button>
           <button
-            v-if="props.gateId === 'G2'"
+            v-if="props.gateId === 'G0'"
             type="button"
             class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
-            @click="enviarMensagem('Gerar critérios BDD Given/When/Then')"
+            @click="enviarMensagem('Estruturar hipótese e problema de enquadramento')"
           >
-            + Gerar BDD
+            + Hipótese & Dor
           </button>
           <button
             v-if="props.gateId === 'G1'"
@@ -493,6 +493,14 @@ function rejeitarPatch() {
             @click="enviarMensagem('Adicionar KPI mensurável e escopo in/out')"
           >
             + KPI e Escopo
+          </button>
+          <button
+            v-if="props.gateId === 'G2'"
+            type="button"
+            class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
+            @click="enviarMensagem('Gerar critérios BDD Given/When/Then')"
+          >
+            + Gerar BDD
           </button>
           <button
             v-if="props.gateId === 'G3'"
@@ -509,6 +517,14 @@ function rejeitarPatch() {
             @click="enviarMensagem('Completar DoR com estratégia de teste')"
           >
             + DoR e Testes
+          </button>
+          <button
+            v-if="props.gateId === 'G5'"
+            type="button"
+            class="rounded-badge border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-[10px] hover:bg-white"
+            @click="enviarMensagem('Validar DoD e evidências de entrega')"
+          >
+            + Validar DoD & Release
           </button>
         </div>
 
