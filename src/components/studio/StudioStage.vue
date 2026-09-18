@@ -3,11 +3,11 @@ import { computed, ref } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { paletteOf } from './m3/theme'
 import { limitesDe, specOf } from './m3/tokens'
-import M3Icon from './m3/M3Icon.vue'
 import M3Node from './m3/M3Node.vue'
 
 const studio = useStudio()
 const emit = defineEmits<{ (e: 'preview'): void }>()
+const props = defineProps<{ ferramenta?: 'select' | 'hand' }>()
 const caixa = ref<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 let panAtivo = false
 let panStart = { x: 0, y: 0, px: 0, py: 0 }
@@ -19,7 +19,7 @@ function iniciarPan(ev: PointerEvent) {
   panStart = { x: ev.clientX, y: ev.clientY, px: studio.pan[0], py: studio.pan[1] }
   ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
 }
-const ferramenta = ref<'select' | 'hand'>('select')
+const ferramenta = computed<'select' | 'hand'>(() => props.ferramenta ?? 'select')
 const modo = ref<'edit' | 'preview'>('edit')
 const historico = ref<string[]>([])
 const guides = ref<{ v: number[]; h: number[] }>({ v: [], h: [] })
@@ -261,9 +261,7 @@ function onKeydown(ev: KeyboardEvent) {
     studio.removerItens(studio.selecionados)
     return
   }
-  if (ev.key === 'v' || ev.key === 'V') ferramenta.value = 'select'
-  else if (ev.key === 'h' || ev.key === 'H') ferramenta.value = 'hand'
-  else if (ev.key === 'p' || ev.key === 'P') alternarPreview()
+  if (ev.key === 'p' || ev.key === 'P') alternarPreview()
   else if (ev.key === '0') studio.zoom = 0.7
   else if (ev.key === '+' || ev.key === '=') studio.zoom = Math.min(2, studio.zoom + 0.1)
   else if (ev.key === '-') studio.zoom = Math.max(0.3, studio.zoom - 0.1)
@@ -282,14 +280,6 @@ function onKeydown(ev: KeyboardEvent) {
 
 function alternarPreview() {
   emit('preview')
-}
-
-function voltar() {
-  const ant = historico.value.pop()
-  if (ant) {
-    studio.screenId = ant
-    studio.persist()
-  }
 }
 
 defineExpose({ alternarPreview })
@@ -311,12 +301,6 @@ defineExpose({ alternarPreview })
         : (studio.pan = [studio.pan[0] - $event.deltaX, studio.pan[1] - $event.deltaY])
     "
   >
-    <div class="absolute left-2 top-2 z-20 flex gap-1 text-xs">
-      <button type="button" class="rounded-btn border border-nexo-border bg-white px-2 py-1" :class="ferramenta === 'select' ? 'text-nexo-primary font-semibold' : ''" :aria-pressed="ferramenta === 'select'" title="Selecionar (V)" @click="ferramenta = 'select'"><M3Icon name="arrow_selector_tool" :size="16" label="Selecionar" /></button>
-      <button type="button" class="rounded-btn border border-nexo-border bg-white px-2 py-1" :class="ferramenta === 'hand' ? 'text-nexo-primary font-semibold' : ''" :aria-pressed="ferramenta === 'hand'" title="Mover (H)" @click="ferramenta = 'hand'"><M3Icon name="pan_tool" :size="16" label="Mover" /></button>
-      <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" :class="modo === 'preview' ? 'bg-nexo-approved-bg text-nexo-approved' : 'bg-white'" :title="modo === 'preview' ? 'Sair do preview (P/Esc)' : 'Preview tap-through (P)'" @click="alternarPreview()"><M3Icon name="play_arrow" :size="16" label="Preview" /></button>
-      <button v-if="modo === 'preview' && historico.length > 0" type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-2 py-1" @click="voltar()"><M3Icon name="arrow_back" :size="16" label="Voltar" /></button>
-    </div>
     <div
       class="absolute left-0 top-0"
       :style="{ transform, transformOrigin: '0 0', width: '3000px', height: '1600px' }"

@@ -12,6 +12,7 @@ const emit = defineEmits<{
 
 const studio = useStudio()
 const aviso = ref('')
+const ferramenta = defineModel<'select' | 'hand'>('ferramenta', { default: 'select' })
 
 function flash(msg: string) {
   aviso.value = msg
@@ -99,14 +100,14 @@ function abrirPrompt() {
 
 <template>
   <div
-    class="flex flex-wrap items-center gap-1 p-1.5 text-xs shadow-card"
-    :style="{ background: '#F7F2FA', borderRadius: '28px', border: '1px solid #E2E8F0' }"
+    class="flex w-full flex-wrap items-center gap-1 border border-nexo-border bg-nexo-surface p-1.5 text-xs shadow-card"
+    style="border-radius: 12px"
     role="toolbar"
     aria-label="Toolbar do Studio"
   >
     <span class="flex items-center gap-1" role="group" aria-label="Modo">
-      <button type="button" title="Selecionar (V)" aria-label="Selecionar" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1 font-semibold text-nexo-primary"><M3Icon name="arrow_selector_tool" :size="18" label="Selecionar" />Selecionar</button>
-      <button type="button" title="Mover (H)" aria-label="Mover" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1"><M3Icon name="pan_tool" :size="18" label="Mover" />Mover</button>
+      <button type="button" title="Selecionar (V)" aria-label="Selecionar" :aria-pressed="ferramenta === 'select'" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" :class="ferramenta === 'select' ? 'font-semibold text-nexo-primary' : ''" @click="ferramenta = 'select'"><M3Icon name="arrow_selector_tool" :size="18" label="Selecionar" />Selecionar</button>
+      <button type="button" title="Mover (H)" aria-label="Mover" :aria-pressed="ferramenta === 'hand'" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" :class="ferramenta === 'hand' ? 'font-semibold text-nexo-primary' : ''" @click="ferramenta = 'hand'"><M3Icon name="pan_tool" :size="18" label="Mover" />Mover</button>
     </span>
     <span class="flex items-center gap-1" role="group" aria-label="Zoom">
       <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="inline-flex items-center justify-center rounded-btn px-1.5 py-1" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
