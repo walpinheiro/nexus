@@ -14,6 +14,7 @@ import PreviewModal from '@/components/studio/PreviewModal.vue'
 import { montarEntradaStudio } from '@/ai/gateParaStudio'
 import type { GateId, NexoObject, Feature } from '@/types/nexo'
 import { seedEnquadramento } from '@/data/seed'
+import { exportarFeatureWiki } from '@/utils/exportWiki'
 
 const props = defineProps<{ id: string }>()
 const route = useRoute()
@@ -226,6 +227,31 @@ function abrirPreview(telaId?: string) {
 function abrirVerStory() {
   storyModalAberto.value = true
 }
+
+function baixarFeatureWiki(featureId: string) {
+  const wiki = exportarFeatureWiki(featureId, {
+    nos: graph.state.nos,
+    gates: gates.gates.map((g) => ({
+      id: g.id,
+      status: g.status,
+      baselineVersao: g.baselineVersao,
+      aprovadoPor: g.aprovadoPor ?? undefined,
+      aprovadoEm: g.aprovadoEm ?? undefined
+    })),
+    vinculos: graph.vinculosTela,
+    regras: graph.regrasValidacao
+  })
+  if (!wiki) return
+  const blob = new Blob([wiki], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `wiki-${featureId}.md`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <template>
@@ -356,6 +382,15 @@ function abrirVerStory() {
                 >
                   <LucideIcon name="eye" :size="13" />
                   preview
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-2.5 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
+                  :title="`Exportar wiki consolidada da feature ${objetoAlvo.titulo}`"
+                  @click="baixarFeatureWiki(objetoAlvo.id)"
+                >
+                  <LucideIcon name="download" :size="13" />
+                  Exportar wiki
                 </button>
               </template>
 
@@ -649,6 +684,16 @@ function abrirVerStory() {
             >
               <LucideIcon name="eye" :size="13" />
               Preview Interativo
+            </button>
+            <button
+              v-if="objetoAlvo"
+              type="button"
+              class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-xs font-semibold text-nexo-text hover:bg-slate-50"
+              :title="`Exportar wiki da feature ${objetoAlvo.titulo}`"
+              @click="baixarFeatureWiki(objetoAlvo.id)"
+            >
+              <LucideIcon name="download" :size="13" />
+              Exportar wiki
             </button>
           </div>
           <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 text-xs" @click="storyModalAberto = false">

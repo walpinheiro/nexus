@@ -7,6 +7,7 @@ import { avaliarGate } from '@/utils/gates'
 import LucideIcon from '@/components/common/LucideIcon.vue'
 import { montarEntradaStudio, isFeatureProntaParaStudio } from '@/ai/gateParaStudio'
 import { useGate } from '@/stores/useGate'
+import { exportarGateMarkdown } from '@/utils/exportWiki'
 
 interface Props {
   gateId: GateId
@@ -152,6 +153,30 @@ const pipelinePassos = computed(() => {
     }
   ]
 })
+
+function baixarGateMarkdown() {
+  if (!props.alvo) return
+  const md = exportarGateMarkdown(props.alvo, props.gateId, {
+    gates: gatesStore.gates.map((g) => ({
+      id: g.id,
+      status: g.status,
+      baselineVersao: g.baselineVersao,
+      aprovadoPor: g.aprovadoPor ?? undefined,
+      aprovadoEm: g.aprovadoEm ?? undefined
+    })),
+    nos: graph.state.nos
+  })
+  if (!md) return
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `gate-${props.gateId.toLowerCase()}-${props.alvo.id || 'documento'}.md`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <template>
@@ -170,20 +195,34 @@ const pipelinePassos = computed(() => {
         </div>
       </div>
 
-      <!-- Badge de Baseline registrada -->
-      <div v-if="props.gateInfo?.baselineVersao" class="text-right">
-        <span class="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-800">
-          <LucideIcon name="shield-check" :size="12" /> Baseline v{{ props.gateInfo.baselineVersao }}
-        </span>
-        <p class="text-[10px] text-nexo-muted mt-0.5">
-          Aprovado por {{ props.gateInfo.aprovadoPor }}
-          <span v-if="props.gateInfo.aprovadoEm"> em {{ new Date(props.gateInfo.aprovadoEm).toLocaleDateString() }}</span>
-        </p>
-      </div>
-      <div v-else>
-        <span class="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-          <LucideIcon name="clock" :size="12" /> Baseline Pendente
-        </span>
+      <!-- Ações do Output e Baseline -->
+      <div class="flex items-center gap-3">
+        <button
+          v-if="props.alvo"
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-btn border border-nexo-border bg-white px-2.5 py-1 text-xs font-semibold text-nexo-text hover:bg-slate-50 transition-colors shadow-xs"
+          :title="`Exportar markdown do Gate ${props.gateId}`"
+          @click="baixarGateMarkdown()"
+        >
+          <LucideIcon name="download" :size="13" />
+          <span>Exportar .md</span>
+        </button>
+
+        <!-- Badge de Baseline registrada -->
+        <div v-if="props.gateInfo?.baselineVersao" class="text-right">
+          <span class="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-800">
+            <LucideIcon name="shield-check" :size="12" /> Baseline v{{ props.gateInfo.baselineVersao }}
+          </span>
+          <p class="text-[10px] text-nexo-muted mt-0.5">
+            Aprovado por {{ props.gateInfo.aprovadoPor }}
+            <span v-if="props.gateInfo.aprovadoEm"> em {{ new Date(props.gateInfo.aprovadoEm).toLocaleDateString() }}</span>
+          </p>
+        </div>
+        <div v-else>
+          <span class="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+            <LucideIcon name="clock" :size="12" /> Baseline Pendente
+          </span>
+        </div>
       </div>
     </div>
 

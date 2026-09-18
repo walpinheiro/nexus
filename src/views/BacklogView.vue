@@ -3,15 +3,18 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGraph } from '@/stores/useGraph'
 import { useUsers } from '@/stores/useUsers'
+import { useGate } from '@/stores/useGate'
 import { avaliarGate } from '@/utils/gates'
 import GateChecklist from '@/components/backlog/GateChecklist.vue'
 import LucideIcon from '@/components/common/LucideIcon.vue'
 import PreviewModal from '@/components/studio/PreviewModal.vue'
 import { montarEntradaStudio } from '@/ai/gateParaStudio'
+import { exportarFeatureWiki } from '@/utils/exportWiki'
 import type { Feature } from '@/types/nexo'
 
 const graph = useGraph()
 const users = useUsers()
+const gatesStore = useGate()
 const router = useRouter()
 const filtro = ref('')
 const filtroEstado = ref('')
@@ -38,6 +41,31 @@ function abrirPreview(featureId: string) {
 function abrirStoryModal(f: Feature) {
   storySelecionada.value = f
   storyModalAberto.value = true
+}
+
+function baixarFeatureWiki(featureId: string) {
+  const wiki = exportarFeatureWiki(featureId, {
+    nos: graph.state.nos,
+    gates: gatesStore.gates.map((g) => ({
+      id: g.id,
+      status: g.status,
+      baselineVersao: g.baselineVersao,
+      aprovadoPor: g.aprovadoPor ?? undefined,
+      aprovadoEm: g.aprovadoEm ?? undefined
+    })),
+    vinculos: graph.vinculosTela,
+    regras: graph.regrasValidacao
+  })
+  if (!wiki) return
+  const blob = new Blob([wiki], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `wiki-${featureId}.md`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 const itens = computed(() =>
@@ -165,6 +193,7 @@ function verChecklist(id: string) {
               <button type="button" class="text-nexo-primary hover:underline" @click="abrirStoryModal(n as Feature)">ver-story</button>
               <RouterLink :to="{ path: '/studio-full', query: { feature: n.id, from: 'backlog' } }" class="text-nexo-primary hover:underline">ver-tela</RouterLink>
               <button type="button" class="text-nexo-primary hover:underline" @click="abrirPreview(n.id)">preview</button>
+              <button type="button" class="text-nexo-primary hover:underline" :title="`Exportar wiki da feature ${n.titulo}`" @click="baixarFeatureWiki(n.id)">Exportar wiki</button>
             </template>
           </td>
         </tr>
@@ -250,6 +279,15 @@ function verChecklist(id: string) {
             >
               <LucideIcon name="eye" :size="13" />
               Preview Interativo
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-xs font-semibold text-nexo-text hover:bg-slate-50"
+              :title="`Exportar wiki da feature ${storySelecionada.titulo}`"
+              @click="baixarFeatureWiki(storySelecionada.id)"
+            >
+              <LucideIcon name="download" :size="13" />
+              Exportar wiki
             </button>
             <RouterLink
               :to="{ path: '/gates/G2', query: { alvo: storySelecionada.id } }"
