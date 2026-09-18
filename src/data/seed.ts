@@ -81,6 +81,32 @@ export const seedEpico: Epic = {
   ]
 }
 
+// ONDA1 W2 — backfill declarativo feature↔tela (documentação do vínculo seed):
+// - telas_ids das 4 features seed era [] (GAP Lupa V5: frame Studio sem dono).
+// - Os ids abaixo são DERIVADOS do montarEntradaStudio (gateParaStudio.ts): fluxo_feliz
+//   vira `${featureId}-t1..tN` (máx 3 passos), cada alternativo vira `${featureId}-altN`.
+//   Verificado por execução real: ft-pagar→[t1,t2,alt1], ft-confirmar→[t1,t2,alt1],
+//   ft-criar→[t1,t2,alt1], ft-status→[t1] (sem alternativos, 1 passo só).
+// - SEM criar telas físicas: são vínculos declarativos — frames reais só passam a
+//   existir no Studio quando gerarNoCanvas() roda (e aí vincula de novo, idempotente).
+// - telas_ids espelha os telaIds desta tabela para compat com gates (FTR-005).
+export const seedVinculosTela: TelaVinculo[] = [
+  { telaId: 'ft-pagar-t1', featureId: 'ft-pagar', origem: 'fluxo_feliz', passoRef: 't1' },
+  { telaId: 'ft-pagar-t2', featureId: 'ft-pagar', origem: 'fluxo_feliz', passoRef: 't2' },
+  { telaId: 'ft-pagar-alt1', featureId: 'ft-pagar', origem: 'alternativo', passoRef: 'alt1' },
+  { telaId: 'ft-confirmar-t1', featureId: 'ft-confirmar', origem: 'fluxo_feliz', passoRef: 't1' },
+  { telaId: 'ft-confirmar-t2', featureId: 'ft-confirmar', origem: 'fluxo_feliz', passoRef: 't2' },
+  { telaId: 'ft-confirmar-alt1', featureId: 'ft-confirmar', origem: 'alternativo', passoRef: 'alt1' },
+  { telaId: 'ft-criar-t1', featureId: 'ft-criar', origem: 'fluxo_feliz', passoRef: 't1' },
+  { telaId: 'ft-criar-t2', featureId: 'ft-criar', origem: 'fluxo_feliz', passoRef: 't2' },
+  { telaId: 'ft-criar-alt1', featureId: 'ft-criar', origem: 'alternativo', passoRef: 'alt1' },
+  { telaId: 'ft-status-t1', featureId: 'ft-status', origem: 'fluxo_feliz', passoRef: 't1' }
+]
+
+export function telasSeedDaFeature(featureId: string): string[] {
+  return seedVinculosTela.filter((v) => v.featureId === featureId).map((v) => v.telaId)
+}
+
 export const seedFeatures: Feature[] = [
   {
     ...base,
@@ -383,31 +409,6 @@ export const seedEdges: Edge[] = [
   }
 ]
 
-// ONDA1 W2 — backfill declarativo feature↔tela (documentação do vínculo seed):
-// - telas_ids das 4 features seed era [] (GAP Lupa V5: frame Studio sem dono).
-// - Os ids abaixo são DERIVADOS do montarEntradaStudio (gateParaStudio.ts): fluxo_feliz
-//   vira `${featureId}-t1..tN` (máx 3 passos), cada alternativo vira `${featureId}-altN`.
-//   Verificado por execução real: ft-pagar→[t1,t2,alt1], ft-confirmar→[t1,t2,alt1],
-//   ft-criar→[t1,t2,alt1], ft-status→[t1] (sem alternativos, 1 passo só).
-// - SEM criar telas físicas: são vínculos declarativos — frames reais só passam a
-//   existir no Studio quando gerarNoCanvas() roda (e aí vincula de novo, idempotente).
-// - telas_ids espelha os telaIds desta tabela para compat com gates (FTR-005).
-export const seedVinculosTela: TelaVinculo[] = [
-  { telaId: 'ft-pagar-t1', featureId: 'ft-pagar', origem: 'fluxo_feliz', passoRef: 't1' },
-  { telaId: 'ft-pagar-t2', featureId: 'ft-pagar', origem: 'fluxo_feliz', passoRef: 't2' },
-  { telaId: 'ft-pagar-alt1', featureId: 'ft-pagar', origem: 'alternativo', passoRef: 'alt1' },
-  { telaId: 'ft-confirmar-t1', featureId: 'ft-confirmar', origem: 'fluxo_feliz', passoRef: 't1' },
-  { telaId: 'ft-confirmar-t2', featureId: 'ft-confirmar', origem: 'fluxo_feliz', passoRef: 't2' },
-  { telaId: 'ft-confirmar-alt1', featureId: 'ft-confirmar', origem: 'alternativo', passoRef: 'alt1' },
-  { telaId: 'ft-criar-t1', featureId: 'ft-criar', origem: 'fluxo_feliz', passoRef: 't1' },
-  { telaId: 'ft-criar-t2', featureId: 'ft-criar', origem: 'fluxo_feliz', passoRef: 't2' },
-  { telaId: 'ft-criar-alt1', featureId: 'ft-criar', origem: 'alternativo', passoRef: 'alt1' },
-  { telaId: 'ft-status-t1', featureId: 'ft-status', origem: 'fluxo_feliz', passoRef: 't1' }
-]
-
-export function telasSeedDaFeature(featureId: string): string[] {
-  return seedVinculosTela.filter((v) => v.featureId === featureId).map((v) => v.telaId)
-}
 
 export const seedUsers: User[] = [
   { id: 'u-pm', nome: 'Paula (PM)', papel: 'PM', projeto_ids: ['proj-cobrancas'] },

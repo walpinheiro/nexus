@@ -26,4 +26,6 @@ useUsers(pinia)
 useUI(pinia)
 
 app.use(router)
-app.mount('#app')
+router.isReady().then(() => {
+  app.mount('#app')
+})

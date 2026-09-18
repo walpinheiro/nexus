@@ -198,6 +198,8 @@ function gerarNoCanvas() {
   if (entrada.telas.length > 0) {
     studio.screenId = entrada.telas[0].id
   }
+  // ONDA1 W1 — vincula cada tela gerada à feature no grafo
+  graph.vincularEntradaStudio(entrada, users.state.currentUserId)
   studio.persist()
   gerarPrompt()
   mensagemGeracao.value = `${entrada.telas.length} telas geradas no canvas!`

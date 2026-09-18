@@ -5,7 +5,11 @@ import Topbar from '@/components/layout/Topbar.vue'
 import Sidebar from '@/components/layout/Sidebar.vue'
 
 const route = useRoute()
-const isStudio = computed(() => (route.meta as Record<string, unknown>).layout === 'studio')
+const isStudio = computed(() => {
+  return (route.meta as Record<string, unknown>).layout === 'studio' ||
+    route.path === '/studio-full' ||
+    route.path === '/studio'
+})
 
 watch(
   isStudio,
