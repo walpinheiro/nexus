@@ -11,6 +11,7 @@ import LayersPanel from '@/components/studio/LayersPanel.vue'
 import FramePanel from '@/components/studio/FramePanel.vue'
 import PreviewModal from '@/components/studio/PreviewModal.vue'
 import NewFrameDialog from '@/components/studio/NewFrameDialog.vue'
+import AiTube from '@/components/studio/AiTube.vue'
 import M3Icon from '@/components/studio/m3/M3Icon.vue'
 import { gerarPromptStudio } from '@/utils/studioPrompt'
 import { useGraph } from '@/stores/useGraph'
@@ -298,5 +299,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     </div>
     <PreviewModal v-if="previewAberto" :inicio-id="studio.screenId" @fechar="previewAberto = false" />
     <NewFrameDialog v-if="dialogNovaTela" @fechar="dialogNovaTela = false" @criar="criarDoDialog" />
+    <AiTube @abrir-prompt="abrirPromptPainel()" />
   </div>
 </template>

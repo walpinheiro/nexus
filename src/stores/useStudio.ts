@@ -300,6 +300,13 @@ export const useStudio = defineStore('studio', () => {
     return true
   }
 
+  function criarItemSemHistorico(kind: string, x: number, y: number, props?: Partial<StudioItem>): StudioItem {
+    const it: StudioItem = { id: rid('it'), kind, label: rotuloDefault(kind), icon: null, variant: 'filled', x: Math.round(x), y: Math.round(y), ...(props ?? {}) } as StudioItem
+    const max = doc.value.groups.reduce((m, g) => Math.max(m, g.order ?? 0), -1)
+    doc.value.groups.push({ id: rid('g'), x: it.x, y: it.y, axis: 'x', order: max + 1, items: [it] })
+    return it
+  }
+
   function criarItem(kind: string, x: number, y: number, label?: string): StudioItem {
     pushHistory()
     const it: StudioItem = { id: rid('it'), kind, label: label ?? rotuloDefault(kind), icon: null, variant: 'filled', x: Math.round(x), y: Math.round(y) }
@@ -449,6 +456,7 @@ export const useStudio = defineStore('studio', () => {
     duplicarFrame,
     removerFrame,
     criarItem,
+    criarItemSemHistorico,
     moverItens,
     removerItens,
     duplicarItens,
