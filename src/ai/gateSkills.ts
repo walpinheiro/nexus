@@ -296,13 +296,45 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
     exemplo: 'Threat model STRIDE documentado cobrindo spoofing de webhook e tampering de payloads.',
     acaoLabel: 'Registrar Threat Model'
   },
-  'PBI-001': {
-    codigo: 'PBI-001',
+  'PBI-SEMBLOQ': {
+    codigo: 'PBI-SEMBLOQ',
+    campoAlvo: 'flag',
+    pergunta: 'Existe alguma flag ou dependência bloqueadora pendente sobre este PBI?',
+    porQueBloqueia: 'Flags bloqueadoras abertas impedem a entrada do item na sprint.',
+    exemplo: 'Remover flag bloqueadora ou resolver o impedimento apontado.',
+    acaoLabel: 'Limpar Bloqueadores'
+  },
+  'PBI-COND-COMPAT': {
+    codigo: 'PBI-COND-COMPAT',
+    campoAlvo: 'contrato',
+    pergunta: 'Sendo o contrato público, foi garantida a compatibilidade e identificados os consumidores homologados?',
+    porQueBloqueia: 'Contratos públicos exigem compatibilidade retroativa e homologação de consumidores.',
+    exemplo: 'Contrato OpenAPI com compatibilidade retroativa declarada e consumidores mapeados.',
+    acaoLabel: 'Garantir Compatibilidade'
+  },
+  'PBI-COND-ROLLBACK': {
+    codigo: 'PBI-COND-ROLLBACK',
+    campoAlvo: 'rollback',
+    pergunta: 'Havendo migração destrutiva de dados, cadê o plano de rollback e o plano de dados detalhado?',
+    porQueBloqueia: 'Alterações destrutivas em banco de dados sem plano de reversão bloqueiam a entrada em sprint.',
+    exemplo: 'Plano de rollback com script reverso testado e backup snapshot prévio.',
+    acaoLabel: 'Adicionar Rollback'
+  },
+  'PBI-COND-TELA': {
+    codigo: 'PBI-COND-TELA',
+    campoAlvo: 'contrato',
+    pergunta: 'As telas vinculadas a este entregável consom a API através de contrato formalmente versionado?',
+    porQueBloqueia: 'Interfaces de usuário não podem depender de APIs não versionadas ou instáveis.',
+    exemplo: 'Tela consome endpoint via contrato OpenAPI v1 homologado.',
+    acaoLabel: 'Vincular Contrato à Tela'
+  },
+  'PBI-COND-TESTE': {
+    codigo: 'PBI-COND-TESTE',
     campoAlvo: 'estrategia_teste',
-    pergunta: 'Cadê a Definition of Ready do PBI: critérios de aceite BDD, owner e estratégia de teste definida?',
-    porQueBloqueia: 'PBIs incompletos entram na sprint sem critério de pronto gerando retrabalho no G5.',
-    exemplo: 'Estratégia de teste: "contrato OpenAPI + teste de integração de webhook + unitário"',
-    acaoLabel: 'Completar DoR do PBI'
+    pergunta: 'A estratégia de testes automatizados cobre os requisitos técnicos deste entregável?',
+    porQueBloqueia: 'Entregáveis críticos exigem cobertura e estratégia de testes automatizados especificada.',
+    exemplo: 'Suíte automatizada de testes de integração e regressão.',
+    acaoLabel: 'Especificar Testes'
   },
   'PBI-ACEITE': {
     codigo: 'PBI-ACEITE',
@@ -524,7 +556,7 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
       id: 'delivery.pbi_planner',
       nome: 'PBI & DoR Planner',
       gate: 'G4',
-      roles: ['Dev', 'QA', 'TechLead'],
+      roles: ['PO', 'Dev', 'QA', 'TechLead'],
       descricao: 'Decompõe entregáveis em Definition of Ready com estratégias de testes automatizados.',
       autonomia: 'Não fecha estimativas de squad e não divide itens sem aceite verificável.',
       checks: [
@@ -549,7 +581,11 @@ export const GATE_SKILLS: Record<GateId, GateSkill[]> = {
         DICIONARIO_PERGUNTAS['PBI-OWNER'],
         DICIONARIO_PERGUNTAS['PBI-TESTE'],
         DICIONARIO_PERGUNTAS['PBI-CONTRATO'],
-        DICIONARIO_PERGUNTAS['PBI-BLOQ']
+        DICIONARIO_PERGUNTAS['PBI-BLOQ'],
+        DICIONARIO_PERGUNTAS['PBI-COND-COMPAT'],
+        DICIONARIO_PERGUNTAS['PBI-COND-ROLLBACK'],
+        DICIONARIO_PERGUNTAS['PBI-COND-TELA'],
+        DICIONARIO_PERGUNTAS['PBI-COND-TESTE']
       ].filter(Boolean)
     }
   ],
@@ -861,7 +897,6 @@ export function gerarPropostaPatch(
       }
     }
 
-    case 'PBI-001':
     case 'PBI-ACEITE':
     case 'PBI-TESTE':
     case 'PBI-ORIGEM':
@@ -869,7 +904,12 @@ export function gerarPropostaPatch(
     case 'PBI-DEP':
     case 'PBI-OWNER':
     case 'PBI-CONTRATO':
-    case 'PBI-BLOQ': {
+    case 'PBI-BLOQ':
+    case 'PBI-SEMBLOQ':
+    case 'PBI-COND-COMPAT':
+    case 'PBI-COND-ROLLBACK':
+    case 'PBI-COND-TELA':
+    case 'PBI-COND-TESTE': {
       // DoR PBI
       const p = objeto as unknown as PBI & { criterios_bdd?: CriterioBdd[] }
       const deBdd = JSON.stringify(p.criterios_bdd ?? [])
@@ -1111,7 +1151,7 @@ export function processarMensagemGate(
 
   // 6. Pedidos de PBI / DoR (G4)
   if (msg.includes('pbi') || msg.includes('dor') || msg.includes('ready') || msg.includes('teste')) {
-    const prop = gerarPropostaPatch(objeto, 'PBI-001', mensagem)
+    const prop = gerarPropostaPatch(objeto, 'PBI-ACEITE', mensagem)
     if (prop) {
       return {
         texto: `**Proposta Gerada:** Completei a Definition of Ready do PBI "${objeto.titulo}" com critérios BDD, owner e estratégia de teste.`,
@@ -1120,7 +1160,7 @@ export function processarMensagemGate(
           justificativa: prop.justificativa,
           mudancas: prop.mudancas
         },
-        checksAfetados: ['PBI-001']
+        checksAfetados: ['PBI-ACEITE', 'PBI-TESTE', 'PBI-OWNER', 'PBI-ESCOPO']
       }
     }
   }

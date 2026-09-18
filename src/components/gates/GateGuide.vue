@@ -346,7 +346,7 @@ const passos = computed<PassoGuia[]>(() => {
         },
         {
           id: 'g3-p9',
-          titulo: '9. Solicitar aprovação a Arquiteto, Tech Lead e Segurança',
+          titulo: '9. Solicitar aprovação a Arquiteto, Tech Lead, Segurança e Dev',
           descricao: 'Aprovação conjunta da arquitetura de solução e contratos.',
           concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
           acaoLabel: 'Solicitar approve',
