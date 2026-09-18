@@ -29,7 +29,7 @@ const modalPromptFullscreen = ref(false)
 const route = useRoute()
 const router = useRouter()
 const renomeando = ref('')
-const abaEsq = ref<'parts' | 'layers'>('parts')
+const abaEsq = ref<'parts' | 'layers' | 'telas'>('parts')
 const railTab = ref<RailTab>('parts')
 const abaDir = ref<'edit' | 'prompt'>('edit')
 const previewAberto = ref(false)
@@ -59,6 +59,11 @@ const origemRota = computed(() => {
   return '/backlog'
 })
 const projetoNome = computed(() => projects.atual?.titulo ?? 'Sem projeto')
+
+function irParaAbaEsq(t: 'parts' | 'layers' | 'telas') {
+  abaEsq.value = t
+  if (t === 'parts' || t === 'layers') railTab.value = t
+}
 
 function criarDoDialog(v: { nome: string; preset: 'phone' | 'desktop' }) {
   if (v.preset === 'phone') studio.adicionarFrame(412, 892, v.nome || 'Nova tela')
@@ -233,26 +238,47 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </button>
       </span>
     </header>
+    <div class="flex h-12 shrink-0 items-center border-b border-nexo-border bg-nexo-surface px-3" role="toolbar" aria-label="Toolbar do Studio">
+      <StudioToolbar @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" @abrir-ask="askAiAberto = true" />
+    </div>
     <div class="relative min-h-0 flex-1">
-      <div class="pointer-events-none absolute left-0 right-0 top-2 z-30 flex justify-center">
-        <div class="pointer-events-auto" style="border-radius: 28px">
-          <StudioToolbar @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" @abrir-ask="askAiAberto = true" />
-        </div>
-      </div>
-      <div class="pointer-events-none absolute bottom-4 right-4 z-30 flex justify-end">
-        <div class="pointer-events-auto flex items-center gap-1 rounded-full border border-nexo-border bg-white px-2 py-1 text-xs shadow-card" role="group" aria-label="Zoom do stage">
-          <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="rounded-full px-1.5 py-0.5" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
-          <span class="min-w-10 text-center" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
-          <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="rounded-full px-1.5 py-0.5" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
-          <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="rounded-full border border-nexo-border px-2 py-0.5" @click="studio.zoom = 0.7"><M3Icon name="fit_screen" :size="14" label="Ajustar" /></button>
-        </div>
-      </div>
       <div class="flex h-full min-h-0">
       <StudioIconRail :ativo="railTab" @selecionar="(t) => { railTab = t; if (t === 'parts' || t === 'layers') abaEsq = t }" />
-      <aside class="flex w-60 shrink-0 flex-col border-r border-nexo-border bg-white" aria-label="Paleta e layers">
-        <p class="border-b border-nexo-border p-2 text-xs font-semibold" aria-live="polite">{{ abaEsq === 'parts' ? 'Parts' : 'Layers' }}</p>
+      <aside class="flex w-60 shrink-0 flex-col border-r border-nexo-border bg-white" aria-label="Paleta, layers e telas">
+        <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas laterais">
+          <button type="button" role="tab" :aria-selected="abaEsq === 'parts'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'parts' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="irParaAbaEsq('parts')">Parts</button>
+          <button type="button" role="tab" :aria-selected="abaEsq === 'layers'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'layers' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="irParaAbaEsq('layers')">Layers</button>
+          <button type="button" role="tab" :aria-selected="abaEsq === 'telas'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'telas' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="irParaAbaEsq('telas')">Telas</button>
+        </div>
         <PartsPalette v-if="abaEsq === 'parts'" class="min-h-0 flex-1 border-r-0" />
-        <LayersPanel v-else class="min-h-0 flex-1" />
+        <LayersPanel v-else-if="abaEsq === 'layers'" class="min-h-0 flex-1" />
+        <div v-else class="flex min-h-0 flex-1 flex-col overflow-auto p-2 text-xs" aria-label="Telas">
+          <ul class="space-y-1">
+            <li
+              v-for="fr in studio.doc.frames"
+              :key="fr.id"
+              class="rounded-badge px-2 py-1.5"
+              :class="fr.id === studio.screenId ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'bg-nexo-canvas'"
+            >
+              <button type="button" class="w-full truncate text-left" :title="`${fr.name} ${fr.w}×${fr.h}`" @click="studio.screenId = fr.id; studio.persist()">
+                {{ renomeando === fr.id ? '' : fr.name }} <span class="text-nexo-muted">{{ fr.w }}×{{ fr.h }}</span>
+              </button>
+              <div class="mt-1 flex gap-1">
+                <button type="button" class="flex-1 rounded-btn border border-nexo-border px-1.5 py-0.5" :title="`Renomear ${fr.name}`" @click="renomeando = renomeando === fr.id ? '' : fr.id">Renomear</button>
+                <button type="button" class="flex-1 rounded-btn border border-nexo-border px-1.5 py-0.5" :title="`Duplicar ${fr.name}`" @click="studio.duplicarFrame(fr.id)">Duplicar</button>
+                <button type="button" class="flex-1 rounded-btn border border-nexo-blocked-border px-1.5 py-0.5 text-nexo-blocked" :title="`Remover ${fr.name}`" @click="confirmarRemocao(fr.id)">Remover</button>
+              </div>
+              <input
+                v-if="renomeando === fr.id"
+                :value="fr.name"
+                aria-label="Renomear tela"
+                class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1"
+                @change="renomeando && studio.renomearFrame(renomeando, ($event.target as HTMLInputElement).value); renomeando = ''"
+              />
+            </li>
+          </ul>
+          <button type="button" title="Criar tela (abre diálogo)" class="mt-2 rounded-btn border border-nexo-primary px-3 py-1.5 font-semibold text-nexo-primary" @click="dialogNovaTela = true">+ Nova tela</button>
+        </div>
       </aside>
       <StudioStage ref="stageRef" class="m-2" @preview="abrirPreview()" />
       <aside class="flex w-72 shrink-0 flex-col border-l border-nexo-border bg-white" aria-label="Painel direito">
@@ -290,45 +316,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </div>
       </aside>
       </div>
-    </div>
-    <div class="flex items-center gap-2 overflow-auto border-t border-nexo-border bg-white p-2 text-xs" aria-label="Telas">
-      <button
-        v-for="fr in studio.doc.frames"
-        :key="fr.id"
-        type="button"
-        class="shrink-0 rounded-btn border px-3 py-1.5"
-        :class="fr.id === studio.screenId ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'"
-        @click="studio.screenId = fr.id; studio.persist()"
-      >
-        {{ renomeando === fr.id ? '' : fr.name }} <span class="text-nexo-muted">{{ fr.w }}×{{ fr.h }}</span>
-      </button>
-      <span class="flex shrink-0 gap-1">
-        <button type="button" title="Criar tela (pergunta mobile ou desktop)" class="rounded-btn border border-nexo-primary px-3 py-1 font-semibold text-nexo-primary" @click="dialogNovaTela = true">+ Nova tela</button>
-      </span>
-      <span class="ml-auto flex shrink-0 gap-1">
-        <button
-          v-for="fr in studio.doc.frames"
-          :key="'m' + fr.id"
-          type="button"
-          class="rounded-btn border border-nexo-border px-1.5 py-1"
-          :title="`Renomear/duplicar/remover ${fr.name}`"
-          @click="renomeando = renomeando === fr.id ? '' : fr.id"
-        >
-          Editar {{ fr.name }}
-        </button>
-      </span>
-    </div>
-    <div v-if="renomeando" class="flex items-center gap-2 border-t border-nexo-border bg-white p-2 text-xs">
-      <span>Editar: {{ studio.doc.frames.find((x) => x.id === renomeando)?.name }}</span>
-      <input
-        :value="studio.doc.frames.find((x) => x.id === renomeando)?.name ?? ''"
-        aria-label="Renomear tela"
-        class="rounded-btn border border-nexo-border px-2 py-1"
-        @change="renomeando && studio.renomearFrame(renomeando, ($event.target as HTMLInputElement).value)"
-      />
-      <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="renomeando && studio.duplicarFrame(renomeando)">Duplicar</button>
-      <button type="button" class="rounded-btn border border-nexo-blocked-border px-2 py-1 text-nexo-blocked" @click="renomeando && confirmarRemocao(renomeando); renomeando = ''">Remover</button>
-      <button type="button" class="underline" @click="renomeando = ''">fechar</button>
     </div>
     <PreviewModal v-if="previewAberto" :inicio-id="studio.screenId" @fechar="previewAberto = false" />
     <NewFrameDialog v-if="dialogNovaTela" @fechar="dialogNovaTela = false" @criar="criarDoDialog" />
