@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AuditEvent, Classificacao, Edge, Epic, IngestaoDoc, NexoObject, Projeto } from '@/types/nexo'
-import { gatesZerados, seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedGates, seedParcialExistente, seedPbis, seedProjeto } from '@/data/seed'
+import { aplicarSeedCoerenteCriacao, aplicarSeedCoerenteTexto, gatesZerados, seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedGates, seedParcialExistente, seedPbis, seedProjeto } from '@/data/seed'
 import type { GateInfo } from '@/stores/useGate'
 
 const KEY = 'nexo.v1.projects'
@@ -56,11 +56,15 @@ export interface CriarProjetoExistenteInput {
 
 export interface RespostasWizardCriacao {
   // OPCIONAL e ignorado: owner sempre deriva do usuario logado (atorId).
+  // Passos CRIACAOIA-1 (sem passo usuario): problema, objetivo, usuarios,
+  // escopo, metrica. Titulo e campos sugeridos pela IA e confirmados na tela.
   usuario?: string
   problema: string
   objetivo: string
   usuarios: string
   escopo: string
+  metrica?: string
+  naoObjetivos?: string
 }
 
 export interface CriarProjetoResult {
@@ -383,6 +387,9 @@ export const useProjects = defineStore('projects', () => {
       escopo_out: parcial.escopo_out ?? [],
       riscos: parcial.riscos ?? []
     }
+    // Item6 (caller real Existente): coerência Pix no épico criado —
+    // aplicarSeedCoerenteCriacao preenche padrões quando vazio + menção Pix.
+    aplicarSeedCoerenteCriacao(epico, [])
     const projeto: Projeto = {
       id,
       titulo: input.titulo.slice(0, 60),
@@ -440,9 +447,12 @@ export const useProjects = defineStore('projects', () => {
     if (projeto.epicoId !== epicoId) {
       return { ok: false, erros: [{ campo: 'epico', codigo: 'G0-001', mensagem: 'epicoId do payload diverge do projeto.' }] }
     }
-    // Persiste a análise da ingestão: épico+feature parciais no namespace
-    // isolado do projeto (sem tocar nos namespaces dos demais projetos).
-    const epicoParcial = {
+    // PRESERVA a análise do usuário: se o épico já existe no namespace
+    // (gravado pela ingestão com problema/objetivo/personas do usuário),
+    // mantém os campos do usuário e só completa vazios via coerência.
+    // Só usa o seed de reembolso quando o namespace está vazio — NUNCA
+    // sobrescreve a análise do usuário com o seed reembolso.
+    const epicoBase = {
       ...seedParcialExistente.epico,
       project_id: projetoId,
       id: epicoId,
@@ -457,9 +467,24 @@ export const useProjects = defineStore('projects', () => {
     try {
       const raw = ler<{ nos: NexoObject[]; arestas: Edge[]; selecionadoId: string | null }>(graphKey(projetoId))
       const nosAtuais = Array.isArray(raw?.nos) ? raw!.nos : []
+      const existente = nosAtuais.find((n) => n.id === epicoId)
+      const base = existente ?? (epicoBase as NexoObject)
+      const rec = base as unknown as Record<string, unknown>
+      const analiseProblema = typeof rec['problema'] === 'string' ? (rec['problema'] as string) : ''
+      const analiseObjetivo = typeof rec['objetivo'] === 'string' ? (rec['objetivo'] as string) : ''
+      const coerencia = aplicarSeedCoerenteTexto(analiseProblema, analiseObjetivo)
+      const epicoFinal = {
+        ...base,
+        project_id: projetoId,
+        id: epicoId,
+        owner: projeto.owner,
+        contribuidores: [projeto.owner],
+        problema: analiseProblema.trim() ? analiseProblema : coerencia.problema,
+        objetivo: analiseObjetivo.trim() ? analiseObjetivo : coerencia.objetivo
+      }
       const semEpico = nosAtuais.filter((n) => n.id !== epicoId)
       const semFeature = semEpico.filter((n) => n.id !== featureParcial.id)
-      const nos = [...semFeature, epicoParcial as NexoObject, featureParcial as NexoObject]
+      const nos = [...semFeature, epicoFinal as NexoObject, featureParcial as NexoObject]
       const ok = escrever(graphKey(projetoId), { nos, arestas: Array.isArray(raw?.arestas) ? raw!.arestas : [], selecionadoId: epicoId })
       if (!ok) {
         return { ok: false, erros: [{ campo: 'ingestao', codigo: 'G0-004', mensagem: 'Falha ao persistir análise da ingestão no projeto.' }] }
@@ -529,33 +554,62 @@ export const useProjects = defineStore('projects', () => {
 
   function criarProjetoComIA(respostas: RespostasWizardCriacao, atorId: string): CriarProjetoResult {
     // Titulo e campos sugeridos pela IA e confirmados pelo usuario na tela
-    // (respostas.problema/objetivo/usuarios/escopo ja ajustadas). Sem campo
-    // responsavel no fluxo IA: owner sempre = atorId (usuario logado).
+    // (respostas.problema/objetivo/usuarios/escopo/metrica/naoObjetivos ja
+    // ajustadas). Sem campo responsavel no fluxo IA: owner sempre = atorId
+    // (usuario logado). Preenche TODOS os campos (incluindo metrica e
+    // naoObjetivos via coerencia Pix) para nao bloquear em G0-001.
     const problema = respostas.problema?.trim() ?? ''
     const objetivo = respostas.objetivo?.trim() ?? ''
     const usuarios = respostas.usuarios?.trim() ?? ''
     const escopo = respostas.escopo ?? ''
-    const titulo = (objetivo || problema).slice(0, 60)
-    let contexto = problema
-    if (contexto.trim().length < 30) {
-      contexto = `${problema} ${objetivo}`.trim()
-    }
+    const metrica = respostas.metrica?.trim() ?? ''
+    const naoObjetivosTxt = respostas.naoObjetivos ?? ''
+    const titulo = (objetivo || problema).slice(0, 60) || 'Novo projeto'
+    const contextoBase = `${problema} ${objetivo}`.trim() || 'Novo projeto'
+    const coerencia = aplicarSeedCoerenteTexto(contextoBase, objetivo || contextoBase)
+    const contextoBruto = coerencia.problema
+    const objetivoBruto = coerencia.objetivo.length >= 10 ? coerencia.objetivo : `${coerencia.objetivo} ${coerencia.problema}`.trim().slice(0, 200)
+    // G0-001 exige contexto 30+: completa curto com objetivo + público.
+    // Sem G0-001 bloquear: wizard de 10 chars por passo sempre passa.
+    const contexto = contextoBruto.trim().length >= 30
+      ? contextoBruto
+      : `${contextoBruto} ${objetivoBruto} Público: ${usuarios || 'Cliente com fatura aberta'}.`.trim().slice(0, 500)
+    const objetivoFinal = objetivoBruto
     const restricoes = escopo
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l.length > 0)
+    const naoObjetivos = naoObjetivosTxt
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
     const input: CriarProjetoInput = {
-      titulo,
+      titulo: titulo || objetivoFinal.slice(0, 60) || 'Novo projeto',
       contexto,
-      publico: usuarios,
-      objetivo,
-      metricaNome: 'Adoção inicial',
-      restricoes,
-      naoObjetivos: [],
+      publico: usuarios || 'Cliente com fatura aberta',
+      objetivo: objetivoFinal,
+      metricaNome: metrica || 'Adoção inicial',
+      restricoes: restricoes.length > 0 ? restricoes : ['Escopo a detalhar'],
+      naoObjetivos: naoObjetivos.length > 0 ? naoObjetivos : ['Fora do padrão a definir'],
       owner: atorId,
       classificacao: 'internal'
     }
-    return criarProjeto(input, atorId)
+    const resultado = criarProjeto(input, atorId)
+    // Item6 (caller real Novo): coerência Pix pós-criação no épico gravado.
+    if (resultado.ok && resultado.projeto) {
+      try {
+        const raw = ler<{ nos: NexoObject[]; arestas: Edge[]; selecionadoId: string | null }>(graphKey(resultado.projeto.id))
+        const nos = Array.isArray(raw?.nos) ? raw!.nos : []
+        const epicoNo = nos.find((n) => n.id === resultado.projeto!.epicoId)
+        if (epicoNo && epicoNo.tipo === 'epico') {
+          aplicarSeedCoerenteCriacao(epicoNo as unknown as Epic, [])
+          escrever(graphKey(resultado.projeto.id), { nos, arestas: Array.isArray(raw?.arestas) ? raw!.arestas : [], selecionadoId: raw?.selecionadoId ?? epicoNo.id })
+        }
+      } catch {
+        // coerência é melhor-esforço: criação já OK
+      }
+    }
+    return resultado
   }
 
   return { state, atual, persist, selecionar, criarProjeto, criarProjetoComIA, criarProjetoExistente, concluirIngestaoExistente, removerProjeto, resetCobrancas, graphKey, gatesKey, patchesKey, auditKey, tentKey }

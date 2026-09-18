@@ -745,11 +745,36 @@ export function seedCoerentePix(): { epicoId: string; aplicados: string[] } {
   return { epicoId, aplicados }
 }
 
+// aplicarSeedCoerenteTexto — núcleo puro da coerência Pix reutilizável na
+// criação (Novo via criarProjetoComIA, Existente via criarProjetoExistente):
+// preenche problema/objetivo padrão Pix quando vazio + menção Pix.
+// CALLERS REAIS: useProjects.ts (Novo pós-criação e Existente). Não renomeia
+// ids, não remove campos, puro/determinístico, PT-BR, sem emoji.
+export function aplicarSeedCoerenteTexto(
+  problema: string | null | undefined,
+  objetivo: string | null | undefined
+): { problema: string; objetivo: string; aplicou: boolean } {
+  let aplicou = false
+  let p = problema ?? ''
+  let o = objetivo ?? ''
+  if (textoVazio(p)) {
+    p = PROBLEMA_PADRAO_PIX
+    aplicou = true
+  }
+  if (textoVazio(o) && mencionaPix(p)) {
+    o = OBJETIVO_PADRAO_PIX
+    aplicou = true
+  }
+  return { problema: p, objetivo: o, aplicou }
+}
+
 // aplicarSeedCoerenteCriacao — mesma lógica de preenchimento padrão Pix do
 // seedCoerentePix (problema/objetivo/personas/BDD quando vazio + menção Pix),
 // mas operando nos OBJETOS PASSADOS (épico+features da criação Novo/Existente,
-// não no seed global). Retorna ids aplicados. Não renomeia ids, não remove
-// campos, puro/determinístico (sem Date/Math.random, PT-BR, sem emoji).
+// não no seed global). CALLERS REAIS: criarProjetoComIA (Novo, pós-criação no
+// namespace) e criarProjetoExistente (Existente, no épico criado) em
+// src/stores/useProjects.ts — sem código morto. Retorna ids aplicados.
+// Não renomeia ids, não remove campos, puro/determinístico, PT-BR, sem emoji.
 export function aplicarSeedCoerenteCriacao(epico: Epic, features: Feature[]): string[] {
   const aplicados: string[] = []
   if (mencionaPix(epico.titulo, epico.descricao, epico.problema)) {

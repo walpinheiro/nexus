@@ -1772,21 +1772,18 @@ export function processarMensagemWizard(
   return { texto: linhas.slice(0, 8).join('\n') }
 }
 
-// Wizard de criacao (tela de novo projeto): 5 perguntas, uma por vez.
-// Reaproveita diagnosticarFaltasGate + inferencia G0DIN, sem alterar
+// Wizard de criacao CRIACAOIA-1 (tela de novo projeto): 5 PASSOS SEM passo
+// usuario (responsavel sempre = usuario logado): problema, objetivo,
+// usuarios, escopo, metrica. Uma pergunta por vez. Reaproveita
+// diagnosticarFaltasGate + inferencia G0DIN, sem alterar
 // processarMensagemWizard nem o bloco G0. Max 8 linhas, zero emoji, PT-BR.
 export interface PassoWizardCriacao {
-  id: 'usuario' | 'problema' | 'objetivo' | 'usuarios' | 'escopo'
+  id: 'problema' | 'objetivo' | 'usuarios' | 'escopo' | 'metrica'
   pergunta: string
   ajuda: string
 }
 
 export const PASSOS_WIZARD_CRIACAO: PassoWizardCriacao[] = [
-  {
-    id: 'usuario',
-    pergunta: 'Quem e o responsavel pelo projeto?',
-    ajuda: 'Informe nome ou papel, ex.: Sou o PM do checkout.'
-  },
   {
     id: 'problema',
     pergunta: 'Qual problema o projeto resolve?',
@@ -1806,6 +1803,11 @@ export const PASSOS_WIZARD_CRIACAO: PassoWizardCriacao[] = [
     id: 'escopo',
     pergunta: 'O que entra e o que fica fora do escopo?',
     ajuda: 'Opcional. Ex.: Dentro: Pix imediato. Fora: Pix credito.'
+  },
+  {
+    id: 'metrica',
+    pergunta: 'Qual metrica mede o sucesso?',
+    ajuda: 'Ex.: Adoção inicial, conversão, tempo de liquidação.'
   }
 ]
 
@@ -1837,18 +1839,9 @@ export function wizardCriacao(
     pendencias = diag.faltas.length
   }
 
-  // Validacao do passo: usuario nao-vazio; problema/objetivo/usuarios min 10; escopo opcional.
-  if (passoId === 'usuario') {
-    if (!texto) {
-      const linhas = [
-        'Nao anotei ainda: falta o responsavel.',
-        `Pergunta: ${passo?.pergunta ?? 'Quem e o responsavel pelo projeto?'}`,
-        `Ajuda: ${passo?.ajuda ?? 'Informe nome ou papel.'}`,
-        'Responda em texto livre para avancar.'
-      ]
-      return { texto: linhas.slice(0, 8).join('\n') }
-    }
-  } else if (passoId === 'escopo') {
+  // Validacao do passo: problema/objetivo/usuarios/metrica min 10;
+  // escopo opcional. Sem passo usuario: responsavel sempre = usuario logado.
+  if (passoId === 'escopo') {
     if (!texto) {
       const linhas = [
         'Anotei: escopo ficara para revisao.',
@@ -1870,12 +1863,11 @@ export function wizardCriacao(
   }
 
   // Enriquece a confirmacao com a inferencia G0DIN quando houver texto.
+  // Sem passo usuario: responsavel sempre = usuario logado (atorId na criacao).
   const extraido = extrairRespostasG0DoTexto(texto)
   const inferido = inferirProblemaObjetivo(texto, objeto?.titulo ?? '')
   let detalhe = resumirWizard(texto)
-  if (passoId === 'usuario') {
-    detalhe = resumirWizard(extraido['owner'] || texto, 60)
-  } else if (passoId === 'problema') {
+  if (passoId === 'problema') {
     detalhe = resumirWizard(extraido['problema'] || inferido.problema || texto)
   } else if (passoId === 'objetivo') {
     detalhe = resumirWizard(extraido['objetivo'] || inferido.objetivo || texto)
