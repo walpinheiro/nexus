@@ -41,6 +41,7 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
     const desc = String(objeto.descricao ?? '')
     const prob = String(o['problema'] ?? '')
     const personas = Array.isArray(o['personas']) ? (o['personas'] as unknown[]) : []
+    const ator = String(o['ator'] ?? '').trim()
     checks.push({
       codigo: 'ENQ-001',
       descricao: 'Problema ou oportunidade descrito (mín. 20 caracteres)',
@@ -49,21 +50,38 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
     })
     checks.push({
       codigo: 'ENQ-002',
-      descricao: 'Público-alvo ou personas identificadas',
+      descricao: 'Público-alvo: personas[] ou ator real (sem heurística textual)',
       severidade: 'bloqueante',
-      ok: personas.length >= 1 || String(o['ator'] ?? '').trim().length > 0 || desc.toLowerCase().includes('para') || desc.toLowerCase().includes('usuário')
+      ok: personas.length >= 1 || ator.length > 0
     })
     checks.push({
       codigo: 'ENQ-003',
-      descricao: 'Hipótese de valor com métrica observável',
+      descricao: 'Hipótese de valor com métrica refutável (nome + alvo)',
       severidade: 'bloqueante',
-      ok: String(o['objetivo'] ?? '').trim().length >= 10 || desc.toLowerCase().includes('métrica') || desc.toLowerCase().includes('kpi') || desc.trim().length >= 30
+      ok: ((): boolean => {
+        const obj = String(o['objetivo'] ?? '').trim()
+        const kpis = Array.isArray(o['kpis']) ? (o['kpis'] as Record<string, unknown>[]) : []
+        return obj.length >= 10 && kpis.some((k) => String(k['nome'] ?? '').trim() !== '' && String(k['alvo'] ?? '').trim() !== '')
+      })()
     })
     checks.push({
       codigo: 'ENQ-004',
       descricao: 'Owner/sponsor definido',
       severidade: 'bloqueante',
       ok: (objeto.owner ?? '').trim().length > 0
+    })
+    checks.push({
+      codigo: 'ENQ-005',
+      descricao: 'Restrições e não-objetivos declarados (escopo_in/out)',
+      severidade: 'bloqueante',
+      ok: (Array.isArray(o['escopo_in']) ? (o['escopo_in'] as unknown[]).length : 0) >= 1 &&
+        (Array.isArray(o['escopo_out']) ? (o['escopo_out'] as unknown[]).length : 0) >= 1
+    })
+    checks.push({
+      codigo: 'ENQ-006',
+      descricao: 'Suposições e riscos declarados (riscos[])',
+      severidade: 'bloqueante',
+      ok: (Array.isArray(o['riscos']) ? (o['riscos'] as unknown[]).length : 0) >= 1
     })
   }
 
@@ -79,13 +97,13 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
     })
     checks.push({
       codigo: 'EPC-002',
-      descricao: 'Épico possui ao menos 1 KPI com nome, unidade, alvo e responsável',
+      descricao: 'Épico possui ao menos 1 KPI com nome, unidade, alvo, janela e responsável',
       severidade: 'bloqueante',
       ok:
         kpis.length >= 1 &&
         kpis.every((k) => {
           const kk = k as Record<string, unknown>
-          return kk['nome'] && kk['unidade'] && kk['alvo'] && kk['responsavel']
+          return kk['nome'] && kk['unidade'] && kk['alvo'] && kk['janela'] && kk['responsavel']
         })
     })
     const scopeIn = Array.isArray(e['escopo_in']) ? (e['escopo_in'] as unknown[]) : []
@@ -95,6 +113,42 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
       descricao: 'Escopo dentro/fora explícito',
       severidade: 'bloqueante',
       ok: scopeIn.length >= 1 && scopeOut.length >= 1
+    })
+    checks.push({
+      codigo: 'EPC-004',
+      descricao: 'Resultado observável declarado (objetivo, não-solução)',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const obj = String(e['objetivo'] ?? '').trim()
+        if (obj.length < 10) return false
+        return !/^(implementar|criar tela|desenvolver sistema|construir api)\b/i.test(obj)
+      })()
+    })
+    checks.push({
+      codigo: 'EPC-005',
+      descricao: 'Risco crítico com probabilidade, impacto, mitigação e owner',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const riscos = Array.isArray(e['riscos']) ? (e['riscos'] as unknown[]) : []
+        return riscos.some((r) => {
+          if (typeof r === 'string') {
+            const s = r.toLowerCase()
+            return s.includes('prob') && s.includes('impacto') && s.includes('mitig') && s.includes('owner')
+          }
+          const rr = r as Record<string, unknown>
+          return rr['probabilidade'] != null && rr['impacto'] != null && rr['mitigacao'] != null && rr['owner'] != null
+        })
+      })()
+    })
+    checks.push({
+      codigo: 'EPC-006',
+      descricao: 'Fonte: 80% dos campos afirmativos preenchidos',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const campos = [problema, String(e['objetivo'] ?? ''), (e['personas'] as unknown[] | undefined)?.length ? 'x' : '', scopeIn.length ? 'x' : '', scopeOut.length ? 'x' : '', kpis.length ? 'x' : '']
+        const ok = campos.filter((c) => String(c).trim().length > 0).length
+        return ok / campos.length >= 0.8
+      })()
     })
   }
 
