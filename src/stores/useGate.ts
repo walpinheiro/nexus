@@ -17,23 +17,32 @@ export interface GateInfo {
   aprovadoEm?: string | null
 }
 
-const seed: GateInfo[] = [
-  { id: 'G0', titulo: 'Enquadramento', status: 'aprovado' },
-  { id: 'G1', titulo: 'Épicos', status: 'aprovado' },
-  { id: 'G2', titulo: 'Features', status: 'revisao' },
-  { id: 'G3', titulo: 'Arquitetura', status: 'rascunho' },
-  { id: 'G4', titulo: 'PBIs', status: 'rascunho' },
-  { id: 'G5', titulo: 'Entrega', status: 'rascunho' }
-]
+import { seedGates } from '@/data/seed'
+
+const seed: GateInfo[] = seedGates
+
+// Backfill sem perda: LS legado com G0/G1 aprovado mas sem baseline
+// migra para baseline do seed (tentativas/solicitações preservadas).
+function backfillBaseline(gates: GateInfo[]): GateInfo[] {
+  for (const g of gates) {
+    const ref = seedGates.find((s) => s.id === g.id)
+    if (g.status === 'aprovado' && g.baselineVersao == null && ref?.baselineVersao != null) {
+      g.baselineVersao = ref.baselineVersao
+      g.aprovadoPor = g.aprovadoPor ?? ref.aprovadoPor ?? null
+      g.aprovadoEm = g.aprovadoEm ?? ref.aprovadoEm ?? null
+    }
+  }
+  return gates
+}
 
 function load(): GateInfo[] {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return JSON.parse(raw) as GateInfo[]
+    if (raw) return backfillBaseline(JSON.parse(raw) as GateInfo[])
   } catch {
     // ignora e usa seed
   }
-  return seed
+  return seed.map((s) => ({ ...s }))
 }
 
 export interface TentativaGate {
@@ -101,7 +110,7 @@ export const useGate = defineStore('gate', () => {
       }
       return null
     })()
-    gates.value = g ?? seed.map((s) => ({ ...s }))
+    gates.value = g ? backfillBaseline(g) : seed.map((s) => ({ ...s }))
     try {
       const raw = localStorage.getItem(`nexo.v1.gateAttempts.${pid}`)
       tentativas.value = raw ? (JSON.parse(raw) as TentativaGate[]) : []
