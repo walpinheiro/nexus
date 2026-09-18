@@ -16,11 +16,21 @@ function load(): UsersState {
     if (raw) {
       const s = JSON.parse(raw) as UsersState
       // backfill sem perda: garante u-po (PO) e u-neg (Negócio) em bases antigas
+      let mudou = false
       if (!s.usuarios.some((u) => u.id === 'u-po')) {
         s.usuarios.push({ id: 'u-po', nome: 'Paulo (PO)', papel: 'PO', projeto_ids: ['proj-cobrancas'] })
+        mudou = true
       }
       if (!s.usuarios.some((u) => u.id === 'u-neg')) {
         s.usuarios.push({ id: 'u-neg', nome: 'Nina (Negócio)', papel: 'Negocio', projeto_ids: ['proj-cobrancas'] })
+        mudou = true
+      }
+      if (mudou) {
+        try {
+          localStorage.setItem(KEY, JSON.stringify(s))
+        } catch {
+          // segue em memória
+        }
       }
       return s
     }

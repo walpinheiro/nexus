@@ -42,6 +42,15 @@ function loadGraph(): GraphState {
         if (n.tipo === 'feature' && !Array.isArray(r['telas_estados'])) r['telas_estados'] = []
         if (!('evidencia' in r)) r['evidencia'] = {}
         if (!('nfrs' in r)) r['nfrs'] = []
+        // migração riscos string legada → RiscoEstruturado
+        if (n.tipo === 'epico' && Array.isArray(r['riscos'])) {
+          const arr = r['riscos'] as unknown[]
+          r['riscos'] = arr.map((x) =>
+            typeof x === 'string'
+              ? { probabilidade: 'média', impacto: 'médio', mitigacao: x, owner: 'u-pm' }
+              : x
+          )
+        }
         i++
       }
       if (!s.nos.some((n) => n.gate === 'G0' || n.id === 'enq-pix')) {
@@ -507,7 +516,7 @@ export const useGraph = defineStore('graph', () => {
     undoStack.value = []
     redoStack.value = []
     state.value = {
-      nos: [seedEpico as NexoObject, ...(seedFeatures as NexoObject[]), ...(seedPbis as NexoObject[])],
+      nos: [seedEnquadramento as NexoObject, seedEpico as NexoObject, ...(seedFeatures as NexoObject[]), ...(seedPbis as NexoObject[])],
       arestas: seedEdges,
       selecionadoId: 'ft-confirmar'
     }
