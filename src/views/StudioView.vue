@@ -12,9 +12,12 @@ import FramePanel from '@/components/studio/FramePanel.vue'
 import PreviewModal from '@/components/studio/PreviewModal.vue'
 import NewFrameDialog from '@/components/studio/NewFrameDialog.vue'
 import M3Icon from '@/components/studio/m3/M3Icon.vue'
+import { gerarPromptStudio } from '@/utils/studioPrompt'
+import { useGraph } from '@/stores/useGraph'
 
 const studio = useStudio()
 const projects = useProjects()
+const graph = useGraph()
 const route = useRoute()
 const router = useRouter()
 const renomeando = ref('')
@@ -22,6 +25,9 @@ const abaEsq = ref<'parts' | 'layers'>('parts')
 const abaDir = ref<'edit' | 'prompt'>('edit')
 const previewAberto = ref(false)
 const dialogNovaTela = ref(false)
+const promptEscopo = ref<string>('tudo')
+const promptTexto = ref('')
+const promptCopiado = ref('')
 const menuAberto = ref(false)
 const menuBtn = ref<HTMLButtonElement | null>(null)
 const itemMenuAberto = ref<number>(0)
@@ -56,6 +62,39 @@ function confirmarRemocao(id: string) {
 
 function abrirPreview() {
   previewAberto.value = true
+}
+
+function abrirPromptPainel() {
+  abaDir.value = 'prompt'
+  gerarPrompt()
+}
+
+function gerarPrompt() {
+  promptTexto.value = gerarPromptStudio(studio.doc, promptEscopo.value, graph.state.selecionadoId ?? undefined)
+}
+
+async function copiarPrompt() {
+  gerarPrompt()
+  try {
+    await navigator.clipboard.writeText(promptTexto.value)
+    promptCopiado.value = 'Prompt copiado.'
+  } catch {
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = promptTexto.value
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      promptCopiado.value = ok ? 'Prompt copiado.' : 'Não foi possível copiar — verifique a permissão do navegador.'
+    } catch {
+      promptCopiado.value = 'Não foi possível copiar — verifique a permissão do navegador.'
+    }
+  }
+  setTimeout(() => (promptCopiado.value = ''), 2500)
 }
 
 function voltar() {
@@ -173,7 +212,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     </header>
     <div class="pointer-events-none absolute left-0 right-0 top-14 z-30 flex justify-center">
       <div class="pointer-events-auto" style="border-radius: 28px">
-        <StudioToolbar @preview="abrirPreview()" />
+        <StudioToolbar @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" />
+      </div>
+    </div>
+    <div class="pointer-events-none absolute bottom-4 right-4 z-30 flex justify-end">
+      <div class="pointer-events-auto flex items-center gap-1 rounded-full border border-nexo-border bg-white px-2 py-1 text-xs shadow-card" role="group" aria-label="Zoom do stage">
+        <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="rounded-full px-1.5 py-0.5" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
+        <span class="min-w-10 text-center" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
+        <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="rounded-full px-1.5 py-0.5" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
+        <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="rounded-full border border-nexo-border px-2 py-0.5" @click="studio.zoom = 0.7"><M3Icon name="fit_screen" :size="14" label="Ajustar" /></button>
       </div>
     </div>
     <div class="flex min-h-0 flex-1 pt-14">
@@ -195,9 +242,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <FramePanel />
           <StudioInspector />
         </div>
-        <div v-else class="min-h-0 flex-1 overflow-auto p-3 text-xs">
-          <p class="font-semibold">Prompt da tela atual</p>
-          <p class="mt-1 text-nexo-muted">Use o botão Prompt na toolbar para o design inteiro ou 1 tela (editável antes de copiar).</p>
+        <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden p-3 text-xs">
+          <p class="font-semibold">Prompt da tela</p>
+          <label class="mt-2 block">Escopo
+            <select v-model="promptEscopo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1" @change="gerarPrompt()">
+              <option value="tudo">Design inteiro</option>
+              <option v-for="fr in studio.doc.frames" :key="fr.id" :value="fr.id">1 tela: {{ fr.name }}</option>
+            </select>
+          </label>
+          <textarea v-model="promptTexto" rows="14" class="mt-2 w-full flex-1 rounded-btn border border-nexo-border p-2 font-mono text-[11px]" aria-label="Prompt editável" />
+          <p class="mt-1 text-nexo-muted">{{ promptTexto.length }} caracteres</p>
+          <button type="button" class="mt-1 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white" @click="copiarPrompt()">Copiar prompt</button>
+          <p v-if="promptCopiado" class="mt-1 text-nexo-approved" role="status">{{ promptCopiado }}</p>
         </div>
       </aside>
     </div>

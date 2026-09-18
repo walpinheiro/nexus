@@ -46,6 +46,17 @@ function remover() {
     <label class="block">Nome<input :value="frame.name" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1" @change="studio.renomearFrame(frame.id, ($event.target as HTMLInputElement).value)" /></label>
     <label class="block">Nota<textarea :value="frame.note ?? ''" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1" @change="(frame.note = ($event.target as HTMLTextAreaElement).value, studio.persist())" /></label>
     <p class="text-nexo-muted">Medidas: {{ frame.w }}×{{ frame.h }} · bars esticam à largura; em desktop a navegação vira rail.</p>
+    <label class="block">Paleta do tema
+      <select :value="studio.doc.paletteKey" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1" aria-label="Paleta do tema" @change="studio.doc.paletteKey = ($event.target as HTMLSelectElement).value; studio.persist()">
+        <option value="purple">Roxo</option>
+        <option value="blue">Azul</option>
+        <option value="green">Verde</option>
+        <option value="coral">Coral</option>
+        <option value="amber">Âmbar</option>
+        <option value="teal">Teal</option>
+        <option value="mono">Mono</option>
+      </select>
+    </label>
     <div class="flex gap-1">
       <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-1" @click="studio.duplicarFrame(frame.id)">Duplicar tela</button>
       <button type="button" class="flex-1 rounded-btn border border-nexo-blocked-border px-2 py-1 text-nexo-blocked" @click="remover()">Remover</button>
