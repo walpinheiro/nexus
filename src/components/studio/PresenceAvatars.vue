@@ -1,11 +1,87 @@
 <script setup lang="ts">
-import { nextTick, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onUnmounted, ref } from 'vue'
 import { usePresence } from '@/stores/studioPresence'
 import { useUsers } from '@/stores/useUsers'
 import M3Icon from './m3/M3Icon.vue'
 
+const props = withDefaults(
+  defineProps<{
+    featureId?: string
+    screenId?: string
+    provider?: string
+  }>(),
+  { featureId: '', screenId: '', provider: '' }
+)
+
 const presence = usePresence()
 const users = useUsers()
+
+interface TaskAvatar {
+  userId: string
+  name: string
+  initials: string
+  color: string
+  provider: string
+  screenId: string
+  mesmaTela: boolean
+  online: boolean
+}
+
+interface TaskEntry {
+  userId: string
+  provider: string
+  screenId: string
+}
+
+const temFiltroTask = computed(() => props.featureId !== '')
+
+// Roster da task via detalhe do feed da presence (mesma fonte do share real
+// do StudioView: detalhe carrega feature/provider/screenId; sem store nova).
+// Formato: "na feature <fid> · IA <provider> · tela <sid>".
+const taskAvatars = computed<TaskAvatar[]>(() => {
+  if (!temFiltroTask.value) return []
+  const porUsuario = new Map<string, TaskEntry>()
+  for (const ev of presence.feed) {
+    const m = /na feature (\S+)\s+· IA (\S+)\s+· tela (\S+)/.exec(ev.detalhe ?? '')
+    if (!m || m[1] !== props.featureId) continue
+    if (!porUsuario.has(ev.actorUserId)) {
+      porUsuario.set(ev.actorUserId, {
+        userId: ev.actorUserId,
+        provider: m[2] ?? '',
+        screenId: m[3] ?? ''
+      })
+    }
+  }
+  // Garante o usuário atual (share registra via registrarEvento também)
+  const atual = users.state.currentUserId
+  if (atual && !porUsuario.has(atual)) {
+    const agente = presence.agenteDe(atual)
+    porUsuario.set(atual, { userId: atual, provider: agente.provider, screenId: props.screenId })
+  }
+  return [...porUsuario.values()].map((entry: TaskEntry) => {
+    const doRoster = presence.roster.find((c) => c.userId === entry.userId)
+    const doUsers = users.state.usuarios.find((u) => u.id === entry.userId)
+    const nome = doRoster?.name ?? doUsers?.nome ?? entry.userId
+    const iniciais =
+      doRoster?.initials ??
+      (nome
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((p) => (p[0] ?? '').toUpperCase())
+        .join('') || entry.userId.slice(0, 2).toUpperCase())
+    return {
+      userId: entry.userId,
+      name: nome,
+      initials: iniciais,
+      color: doRoster?.color ?? '#334155',
+      provider: entry.provider,
+      screenId: entry.screenId,
+      mesmaTela: props.screenId !== '' && entry.screenId !== '' && entry.screenId === props.screenId,
+      online: doRoster?.online ?? false
+    }
+  })
+})
 const convidarAberto = ref(false)
 const convidarBtn = ref<HTMLButtonElement | null>(null)
 
@@ -35,17 +111,33 @@ onUnmounted(() => fecharConvidar(false))
 <template>
   <span class="relative flex items-center gap-2">
     <span class="flex items-center" role="group" aria-label="Colaboradores online no Studio">
-      <span
-        v-for="(c, i) in presence.onlineUsers.slice(0, 5)"
-        :key="c.userId"
-        class="relative flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white"
-        :style="{ backgroundColor: c.color, borderColor: c.color, marginLeft: i === 0 ? '0' : '-8px', zIndex: 10 - i }"
-        :title="`${c.name} — ${c.agent.model}`"
-        :aria-label="`${c.name}, online, desenhando com ${c.agent.model}`"
-      >
-        {{ c.initials }}
-        <span class="absolute bottom-0 right-0 h-2 w-2 rounded-full border border-white bg-green-500" aria-hidden="true" />
-      </span>
+      <template v-if="temFiltroTask">
+        <span
+          v-for="(c, i) in taskAvatars.slice(0, 5)"
+          :key="c.userId"
+          class="relative flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white"
+          :class="c.mesmaTela ? 'ring-2 ring-nexo-primary ring-offset-1 ring-offset-white' : ''"
+          :style="{ backgroundColor: c.color, borderColor: c.mesmaTela ? '#ffffff' : c.color, marginLeft: i === 0 ? '0' : '-8px', zIndex: 10 - i }"
+          :title="`${c.name} — IA ${c.provider} — tela ${c.screenId}`"
+          :aria-label="`${c.name}, IA ${c.provider}, tela ${c.screenId}`"
+        >
+          {{ c.initials }}
+          <span class="absolute bottom-0 right-0 h-2 w-2 rounded-full border border-white bg-green-500" aria-hidden="true" />
+        </span>
+      </template>
+      <template v-else>
+        <span
+          v-for="(c, i) in presence.onlineUsers.slice(0, 5)"
+          :key="c.userId"
+          class="relative flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white"
+          :style="{ backgroundColor: c.color, borderColor: c.color, marginLeft: i === 0 ? '0' : '-8px', zIndex: 10 - i }"
+          :title="`${c.name} — ${c.agent.model}`"
+          :aria-label="`${c.name}, online, desenhando com ${c.agent.model}`"
+        >
+          {{ c.initials }}
+          <span class="absolute bottom-0 right-0 h-2 w-2 rounded-full border border-white bg-green-500" aria-hidden="true" />
+        </span>
+      </template>
     </span>
     <button
       ref="convidarBtn"

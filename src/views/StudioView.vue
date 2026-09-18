@@ -61,6 +61,21 @@ const featuresDisponiveis = computed(() => listarFeaturesElegiveis(graph.state.n
 const entradaStudio = computed(() => (featureId.value ? montarEntradaStudio(featureId.value, graph.state.nos) : null))
 const mensagemGeracao = ref('')
 
+// Share real via feed da presence (featureId + provider + screenId por usuário,
+// mesma fonte que PresenceAvatars lê; sem store nova, sem setPresence).
+// Provider reativo vem da presence (agent do usuário atual).
+const providerAtual = computed(() => presence.agenteDe(users.state.currentUserId).provider)
+const telaAtualId = computed(() => studio.screenId || '')
+
+function sincronizarPresenca() {
+  if (!featureId.value) return
+  presence.registrarEvento({
+    actorUserId: users.state.currentUserId,
+    kind: 'join',
+    detalhe: `na feature ${featureId.value} · IA ${providerAtual.value} · tela ${telaAtualId.value || '—'}`
+  })
+}
+
 function origemDaTela(telaId: string): string | undefined {
   const v = graph.vinculosTela.find((x) => x.telaId === telaId)
   if (v) return v.origem
@@ -104,8 +119,18 @@ const exibirEmptyState = computed(() => {
   return true
 })
 
+// Pré-tela com feature (W7 PACK5 TELA): há ?feature= + entradaStudio mas canvas ainda vazio
+const semTelasNoCanvas = computed(() => studio.doc.frames.length === 0)
+const precisaPreTela = computed(() => !!featureId.value && !!entradaStudio.value && semTelasNoCanvas.value)
+// Sem tela vazia: entrada existe mas nenhum artefato derivou telas
+const semTelasDerivadas = computed(() => !!entradaStudio.value && entradaStudio.value.telas.length === 0)
+
 watch(featureId, (novo) => {
   if (novo) featureSelecionadaId.value = novo
+})
+
+watch([featureId, telaAtualId, providerAtual], () => {
+  sincronizarPresenca()
 })
 
 function selecionarFeature(fId: string) {
@@ -377,6 +402,7 @@ onMounted(() => {
   if (studio.doc.frames && studio.doc.frames.length > 0) {
     gerarPrompt()
   }
+  sincronizarPresenca()
   nextTick(() => {
     setTimeout(() => {
       const el = (stageRef.value?.$el ?? document.querySelector('[role="application"]')) as HTMLElement | null
@@ -384,7 +410,9 @@ onMounted(() => {
     }, 320)
   })
 })
-onUnmounted(() => window.removeEventListener('keydown', onKey))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKey)
+})
 </script>
 
 <template>
@@ -447,7 +475,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </RouterLink>
       </div>
       <span class="ml-auto flex items-center gap-2">
-        <PresenceAvatars />
+        <span v-if="featureId" class="hidden text-xs text-nexo-muted md:inline" title="Link de share: mesma URL com ?feature=">
+          compartilhando tela {{ telaAtualId || '—' }} via ?feature={{ featureId }}
+        </span>
+        <PresenceAvatars :feature-id="featureId" :screen-id="telaAtualId" :provider="providerAtual" />
         <span class="hidden text-xs text-nexo-muted md:inline">voltando para {{ origemLabel }}</span>
         <button type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="voltar()">
           <M3Icon name="arrow_back" :size="16" label="Voltar" /> Voltar
@@ -473,13 +504,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <span v-if="mensagemGeracao" class="text-nexo-approved font-semibold text-[11px] animate-pulse">
           {{ mensagemGeracao }}
         </span>
+        <span v-else-if="semTelasDerivadas" class="text-nexo-muted font-medium text-[11px]">
+          Nenhuma tela derivada dos artefatos — crie a tela em branco ou complete o G2
+        </span>
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-btn bg-nexo-primary px-3 py-1 font-semibold text-white shadow-xs hover:bg-nexo-primary/90 transition-colors"
+          class="inline-flex items-center gap-1.5 rounded-btn bg-nexo-primary px-3 py-1 min-h-[32px] text-sm font-semibold text-white shadow-xs hover:bg-nexo-primary/90 transition-colors"
           @click="gerarNoCanvas()"
         >
-          <M3Icon name="auto_awesome" :size="15" label="Gerar no canvas" />
-          Gerar no canvas
+          <M3Icon name="auto_awesome" :size="15" label="Gerar pré-tela" />
+          {{ precisaPreTela ? 'Gerar pré-tela' : 'Gerar no canvas' }}
         </button>
       </div>
     </div>

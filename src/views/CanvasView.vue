@@ -96,7 +96,7 @@ function abrirGrafo() {
         <p class="mt-1 text-sm text-nexo-muted">Escolha o contexto (nível + objeto) para abrir o grafo. O grafo não monta neste modo.</p>
         <div class="mt-3 flex flex-wrap gap-2 text-sm">
           <label>Nível
-            <select v-model="nivelSel" class="ml-1 rounded-btn border border-nexo-border px-2 py-1.5">
+            <select v-model="nivelSel" class="ml-1 min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
               <option value="projeto">Projeto</option>
               <option value="epico">Épico</option>
               <option value="feature">Feature</option>
@@ -104,7 +104,7 @@ function abrirGrafo() {
             </select>
           </label>
           <label>Objeto
-            <select v-model="objetoSel" class="ml-1 rounded-btn border border-nexo-border px-2 py-1.5">
+            <select v-model="objetoSel" class="ml-1 min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
               <option value="">(atual)</option>
               <option v-for="n in objetosDoNivel" :key="n.id" :value="n.id">{{ n.titulo }}</option>
             </select>
@@ -121,16 +121,16 @@ function abrirGrafo() {
           v-model="ui.state.buscaTexto"
           placeholder="Filtrar canvas por título/id/owner…"
           aria-label="Filtrar canvas"
-          class="w-64 rounded-btn border border-nexo-border bg-white px-3 py-1.5"
+          class="w-64 min-h-[32px] rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text"
         />
-        <select v-model="ui.state.filtroEstado" aria-label="Filtrar por estado" class="rounded-btn border border-nexo-border bg-white px-2 py-1.5">
+        <select v-model="ui.state.filtroEstado" aria-label="Filtrar por estado" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
           <option value="">Todos os estados</option>
           <option value="draft">Rascunho</option>
           <option value="review">Em revisão</option>
           <option value="approved">Aprovado</option>
           <option value="stale">Desatualizado</option>
         </select>
-        <select v-model="ui.state.filtroOwner" aria-label="Filtrar por owner" class="rounded-btn border border-nexo-border bg-white px-2 py-1.5">
+        <select v-model="ui.state.filtroOwner" aria-label="Filtrar por owner" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
           <option value="">Todos os owners</option>
           <option v-for="u in ['u-pm','u-ux','u-arq','u-tl','u-dev','u-qa','u-sec']" :key="u" :value="u">{{ u }}</option>
         </select>
