@@ -627,14 +627,14 @@ function rejeitarPatch() {
             <div class="mt-3 flex items-center justify-end gap-2">
               <button
                 type="button"
-                class="rounded-btn border border-nexo-border px-3 py-1 text-xs font-semibold hover:bg-nexo-canvas"
+                class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm font-semibold hover:bg-nexo-canvas"
                 @click="rejeitarPatch()"
               >
                 Rejeitar
               </button>
               <button
                 type="button"
-                class="rounded-btn bg-nexo-primary px-3 py-1 text-xs font-semibold text-white hover:bg-nexo-primary/90"
+                class="rounded-btn bg-nexo-primary px-3 py-1.5 min-h-[32px] text-sm font-semibold text-white hover:bg-nexo-primary/90"
                 @click="aceitarPatch()"
               >
                 Aceitar (nova versão)

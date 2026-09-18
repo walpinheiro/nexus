@@ -480,7 +480,7 @@ onUnmounted(() => {
         </span>
         <PresenceAvatars :feature-id="featureId" :screen-id="telaAtualId" :provider="providerAtual" />
         <span class="hidden text-xs text-nexo-muted md:inline">voltando para {{ origemLabel }}</span>
-        <button type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="voltar()">
+        <button type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="voltar()">
           <M3Icon name="arrow_back" :size="16" label="Voltar" /> Voltar
         </button>
       </span>
@@ -531,7 +531,7 @@ onUnmounted(() => {
           <div class="space-y-1">
             <h3 class="text-base font-bold text-nexo-text">Nenhuma Feature Selecionada no Studio</h3>
             <p class="text-xs text-nexo-muted leading-relaxed">
-              O Studio monta o protótipo de telas navegáveis a partir das features aprovadas do Gate G2 ou permite criar telas livres no canvas.
+              O Studio monta o protótipo de telas navegáveis a partir das features aprovadas do Gate G2 ou selecione feature aprovada G2.
             </p>
           </div>
           <div v-if="featuresDisponiveis.length > 0" class="space-y-2 pt-2 text-left">
