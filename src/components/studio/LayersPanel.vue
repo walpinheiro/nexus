@@ -1,28 +1,23 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useStudio } from '@/stores/useStudio'
+import { usePresence } from '@/stores/studioPresence'
 import M3Icon from './m3/M3Icon.vue'
 
 const studio = useStudio()
-const abertos = ref<Set<string>>(new Set())
+const presence = usePresence()
+const feedAberto = ref(false)
 const arrastando = ref<string | null>(null)
-const telaFiltro = ref<string>('atual')
 
-const telas = computed(() => studio.doc.frames)
-const telaAlvo = computed(() => (telaFiltro.value === 'atual' ? (studio.frameAtual() ?? null) : (studio.doc.frames.find((f) => f.id === telaFiltro.value) ?? null)))
+const telaAtual = computed(() => studio.frameAtual() ?? null)
 
 const gruposDaTela = computed(() => {
-  const f = telaAlvo.value
+  const f = telaAtual.value
   if (!f) return []
   return studio.doc.groups
     .filter((g) => g.items.some((i) => i.x >= f.x && i.x < f.x + f.w))
     .sort((a, b) => (b.order ?? 0) - (a.order ?? 0))
 })
-
-function alternar(id: string) {
-  if (abertos.value.has(id)) abertos.value.delete(id)
-  else abertos.value.add(id)
-}
 
 function selecionar(ids: string[], add: boolean) {
   studio.selecionados = add ? [...new Set([...studio.selecionados, ...ids])] : ids
@@ -57,14 +52,6 @@ function rotulo(g: { items: { kind: string; label?: string }[] }): string {
 
 <template>
   <div class="flex h-full flex-col" aria-label="Layers">
-    <div class="border-b border-nexo-border p-2">
-      <label class="block text-xs">Tela
-        <select v-model="telaFiltro" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-xs" aria-label="Filtrar layers por tela">
-          <option value="atual">Tela atual</option>
-          <option v-for="f in telas" :key="f.id" :value="f.id">{{ f.name }} ({{ f.w }}×{{ f.h }})</option>
-        </select>
-      </label>
-    </div>
     <div class="min-h-0 flex-1 overflow-auto p-2">
       <p v-if="gruposDaTela.length === 0" class="p-4 text-center text-xs text-nexo-muted">Sem layers nesta tela.</p>
       <ul v-else class="space-y-1">
@@ -96,17 +83,8 @@ function rotulo(g: { items: { kind: string; label?: string }[] }): string {
             >
               <M3Icon :name="g.locked ? 'lock' : 'lock_open'" :size="16" :fill="!!g.locked" />
             </button>
-            <button
-              v-if="g.items.length > 1"
-              type="button"
-              :aria-expanded="abertos.has(g.id)"
-              :aria-label="abertos.has(g.id) ? 'Recolher parts' : 'Expandir parts'"
-              @click="alternar(g.id)"
-            >
-              <M3Icon name="chevron_right" :size="16" />
-            </button>
           </div>
-          <ul v-if="abertos.has(g.id)" class="ml-6 mt-1 space-y-1">
+          <ul class="ml-6 mt-1 space-y-1">
             <li v-for="it in g.items" :key="it.id">
               <button
                 type="button"
@@ -122,6 +100,23 @@ function rotulo(g: { items: { kind: string; label?: string }[] }): string {
         </li>
       </ul>
       <div class="h-8" @dragover.prevent @drop="onDrop($event, null)" />
+    </div>
+    <div class="border-t border-nexo-border p-2 text-xs">
+      <button
+        type="button"
+        class="flex w-full items-center gap-1 font-semibold"
+        :aria-expanded="feedAberto"
+        aria-label="Feed de atividade"
+        @click="feedAberto = !feedAberto"
+      >
+        <M3Icon name="history" :size="14" label="Atividade" /> Atividade ({{ presence.feed.length }})
+      </button>
+      <ul v-if="feedAberto" class="mt-1 max-h-40 space-y-1 overflow-auto" aria-live="polite" aria-label="Últimos eventos">
+        <li v-if="presence.feed.length === 0" class="text-nexo-muted">Sem atividade ainda.</li>
+        <li v-for="ev in presence.feed.slice(0, 15)" :key="ev.id" class="rounded-badge bg-nexo-canvas px-2 py-1">
+          {{ presence.atividadeTexto(ev) }}
+        </li>
+      </ul>
     </div>
     <div class="flex gap-1 border-t border-nexo-border p-2 text-xs">
       <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-1" title="Trazer seleção para frente" @click="studio.selecionados.forEach((id) => { const g = studio.doc.groups.find((x) => x.items.some((i) => i.id === id)); if (g) studio.trazerFrente(g.id) })">Frente</button>
