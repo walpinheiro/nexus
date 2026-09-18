@@ -100,21 +100,21 @@ function abrirPrompt() {
     aria-label="Toolbar do Studio"
   >
     <span class="flex items-center gap-1" role="group" aria-label="Modo">
-      <button type="button" title="Selecionar (V)" aria-label="Selecionar" class="rounded-btn px-2 py-1 font-semibold text-nexo-primary"><M3Icon name="arrow_selector_tool" :size="18" label="Selecionar" /></button>
-      <button type="button" title="Mover (H)" aria-label="Mover" class="rounded-btn px-2 py-1"><M3Icon name="pan_tool" :size="18" label="Mover" /></button>
+      <button type="button" title="Selecionar (V)" aria-label="Selecionar" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1 font-semibold text-nexo-primary"><M3Icon name="arrow_selector_tool" :size="18" label="Selecionar" />Selecionar</button>
+      <button type="button" title="Mover (H)" aria-label="Mover" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1"><M3Icon name="pan_tool" :size="18" label="Mover" />Mover</button>
     </span>
     <span class="flex items-center gap-1" role="group" aria-label="Zoom">
-      <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="rounded-btn px-1.5 py-1" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
+      <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="inline-flex items-center justify-center rounded-btn px-1.5 py-1" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
       <span class="min-w-12 text-center" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
-      <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="rounded-btn px-1.5 py-1" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
-      <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="rounded-btn px-2 py-1" @click="studio.zoom = 0.7"><M3Icon name="fit_screen" :size="18" label="Ajustar" /></button>
+      <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="inline-flex items-center justify-center rounded-btn px-1.5 py-1" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
+      <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.zoom = 0.7"><M3Icon name="fit_screen" :size="18" label="Ajustar" />Ajustar</button>
     </span>
-    <button type="button" title="Organizar (tidy)" aria-label="Organizar" class="rounded-btn px-2 py-1" @click="studio.tidy()"><M3Icon name="auto_fix" :size="18" label="Organizar" /></button>
-    <button type="button" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" class="rounded-btn px-2 py-1" @click="studio.undo()"><M3Icon name="undo" :size="18" label="Desfazer" /></button>
-    <button type="button" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" class="rounded-btn px-2 py-1" @click="studio.redo()"><M3Icon name="redo" :size="18" label="Refazer" /></button>
-    <button type="button" title="Preview modal (P)" aria-label="Abrir preview" class="rounded-btn bg-nexo-primary px-3 py-1 font-semibold text-white" @click="emit('preview')"><M3Icon name="play_arrow" :size="18" label="Preview" /></button>
-    <button type="button" title="Prompt (abre painel)" aria-label="Abrir prompt" class="rounded-btn border border-nexo-border px-2 py-1" @click="abrirPrompt()"><M3Icon name="auto_awesome" :size="18" label="Prompt" /></button>
-    <button type="button" title="Compartilhar (copia share-link)" aria-label="Compartilhar" class="rounded-btn border border-nexo-border px-2 py-1" @click="copiarShare()"><M3Icon name="share" :size="18" label="Compartilhar" /></button>
+    <button type="button" title="Organizar (tidy)" aria-label="Organizar" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.tidy()"><M3Icon name="auto_fix" :size="18" label="Organizar" />Organizar</button>
+    <button type="button" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.undo()"><M3Icon name="undo" :size="18" label="Desfazer" />Desfazer</button>
+    <button type="button" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.redo()"><M3Icon name="redo" :size="18" label="Refazer" />Refazer</button>
+    <button type="button" title="Preview modal (P)" aria-label="Abrir preview" class="inline-flex items-center justify-center gap-1 rounded-btn bg-nexo-primary px-3 py-1 font-semibold text-white" @click="emit('preview')"><M3Icon name="play_arrow" :size="18" label="Preview" />Preview</button>
+    <button type="button" title="Prompt (abre painel)" aria-label="Abrir prompt" class="inline-flex items-center justify-center gap-1 rounded-btn border border-nexo-border px-2 py-1" @click="abrirPrompt()"><M3Icon name="auto_awesome" :size="18" label="Prompt" />Prompt</button>
+    <button type="button" title="Compartilhar (copia share-link)" aria-label="Compartilhar" class="inline-flex items-center justify-center gap-1 rounded-btn border border-nexo-border px-2 py-1" @click="copiarShare()"><M3Icon name="share" :size="18" label="Compartilhar" />Share</button>
     <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="exportarPNG()">PNG</button>
     <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="exportarJSON()">JSON</button>
     <span v-if="aviso" class="text-nexo-approved" role="status">{{ aviso }}</span>
