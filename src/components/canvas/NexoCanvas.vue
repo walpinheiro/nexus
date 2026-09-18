@@ -380,7 +380,7 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
 </script>
 
 <template>
-  <div class="flex h-full min-h-[560px] gap-0">
+  <div class="flex h-full min-h-0 w-full flex-1 gap-0">
     <CanvasToolbar
       @zoom-in="zoomIn"
       @zoom-out="zoomOut"
@@ -391,7 +391,7 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
       @adicionar="adicionarNo"
     />
 
-    <div class="ml-3 min-w-0 flex-1">
+    <div class="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
       <div class="mb-2 flex flex-wrap items-center gap-2 text-xs">
         <label class="flex items-center gap-1">
           Tipo da próxima conexão

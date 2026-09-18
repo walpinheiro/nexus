@@ -69,8 +69,8 @@ function abrirGrafo() {
 </script>
 
 <template>
-  <div class="flex h-full flex-col gap-2">
-    <div class="flex items-center gap-2 text-sm" role="tablist" aria-label="Vista do canvas">
+  <div class="flex h-full min-h-0 w-full flex-col gap-2">
+    <div class="flex shrink-0 items-center gap-2 text-sm" role="tablist" aria-label="Vista do canvas">
       <button type="button" role="tab" :aria-selected="vista !== 'studio'" class="rounded-btn border px-3 py-1" :class="vista !== 'studio' ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'" @click="irVista('canvas')">Grafo NEXO</button>
       <button type="button" role="tab" :aria-selected="vista === 'studio'" class="rounded-btn border px-3 py-1" :class="vista === 'studio' ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'" @click="irVista('studio')">Telas (Studio)</button>
       <RouterLink :to="{ path: '/studio-full', query: { from: 'canvas' } }" class="rounded-btn border border-nexo-border px-3 py-1">Abrir Studio tela toda</RouterLink>
@@ -106,7 +106,7 @@ function abrirGrafo() {
     </template>
 
     <template v-else>
-      <div class="flex flex-wrap items-center gap-2 text-xs">
+      <div class="flex shrink-0 flex-wrap items-center gap-2 text-xs">
         <input
           v-model="ui.state.buscaTexto"
           placeholder="Filtrar canvas por título/id/owner…"
@@ -128,16 +128,16 @@ function abrirGrafo() {
         <span class="ml-auto text-nexo-muted">{{ graph.state.nos.length }} nós · {{ graph.state.arestas.length }} arestas</span>
       </div>
 
-      <div class="flex min-h-0 flex-1 gap-0">
-        <div class="min-w-0 flex-1" data-export-root>
+      <div class="flex min-h-0 h-full w-full flex-1 gap-0">
+        <div class="flex min-h-0 h-full w-full min-w-0 flex-1 flex-col" data-export-root>
           <NexoCanvas ref="canvasComp" />
         </div>
-        <DetailPanel v-if="comPainel" class="ml-3 hidden lg:flex" />
+        <DetailPanel v-if="comPainel" class="ml-3 hidden h-full min-h-0 lg:flex" />
       </div>
 
       <DetailPanel v-if="comPainel" class="lg:hidden" />
 
-      <div class="flex items-center gap-3">
+      <div class="flex shrink-0 items-center gap-3">
         <Minimap @navegar="navegarMinimap" />
         <span class="text-xs text-nexo-muted">Minimap clicável · filtros só alteram a vista · duplo-clique no vazio cria nó · arraste handle para conectar</span>
       </div>
