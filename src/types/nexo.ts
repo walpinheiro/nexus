@@ -341,6 +341,40 @@ export interface FeatureParaStudio {
   }
 }
 
+// ONDA2-MOTOR-VALIDAÇÃO (Y1) — fecha GAPs Lupa V7 (M3TextField sem input/engine)
+// e V8 (snackbar estático sem mensagens).
+// Engine pura em src/utils/validacao.ts (sem DOM); seed declarativo em
+// src/data/seed.ts; store carregarRegras(featureId)+validarPreview(telaId,valores).
+// Tudo serializável (sem funções) para persistir em localStorage e manter determinismo.
+export type TipoRegraValidacao = 'obrigatorio' | 'min' | 'max' | 'regex' | 'email' | 'custom'
+
+export interface RegraValidacao {
+  id: string
+  campoId: string
+  tipo: TipoRegraValidacao
+  /** min/max: número (valor numérico ou tamanho); regex/custom: string (pattern ou "op:arg"). */
+  parametro?: string | number
+  mensagemErro: string
+  mensagemSucesso?: string
+}
+
+export interface ValidacaoCampo {
+  campoId: string
+  regras: RegraValidacao[]
+  mensagemSucesso?: string
+}
+
+export interface ResultadoValidacao {
+  ok: boolean
+  /** Primeira mensagem de erro por campo (ordem do schema). */
+  erros: Record<string, string>
+  /** campoIds aprovados em todas as regras (VUE resolve a mensagemSucesso p/ snackbar). */
+  sucessos: string[]
+}
+
+/** Mapa telaId → campos (seed + carregarRegras). */
+export type MapaRegrasValidacao = Record<string, ValidacaoCampo[]>
+
 // Solicitação de aprovação de Gate (governança com SoD e fila)
 export type SolicitacaoGateStatus = 'pendente' | 'aprovada' | 'negada'
 

@@ -130,3 +130,13 @@ export const STUDIO_KINDS = [
 ] as const
 
 export type StudioKind = (typeof STUDIO_KINDS)[number]
+
+// ONDA2-MOTOR-VALIDAÇÃO (Y1): re-export dos tipos de validação (fonte: @/types/nexo).
+// O VUE (M3TextField/snackbar) consome carregarRegras()+validarPreview() do graph.
+export type {
+  MapaRegrasValidacao,
+  RegraValidacao,
+  ResultadoValidacao,
+  TipoRegraValidacao,
+  ValidacaoCampo
+} from '@/types/nexo'
