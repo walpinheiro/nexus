@@ -423,6 +423,7 @@ export const useStudio = defineStore('studio', () => {
 
   function importarDoc(novo: StudioDoc): void {
     pushHistory()
+    if ((novo.platform as string) !== 'web') novo.platform = 'web'
     doc.value = novo
     screenId.value = novo.frames[0]?.id ?? screenId.value
     selecionados.value = []

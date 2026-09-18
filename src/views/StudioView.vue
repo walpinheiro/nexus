@@ -19,14 +19,12 @@ import { gerarPromptStudio } from '@/utils/studioPrompt'
 import { useGraph } from '@/stores/useGraph'
 import { usePresence } from '@/stores/studioPresence'
 import { useUsers } from '@/stores/useUsers'
-import { useStudioDraftHistory } from '@/stores/studioDraftHistory'
 
 const studio = useStudio()
 const projects = useProjects()
 const graph = useGraph()
 const presence = usePresence()
 const users = useUsers()
-const draftHistory = useStudioDraftHistory()
 const modalPromptFullscreen = ref(false)
 const route = useRoute()
 const router = useRouter()
@@ -87,22 +85,14 @@ watch(abaDir, (novaAba) => {
 })
 
 function gerarPrompt() {
-  const draft = draftHistory.ultimoDraft
-  const autor = draft
-    ? { authorName: draft.authorName, model: draft.model, provider: draft.provider }
-    : {
-        authorName: users.currentUser ? users.currentUser.nome.replace(/\(.*?\)/g, '').trim() : users.state.currentUserId,
-        model: presence.agenteDe(users.state.currentUserId).model,
-        provider: presence.agenteDe(users.state.currentUserId).provider
-      }
-  promptTexto.value = gerarPromptStudio(studio.doc, promptEscopo.value, graph.state.selecionadoId ?? undefined, autor)
+  promptTexto.value = gerarPromptStudio(studio.doc, promptEscopo.value, graph.state.selecionadoId ?? undefined)
 }
 
 async function copiarPrompt() {
   if (!promptTexto.value) {
     gerarPrompt()
   }
-  presence.registrarEvento({ actorUserId: users.state.currentUserId, kind: 'prompt', detalhe: `via ${presence.agenteDe(users.state.currentUserId).model}` })
+  presence.registrarEvento({ actorUserId: users.state.currentUserId, kind: 'prompt', detalhe: 'copiou prompt' })
   try {
     await navigator.clipboard.writeText(promptTexto.value)
     promptCopiado.value = 'Prompt copiado.'
@@ -277,14 +267,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <p class="font-semibold">Prompt da tela</p>
           <p class="mt-1 text-nexo-muted">Destino: Web (Vue 3 + TS + Tailwind).</p>
 
-          <!-- Badge do Autor e Modelo da IA -->
-          <div v-if="draftHistory.ultimoDraft" class="mt-2 flex items-center gap-1.5 rounded-badge bg-slate-100 px-2 py-1 text-[11px] text-nexo-muted" role="status">
-            <M3Icon name="auto_awesome" :size="14" class="text-nexo-primary" />
-            <span class="truncate">
-              gerado por <strong class="text-nexo-text">{{ draftHistory.ultimoDraft.authorName }}</strong> · {{ draftHistory.ultimoDraft.model }}
-            </span>
-          </div>
-
           <label class="mt-2 block">Escopo
             <select v-model="promptEscopo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1" @change="gerarPrompt()">
               <option value="tudo">Design inteiro</option>
@@ -365,9 +347,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <div class="flex items-center gap-2">
             <M3Icon name="auto_awesome" :size="20" class="text-nexo-primary" />
             <h2 class="text-base font-bold">Prompt do Studio</h2>
-            <span v-if="draftHistory.ultimoDraft" class="ml-2 rounded-badge bg-slate-100 px-2 py-0.5 text-xs text-nexo-muted">
-              gerado por {{ draftHistory.ultimoDraft.authorName }} · {{ draftHistory.ultimoDraft.model }}
-            </span>
           </div>
           <button type="button" class="rounded-btn p-1.5 text-nexo-muted hover:bg-slate-100 hover:text-nexo-text" aria-label="Fechar" @click="modalPromptFullscreen = false">
             <M3Icon name="close" :size="20" label="Fechar" />
