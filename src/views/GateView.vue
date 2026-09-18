@@ -10,7 +10,9 @@ import GateAiSession from '@/components/gates/GateAiSession.vue'
 import GateGuide from '@/components/gates/GateGuide.vue'
 import GateOutput from '@/components/gates/GateOutput.vue'
 import LucideIcon from '@/components/common/LucideIcon.vue'
-import type { GateId, NexoObject } from '@/types/nexo'
+import PreviewModal from '@/components/studio/PreviewModal.vue'
+import { montarEntradaStudio } from '@/ai/gateParaStudio'
+import type { GateId, NexoObject, Feature } from '@/types/nexo'
 import { seedEnquadramento } from '@/data/seed'
 
 const props = defineProps<{ id: string }>()
@@ -195,6 +197,35 @@ function abrirStudioParaFeature() {
   const id = alvoId.value || alvos.value[0]?.id || ''
   router.push({ path: '/studio-full', query: { feature: id, from: `gates/${props.id}` } })
 }
+
+// Ações W4 por feature no G2
+const modalPreviewAberto = ref(false)
+const previewTelaId = ref<string | null>(null)
+const storyModalAberto = ref(false)
+
+function abrirPreview(telaId?: string) {
+  if (telaId) {
+    previewTelaId.value = telaId
+  } else {
+    const fId = alvoId.value || alvos.value[0]?.id
+    if (fId) {
+      const vinculos = graph.telasDaFeature(fId)
+      if (vinculos.length > 0) {
+        previewTelaId.value = vinculos[0].telaId
+      } else {
+        const entrada = montarEntradaStudio(fId, graph.state.nos)
+        previewTelaId.value = entrada?.telas[0]?.id ?? null
+      }
+    } else {
+      previewTelaId.value = null
+    }
+  }
+  modalPreviewAberto.value = true
+}
+
+function abrirVerStory() {
+  storyModalAberto.value = true
+}
 </script>
 
 <template>
@@ -299,8 +330,35 @@ function abrirStudioParaFeature() {
               </select>
             </label>
 
-            <!-- Botão Solicitar Approve -->
-            <div class="flex items-center gap-2">
+            <!-- Ações por Feature no Gate G2 e Botão Solicitar Approve -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <template v-if="props.id === 'G2' && objetoAlvo && objetoAlvo.tipo === 'feature'">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-2.5 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
+                  @click="abrirVerStory()"
+                >
+                  <LucideIcon name="file-text" :size="13" />
+                  ver-story
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-btn border border-nexo-border bg-white px-2.5 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
+                  @click="abrirStudioParaFeature()"
+                >
+                  <LucideIcon name="layout" :size="13" />
+                  ver-tela
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-btn border border-green-600 bg-white px-2.5 py-1.5 text-xs font-semibold text-green-800 hover:bg-green-50 shadow-xs transition-colors"
+                  @click="abrirPreview()"
+                >
+                  <LucideIcon name="eye" :size="13" />
+                  preview
+                </button>
+              </template>
+
               <span v-if="temSolicitacaoPendenteAlvo" class="inline-flex items-center gap-1 rounded bg-amber-100 text-amber-800 px-2 py-1 text-xs font-semibold">
                 <LucideIcon name="clock" :size="12" /> Solicitação Pendente
               </span>
@@ -489,6 +547,7 @@ function abrirStudioParaFeature() {
           :gate-id="props.id as GateId"
           :alvo="objetoAlvo"
           :gate-info="gate"
+          @preview="abrirPreview"
         />
 
         <!-- Trilha de Auditoria / Tentativas -->
@@ -517,5 +576,93 @@ function abrirStudioParaFeature() {
         />
       </div>
     </div>
+
+    <!-- Modal Ver-Story (Doc) do Gate G2 -->
+    <div
+      v-if="storyModalAberto && objetoAlvo && objetoAlvo.tipo === 'feature'"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      @click.self="storyModalAberto = false"
+    >
+      <div class="max-w-xl w-full rounded-card border border-nexo-border bg-white p-5 space-y-4 shadow-xl max-h-[85vh] overflow-y-auto">
+        <div class="flex items-start justify-between border-b pb-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="rounded bg-nexo-primary/10 px-1.5 py-0.5 text-[10px] font-mono font-bold text-nexo-primary">{{ objetoAlvo.id }}</span>
+              <span class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">{{ objetoAlvo.gate }}</span>
+              <span class="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800">{{ objetoAlvo.status }}</span>
+            </div>
+            <h2 class="text-base font-bold text-nexo-text mt-1">{{ objetoAlvo.titulo }}</h2>
+          </div>
+          <button type="button" class="text-gray-400 hover:text-gray-700" @click="storyModalAberto = false">
+            <LucideIcon name="x" :size="18" />
+          </button>
+        </div>
+
+        <!-- Conteúdo da Story -->
+        <div class="space-y-3 text-xs leading-relaxed text-nexo-text">
+          <div class="rounded bg-nexo-canvas/40 p-3 border border-nexo-border/60 space-y-1">
+            <p><strong class="text-nexo-primary">Como:</strong> {{ (objetoAlvo as Feature).ator || 'usuário do sistema' }}</p>
+            <p><strong class="text-nexo-primary">Quero:</strong> {{ (objetoAlvo as Feature).beneficio || objetoAlvo.descricao }}</p>
+            <p><strong class="text-nexo-primary">Para:</strong> {{ (objetoAlvo as Feature).gatilho || 'alcançar o objetivo planejado' }}</p>
+          </div>
+
+          <div v-if="(objetoAlvo as Feature).fluxo_feliz">
+            <h4 class="font-bold text-nexo-text mb-1">Fluxo Principal (Happy Path):</h4>
+            <p class="text-nexo-muted pl-2 border-l-2 border-nexo-primary">{{ (objetoAlvo as Feature).fluxo_feliz }}</p>
+          </div>
+
+          <div v-if="(objetoAlvo as Feature).alternativos && (objetoAlvo as Feature).alternativos.length > 0">
+            <h4 class="font-bold text-nexo-text mb-1">Fluxos Alternativos & Exceções:</h4>
+            <ul class="list-disc list-inside space-y-0.5 text-nexo-muted">
+              <li v-for="(alt, idx) in (objetoAlvo as Feature).alternativos" :key="idx">{{ alt }}</li>
+            </ul>
+          </div>
+
+          <div v-if="(objetoAlvo as Feature).criterios_bdd && (objetoAlvo as Feature).criterios_bdd.length > 0">
+            <h4 class="font-bold text-nexo-text mb-1">Critérios de Aceite (BDD):</h4>
+            <div class="space-y-2">
+              <div v-for="c in (objetoAlvo as Feature).criterios_bdd" :key="c.id" class="rounded border border-nexo-border/80 p-2 bg-white space-y-0.5">
+                <span class="font-mono text-[10px] font-bold text-nexo-primary">{{ c.id }}</span>
+                <p class="text-[11px]"><strong class="text-gray-700">Dado</strong> {{ c.given }}</p>
+                <p class="text-[11px]"><strong class="text-gray-700">Quando</strong> {{ c.when }}</p>
+                <p class="text-[11px]"><strong class="text-gray-700">Então</strong> {{ c.then }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rodapé do Modal -->
+        <div class="flex items-center justify-between border-t pt-3">
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-nexo-primary/90"
+              @click="storyModalAberto = false; abrirStudioParaFeature()"
+            >
+              <LucideIcon name="layout" :size="13" />
+              Ver Tela no Studio
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-btn border border-green-600 bg-white px-3 py-1.5 text-xs font-semibold text-green-800 hover:bg-green-50"
+              @click="storyModalAberto = false; abrirPreview()"
+            >
+              <LucideIcon name="eye" :size="13" />
+              Preview Interativo
+            </button>
+          </div>
+          <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 text-xs" @click="storyModalAberto = false">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Preview Interativo -->
+    <PreviewModal
+      v-if="modalPreviewAberto"
+      :inicio-id="previewTelaId"
+      @fechar="modalPreviewAberto = false"
+    />
   </div>
 </template>

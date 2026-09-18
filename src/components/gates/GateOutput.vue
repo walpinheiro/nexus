@@ -15,8 +15,16 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  (e: 'preview', telaId: string): void
+}>()
 const graph = useGraph()
 const gatesStore = useGate()
+
+const vinculosTela = computed(() => {
+  if (!props.alvo || props.alvo.tipo !== 'feature') return []
+  return graph.telasDaFeature(props.alvo.id)
+})
 
 const prontaParaStudio = computed(() => {
   if (!props.alvo || props.alvo.tipo !== 'feature') return false
@@ -342,15 +350,26 @@ const pipelinePassos = computed(() => {
                 {{ prontaParaStudio ? 'Pronto para Studio' : 'Pendente de Baseline G2 para Studio' }}
               </span>
             </div>
-            <RouterLink
-              v-if="props.alvo"
-              :to="{ path: '/studio-full', query: { feature: props.alvo.id, from: 'gates/G2' } }"
-              class="inline-flex items-center gap-1 rounded-btn px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs transition-colors"
-              :class="prontaParaStudio ? 'bg-green-700 hover:bg-green-800' : 'bg-amber-600 hover:bg-amber-700'"
-            >
-              <LucideIcon name="external-link" :size="12" />
-              Abrir no Studio
-            </RouterLink>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="vinculosTela.length > 0"
+                type="button"
+                class="inline-flex items-center gap-1 rounded-btn border border-green-600 bg-white px-2.5 py-1 text-[11px] font-semibold text-green-800 shadow-xs hover:bg-green-50 transition-colors"
+                @click="emit('preview', vinculosTela[0].telaId)"
+              >
+                <LucideIcon name="eye" :size="12" />
+                Preview
+              </button>
+              <RouterLink
+                v-if="props.alvo"
+                :to="{ path: '/studio-full', query: { feature: props.alvo.id, from: 'gates/G2' } }"
+                class="inline-flex items-center gap-1 rounded-btn px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs transition-colors"
+                :class="prontaParaStudio ? 'bg-green-700 hover:bg-green-800' : 'bg-amber-600 hover:bg-amber-700'"
+              >
+                <LucideIcon :name="vinculosTela.length > 0 ? 'layout' : 'auto_awesome'" :size="12" />
+                {{ vinculosTela.length > 0 ? `Ver telas (${vinculosTela.length})` : 'Gerar telas' }}
+              </RouterLink>
+            </div>
           </div>
 
           <p class="text-[11px] leading-relaxed" :class="prontaParaStudio ? 'text-green-900' : 'text-amber-900'">
@@ -366,12 +385,22 @@ const pipelinePassos = computed(() => {
               <span class="text-[10px] text-nexo-muted font-normal">{{ entradaStudio.navegacao.length }} transições BDD mapeadas</span>
             </div>
             <ul class="space-y-1 pl-1">
-              <li v-for="t in entradaStudio.telas" :key="t.id" class="flex items-start gap-1.5 text-[10px] text-nexo-text">
-                <span class="rounded bg-nexo-primary/10 text-nexo-primary px-1 font-mono text-[9px] font-bold shrink-0">
-                  {{ t.origem === 'fluxo_feliz' ? 'passo' : 'exceção' }}
-                </span>
-                <span class="font-medium">{{ t.nome }}:</span>
-                <span class="text-nexo-muted truncate">{{ t.descricao }}</span>
+              <li v-for="t in entradaStudio.telas" :key="t.id" class="flex items-center justify-between gap-1.5 text-[10px] text-nexo-text">
+                <div class="flex items-start gap-1.5 min-w-0">
+                  <span class="rounded bg-nexo-primary/10 text-nexo-primary px-1 font-mono text-[9px] font-bold shrink-0">
+                    {{ t.origem === 'fluxo_feliz' ? 'passo' : 'exceção' }}
+                  </span>
+                  <span class="font-medium shrink-0">{{ t.nome }}:</span>
+                  <span class="text-nexo-muted truncate">{{ t.descricao }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-nexo-primary hover:underline px-1 py-0.5"
+                  @click="emit('preview', t.id)"
+                >
+                  <LucideIcon name="eye" :size="11" />
+                  preview
+                </button>
               </li>
             </ul>
           </div>
@@ -664,7 +693,7 @@ const pipelinePassos = computed(() => {
                 <span v-for="(obs, idx) in (evidencia.observabilidade || [])" :key="`o-${idx}`" class="rounded bg-blue-50 text-blue-900 px-1.5 py-0.5 border border-blue-200">
                   telemetria: {{ obs }}
                 </span>
-                <span v-for="(rst, idx) in (evidencia.rastreabilidade || [])" :key="`r-${idx}`" class="rounded bg-purple-50 text-purple-900 px-1.5 py-0.5 border border-purple-200">
+                <span v-for="(rst, idx) in (evidencia.rastreabilidade || [])" :key="`r-${idx}`" class="rounded bg-slate-100 text-slate-800 px-1.5 py-0.5 border border-slate-200">
                   grafo: {{ rst }}
                 </span>
                 <span v-if="(!evidencia.observabilidade || evidencia.observabilidade.length === 0) && (!evidencia.rastreabilidade || evidencia.rastreabilidade.length === 0)" class="text-nexo-muted italic text-[10px]">
