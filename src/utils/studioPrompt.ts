@@ -1,9 +1,26 @@
 import type { StudioDoc } from '@/types/studio'
 
+export interface StudioPromptAuthor {
+  authorName?: string
+  model?: string
+  provider?: string
+}
+
 // Prompt PT-BR do Studio: design inteiro ou 1 tela, com labels, notes, actions e tema.
-export function gerarPromptStudio(doc: StudioDoc, frameId: string | 'tudo', origemNo?: string): string {
+export function gerarPromptStudio(
+  doc: StudioDoc,
+  frameId: string | 'tudo',
+  origemNo?: string,
+  author?: StudioPromptAuthor | null
+): string {
   const frames = frameId === 'tudo' ? doc.frames : doc.frames.filter((f) => f.id === frameId)
   const linhas: string[] = []
+  if (author && (author.authorName || author.model)) {
+    const modelStr = author.model ? ` (${author.model})` : ''
+    const authorStr = author.authorName ?? ''
+    linhas.push(`Author: ${authorStr}${modelStr}`.trim())
+    linhas.push('')
+  }
   linhas.push(`Implemente em Vue 3 + TypeScript + Tailwind CSS as telas abaixo (origem NEXO: ${origemNo ?? '—'}). Não invente conteúdo; use labels e notes literais.`)
   linhas.push('')
   linhas.push(`App: ${doc.title}${doc.brief ? ` — ${doc.brief}` : ''}`)

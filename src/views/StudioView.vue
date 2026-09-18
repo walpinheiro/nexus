@@ -12,13 +12,22 @@ import FramePanel from '@/components/studio/FramePanel.vue'
 import PreviewModal from '@/components/studio/PreviewModal.vue'
 import NewFrameDialog from '@/components/studio/NewFrameDialog.vue'
 import AiTube from '@/components/studio/AiTube.vue'
+import PresenceAvatars from '@/components/studio/PresenceAvatars.vue'
+import PresenceAgentSelect from '@/components/studio/PresenceAgentSelect.vue'
 import M3Icon from '@/components/studio/m3/M3Icon.vue'
 import { gerarPromptStudio } from '@/utils/studioPrompt'
 import { useGraph } from '@/stores/useGraph'
+import { usePresence } from '@/stores/studioPresence'
+import { useUsers } from '@/stores/useUsers'
+import { useStudioDraftHistory } from '@/stores/studioDraftHistory'
 
 const studio = useStudio()
 const projects = useProjects()
 const graph = useGraph()
+const presence = usePresence()
+const users = useUsers()
+const draftHistory = useStudioDraftHistory()
+const modalPromptFullscreen = ref(false)
 const route = useRoute()
 const router = useRouter()
 const renomeando = ref('')
@@ -70,12 +79,27 @@ function abrirPromptPainel() {
   gerarPrompt()
 }
 
+function trocarPlataforma(plat: 'android' | 'web') {
+  studio.doc.platform = plat
+  studio.persist()
+  gerarPrompt()
+}
+
 function gerarPrompt() {
-  promptTexto.value = gerarPromptStudio(studio.doc, promptEscopo.value, graph.state.selecionadoId ?? undefined)
+  const draft = draftHistory.ultimoDraft
+  const autor = draft
+    ? { authorName: draft.authorName, model: draft.model, provider: draft.provider }
+    : {
+        authorName: users.currentUser ? users.currentUser.nome.replace(/\(.*?\)/g, '').trim() : users.state.currentUserId,
+        model: presence.agenteDe(users.state.currentUserId).model,
+        provider: presence.agenteDe(users.state.currentUserId).provider
+      }
+  promptTexto.value = gerarPromptStudio(studio.doc, promptEscopo.value, graph.state.selecionadoId ?? undefined, autor)
 }
 
 async function copiarPrompt() {
   gerarPrompt()
+  presence.registrarEvento({ actorUserId: users.state.currentUserId, kind: 'prompt', detalhe: `via ${presence.agenteDe(users.state.currentUserId).model}` })
   try {
     await navigator.clipboard.writeText(promptTexto.value)
     promptCopiado.value = 'Prompt copiado.'
@@ -205,6 +229,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <span class="flex items-baseline text-[18px] font-extrabold tracking-tight" aria-label="NEXO Studio">NEXO <span class="ml-1 text-sm font-semibold text-nexo-muted">Studio</span></span>
       <span class="hidden text-sm text-nexo-muted sm:inline">{{ projetoNome }}</span>
       <span class="ml-auto flex items-center gap-2">
+        <PresenceAvatars />
         <span class="hidden text-xs text-nexo-muted md:inline">voltando para {{ origemLabel }}</span>
         <button type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="voltar()">
           <M3Icon name="arrow_back" :size="16" label="Voltar" /> Voltar
@@ -245,16 +270,63 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </div>
         <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden p-3 text-xs">
           <p class="font-semibold">Prompt da tela</p>
+
+          <!-- Plataforma: Radio Android | Web (M3E paridade) -->
+          <div class="mt-2">
+            <span class="mb-1 block font-semibold text-nexo-muted">Plataforma</span>
+            <div class="flex rounded-btn border border-nexo-border p-0.5" role="radiogroup" aria-label="Plataforma de destino">
+              <button
+                type="button"
+                role="radio"
+                :aria-checked="studio.doc.platform === 'android'"
+                class="flex flex-1 items-center justify-center gap-1 rounded-btn py-1 text-xs transition"
+                :class="studio.doc.platform === 'android' ? 'bg-nexo-primary font-semibold text-white' : 'text-nexo-text hover:bg-slate-50'"
+                @click="trocarPlataforma('android')"
+              >
+                <M3Icon name="android" :size="15" label="Android" /> Android
+              </button>
+              <button
+                type="button"
+                role="radio"
+                :aria-checked="studio.doc.platform === 'web'"
+                class="flex flex-1 items-center justify-center gap-1 rounded-btn py-1 text-xs transition"
+                :class="studio.doc.platform === 'web' ? 'bg-nexo-primary font-semibold text-white' : 'text-nexo-text hover:bg-slate-50'"
+                @click="trocarPlataforma('web')"
+              >
+                <M3Icon name="language" :size="15" label="Web" /> Web
+              </button>
+            </div>
+          </div>
+
+          <!-- Badge do Autor e Modelo da IA -->
+          <div v-if="draftHistory.ultimoDraft" class="mt-2 flex items-center gap-1.5 rounded-badge bg-slate-100 px-2 py-1 text-[11px] text-nexo-muted" role="status">
+            <M3Icon name="auto_awesome" :size="14" class="text-nexo-primary" />
+            <span class="truncate">
+              gerado por <strong class="text-nexo-text">{{ draftHistory.ultimoDraft.authorName }}</strong> · {{ draftHistory.ultimoDraft.model }}
+            </span>
+          </div>
+
+          <PresenceAgentSelect />
+
           <label class="mt-2 block">Escopo
             <select v-model="promptEscopo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1" @change="gerarPrompt()">
               <option value="tudo">Design inteiro</option>
               <option v-for="fr in studio.doc.frames" :key="fr.id" :value="fr.id">1 tela: {{ fr.name }}</option>
             </select>
           </label>
-          <textarea v-model="promptTexto" rows="14" class="mt-2 w-full flex-1 rounded-btn border border-nexo-border p-2 font-mono text-[11px]" aria-label="Prompt editável" />
+
+          <textarea v-model="promptTexto" rows="12" class="mt-2 w-full flex-1 resize-none rounded-btn border border-nexo-border p-2 font-mono text-[11px] leading-relaxed" aria-label="Prompt editável" />
           <p class="mt-1 text-nexo-muted">{{ promptTexto.length }} caracteres</p>
-          <button type="button" class="mt-1 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white" @click="copiarPrompt()">Copiar prompt</button>
-          <p v-if="promptCopiado" class="mt-1 text-nexo-approved" role="status">{{ promptCopiado }}</p>
+
+          <div class="mt-2 flex flex-col gap-1.5">
+            <button type="button" class="flex items-center justify-center gap-1.5 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white shadow-xs hover:opacity-95" @click="copiarPrompt()">
+              <M3Icon name="content_copy" :size="16" label="Copiar" /> Copiar prompt
+            </button>
+            <button type="button" class="flex items-center justify-center gap-1.5 rounded-btn border border-nexo-border px-3 py-1.5 font-medium text-nexo-text hover:bg-slate-50" @click="modalPromptFullscreen = true">
+              <M3Icon name="open_in_full" :size="16" label="Tela cheia" /> Edit full screen
+            </button>
+          </div>
+          <p v-if="promptCopiado" class="mt-1 text-center text-nexo-approved" role="status">{{ promptCopiado }}</p>
         </div>
       </aside>
     </div>
@@ -300,5 +372,40 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <PreviewModal v-if="previewAberto" :inicio-id="studio.screenId" @fechar="previewAberto = false" />
     <NewFrameDialog v-if="dialogNovaTela" @fechar="dialogNovaTela = false" @criar="criarDoDialog" />
     <AiTube @abrir-prompt="abrirPromptPainel()" />
+
+    <!-- Modal Edit Full Screen do Prompt (M3E paridade) -->
+    <div
+      v-if="modalPromptFullscreen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-6 backdrop-blur-xs"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Editar prompt em tela cheia"
+      @keydown.escape="modalPromptFullscreen = false"
+    >
+      <div class="flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-card bg-white p-5 shadow-card">
+        <div class="flex items-center justify-between border-b border-nexo-border pb-3">
+          <div class="flex items-center gap-2">
+            <M3Icon name="auto_awesome" :size="20" class="text-nexo-primary" />
+            <h2 class="text-base font-bold">Prompt do Studio</h2>
+            <span v-if="draftHistory.ultimoDraft" class="ml-2 rounded-badge bg-slate-100 px-2 py-0.5 text-xs text-nexo-muted">
+              gerado por {{ draftHistory.ultimoDraft.authorName }} · {{ draftHistory.ultimoDraft.model }}
+            </span>
+          </div>
+          <button type="button" class="rounded-btn p-1.5 text-nexo-muted hover:bg-slate-100 hover:text-nexo-text" aria-label="Fechar" @click="modalPromptFullscreen = false">
+            <M3Icon name="close" :size="20" label="Fechar" />
+          </button>
+        </div>
+        <textarea v-model="promptTexto" class="mt-4 flex-1 w-full resize-none rounded-btn border border-nexo-border p-3 font-mono text-xs leading-relaxed focus:border-nexo-primary" aria-label="Prompt em tela cheia" />
+        <div class="mt-4 flex items-center justify-between">
+          <span class="text-xs text-nexo-muted">{{ promptTexto.length }} caracteres</span>
+          <div class="flex gap-2">
+            <button type="button" class="rounded-btn border border-nexo-border px-4 py-2 text-sm hover:bg-slate-50" @click="modalPromptFullscreen = false">Fechar</button>
+            <button type="button" class="flex items-center gap-1.5 rounded-btn bg-nexo-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-95" @click="copiarPrompt()">
+              <M3Icon name="content_copy" :size="16" label="Copiar" /> Copiar prompt
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

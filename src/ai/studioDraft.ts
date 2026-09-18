@@ -7,6 +7,24 @@ export interface DraftSpec {
   props: Record<string, unknown>
 }
 
+export interface Geracao {
+  authorUserId: string
+  provider: string
+  model: string
+  prompt: string
+  result: DraftSpec[]
+  at: number
+}
+
+export interface RegistrarMetadadosParams {
+  authorUserId: string
+  prompt: string
+  result?: DraftSpec[]
+  provider?: string
+  model?: string
+  at?: number
+}
+
 interface Regra {
   chaves: string[]
   pecas: DraftSpec[]
@@ -178,3 +196,16 @@ export function gerarDraft(texto: string): DraftSpec[] {
     { kind: 'button', props: { label: 'Continuar', variant: 'filled' } }
   ]
 }
+
+export function registrarMetadados(params: RegistrarMetadadosParams): Geracao {
+  const result = params.result ?? gerarDraft(params.prompt)
+  return {
+    authorUserId: params.authorUserId,
+    provider: params.provider ?? 'local',
+    model: params.model ?? 'template-ptbr',
+    prompt: params.prompt,
+    result,
+    at: params.at ?? Date.now()
+  }
+}
+
