@@ -15,6 +15,7 @@ import AiTube from '@/components/studio/AiTube.vue'
 import StudioIconRail, { type RailTab } from '@/components/studio/StudioIconRail.vue'
 import PresenceAvatars from '@/components/studio/PresenceAvatars.vue'
 import M3Icon from '@/components/studio/m3/M3Icon.vue'
+import NexoLogo from '@/components/common/NexoLogo.vue'
 import { gerarPromptStudio } from '@/utils/studioPrompt'
 import { useGraph } from '@/stores/useGraph'
 import { usePresence } from '@/stores/studioPresence'
@@ -229,8 +230,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           </button>
         </div>
       </div>
-      <span class="flex items-baseline text-[18px] font-extrabold tracking-tight" aria-label="NEXO Studio">NEXO <span class="ml-1 text-sm font-semibold text-nexo-muted">Studio</span></span>
-      <span class="hidden text-sm text-nexo-muted sm:inline">{{ projetoNome }}</span>
+      <div class="flex items-center gap-2">
+        <RouterLink
+          to="/"
+          class="flex items-center gap-1.5 rounded focus:outline-none focus:ring-2 focus:ring-nexo-primary"
+          aria-label="NEXO Studio — início"
+        >
+          <NexoLogo compact :size="22" />
+          <span class="text-sm font-semibold text-nexo-muted">Studio</span>
+        </RouterLink>
+        <span class="hidden text-xs text-nexo-border sm:inline" aria-hidden="true">/</span>
+        <span class="hidden text-sm font-medium text-nexo-text sm:inline" :title="projetoNome">
+          {{ projetoNome }}
+        </span>
+      </div>
       <span class="ml-auto flex items-center gap-2">
         <PresenceAvatars />
         <span class="hidden text-xs text-nexo-muted md:inline">voltando para {{ origemLabel }}</span>

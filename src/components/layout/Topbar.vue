@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Breadcrumb from '@/components/layout/Breadcrumb.vue'
 import ImpactBanner from '@/components/layout/ImpactBanner.vue'
+import NexoLogo from '@/components/common/NexoLogo.vue'
 import { useUI } from '@/stores/useUI'
 import { useGraph } from '@/stores/useGraph'
 import { useProjects } from '@/stores/useProjects'
@@ -81,12 +82,10 @@ function abrirBusca() {
       </button>
       <RouterLink
         to="/"
-        class="flex items-baseline text-[26px] font-extrabold tracking-tight"
+        class="flex items-center"
         aria-label="NEXO — início"
       >
-        <span class="text-nexo-text">NE</span>
-        <span class="bg-gradient-to-r from-[#1D4ED8] to-[#7C3AED] bg-clip-text text-transparent">X</span>
-        <span class="text-nexo-text">O</span>
+        <NexoLogo :size="28" />
       </RouterLink>
     </div>
 
