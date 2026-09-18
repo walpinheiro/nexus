@@ -163,6 +163,7 @@ const exemploCurto = computed(() => {
 })
 
 // W4: modo wizard (?modo=wizard, G0) — pergunta 1 falta por vez via processarMensagemWizard
+// (modoWizard hoje só controla o branch de envio; textos já são puros — regra ZERO-EMOJI permanente)
 const modoWizard = computed(() => route.query.modo === 'wizard' && props.gateId === 'G0')
 
 // Governança, papéis e travas
@@ -196,16 +197,13 @@ watch(
 
     let msgInicial = ''
     if (diag.aprovado) {
-      msgInicial = modoWizard.value
-        ? `Todos os critérios do Gate ${props.gateId} para "${props.alvo.titulo}" estão 100% preenchidos. O objeto está apto para aprovação formal de baseline.`
-        : `🎉 Todos os critérios do Gate ${props.gateId} para "${props.alvo.titulo}" estão 100% preenchidos! O objeto está apto para aprovação formal de baseline.`
+      // ZERO-EMOJI (regra permanente): texto puro, sem codepoint emoji; ícone Lucide vive no chrome da mensagem
+      msgInicial = `Todos os critérios do Gate ${props.gateId} para "${props.alvo.titulo}" estão 100% preenchidos. O objeto está apto para aprovação formal de baseline.`
     } else {
       // R3 Grill-me: ao abrir, a IA faz a 1ª pergunta da próxima falta (sem saudação prolixa nem menu mockado)
       const faltas = ordenarFaltasPorPapel(diag.faltas, props.gateId, users.currentUser?.papel)
       const primeira = faltas[0]
-      msgInicial = modoWizard.value
-        ? `[${primeira.codigo}] ${primeira.pergunta}\n\nExemplo sugerido: "${primeira.exemplo}"`
-        : `👉 **[${primeira.codigo}] ${primeira.pergunta}**\n\n*Exemplo sugerido:* "${primeira.exemplo}"`
+      msgInicial = `[${primeira.codigo}] ${primeira.pergunta}\n\nExemplo sugerido: "${primeira.exemplo}"`
     }
 
     historicoChat.value = [
@@ -290,15 +288,12 @@ async function enviarMensagem(textoCustom?: string) {
 
       const prov = ollamaStatus.value === 'online' ? provedorEfetivo.value : 'local-fallback (servidor inalcançável)'
       const mod = ollamaStatus.value === 'online' ? modeloEfetivo.value : 'local'
-      // Item C FIXTIPOS: texto puro sem emoji quando modoWizard ativo
-      let msgResp = modoWizard.value
-        ? `Provedor: ${prov}\nModelo efetivo: ${mod}\nStatus: ${ollamaStatus.value === 'online' ? 'Online' : 'Offline (resposta local)'}`
-        : `🤖 **Provedor:** \`${prov}\`\n**Modelo efetivo:** \`${mod}\`\n**Status:** ${ollamaStatus.value === 'online' ? '🟢 Online' : '⚪ Offline (resposta local)'}`
+      // ZERO-EMOJI (regra permanente): texto puro + Lucide no chrome; Online/Offline sem codepoint emoji
+      const msgRespBase = `Provedor: ${prov}\nModelo efetivo: ${mod}\nStatus: ${ollamaStatus.value === 'online' ? 'Online' : 'Offline (resposta local)'}`
+      let msgResp = msgRespBase
 
       if (falta) {
-        msgResp += modoWizard.value
-          ? `\n\nContinuando o Gate ${props.gateId}:\n[${falta.codigo}] ${falta.pergunta}\n\nExemplo sugerido: "${falta.exemplo}"`
-          : `\n\nContinuando o Gate ${props.gateId}:\n👉 **[${falta.codigo}] ${falta.pergunta}**\n\n*Exemplo sugerido:* "${falta.exemplo}"`
+        msgResp += `\n\nContinuando o Gate ${props.gateId}:\n[${falta.codigo}] ${falta.pergunta}\n\nExemplo sugerido: "${falta.exemplo}"`
       }
 
       historicoChat.value.push({
@@ -377,13 +372,11 @@ async function enviarMensagem(textoCustom?: string) {
       })
     } else {
       // Sem faltas pendentes — todos os checks já cumpridos (REMOVIDO menu mockado 'experimente pedir')
-      // Item C FIXTIPOS: texto puro sem emoji quando modoWizard ativo
+      // ZERO-EMOJI (regra permanente): texto puro, sem codepoint emoji
       historicoChat.value.push({
         id: `ia-${Date.now()}`,
         autor: 'ia',
-        texto: modoWizard.value
-          ? `Todos os critérios do Gate ${props.gateId} para "${props.alvo.titulo}" já estão 100% preenchidos e em conformidade. O objeto está apto para aprovação formal de baseline.`
-          : `🎉 Todos os critérios do Gate ${props.gateId} para "${props.alvo.titulo}" já estão 100% preenchidos e em conformidade! O objeto está apto para aprovação formal de baseline.`,
+        texto: `Todos os critérios do Gate ${props.gateId} para "${props.alvo.titulo}" já estão 100% preenchidos e em conformidade. O objeto está apto para aprovação formal de baseline.`,
         timestamp: agora
       })
     }
@@ -420,22 +413,18 @@ function aceitarPatch() {
     if (novoDiag.faltas.length > 0) {
       const faltas = ordenarFaltasPorPapel(novoDiag.faltas, props.gateId, users.currentUser?.papel)
       const prox = faltas[0]
-      // Item C FIXTIPOS: texto puro sem emoji quando modoWizard ativo
+      // ZERO-EMOJI (regra permanente): texto puro, sem codepoint emoji
       historicoChat.value.push({
         id: `sys-${Date.now()}`,
         autor: 'ia',
-        texto: modoWizard.value
-          ? `Patch aceito. O objeto foi atualizado para v${props.alvo.versao}.\n\nPróxima pergunta da IA do Gate:\n[${prox.codigo}] ${prox.pergunta}\n\nExemplo sugerido: "${prox.exemplo}"`
-          : `✅ **Patch aceito!** O objeto foi atualizado para **v${props.alvo.versao}**.\n\nPróxima pergunta da IA do Gate:\n👉 **[${prox.codigo}] ${prox.pergunta}**\n\n*Exemplo sugerido:* "${prox.exemplo}"`,
+        texto: `Patch aceito. O objeto foi atualizado para v${props.alvo.versao}.\n\nPróxima pergunta da IA do Gate:\n[${prox.codigo}] ${prox.pergunta}\n\nExemplo sugerido: "${prox.exemplo}"`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       })
     } else {
       historicoChat.value.push({
         id: `sys-${Date.now()}`,
         autor: 'ia',
-        texto: modoWizard.value
-          ? `Todos os critérios da IA do Gate ${props.gateId} foram preenchidos com sucesso.\nO objeto está 100% em conformidade e pronto para solicitar aprovação formal.`
-          : `🎉 **Todos os critérios da IA do Gate ${props.gateId} foram preenchidos com sucesso!**\nO objeto está 100% em conformidade e pronto para solicitar aprovação formal.`,
+        texto: `Todos os critérios da IA do Gate ${props.gateId} foram preenchidos com sucesso.\nO objeto está 100% em conformidade e pronto para solicitar aprovação formal.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       })
     }
