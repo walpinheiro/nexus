@@ -36,6 +36,8 @@ export interface FeedEvent {
   kind: FeedKind
   detalhe: string
   at: number
+  provider?: string
+  screenId?: string
 }
 
 export interface RegistrarEvento {
@@ -43,6 +45,20 @@ export interface RegistrarEvento {
   kind: FeedKind
   detalhe: string
   at?: number
+  provider?: string
+  screenId?: string
+}
+
+// Presença por task (featureId): só usuários atuando na task, cada um com
+// o provider de IA em uso e a tela atual (screenId). Transitória como
+// cursores/seleção: sem ids gerados, só os valores passados.
+export interface TaskPresenceInfo {
+  provider: string
+  screenId: string
+}
+
+export interface TaskRosterEntry extends TaskPresenceInfo {
+  userId: string
 }
 
 // Faixa de agentes (faixa pen.dev: OpenAI/Claude/Gemini/DeepSeek). Modelos
@@ -125,8 +141,11 @@ export const usePresence = defineStore('studioPresence', () => {
   const online = ref<Record<string, boolean>>(saved.online)
   const agents = ref<Record<string, AgentInfo>>(saved.agents)
   // Cursores/seleção são transitórios (60fps via rAF) e não persistem.
+  // Presença por task (featureId -> userId -> { provider, screenId }) também
+  // é transitória: roster filtrado só com usuários atuando na task.
   const cursors = ref<Record<string, CursorState | null>>({})
   const selections = ref<Record<string, string[]>>({})
+  const tasks = ref<Record<string, Record<string, TaskPresenceInfo>>>({})
   const feed = ref<FeedEvent[]>(saved.feed)
 
   // Defaults para usuários sem override persistido.
@@ -195,17 +214,43 @@ export const usePresence = defineStore('studioPresence', () => {
   }
 
   function registrarEvento(e: RegistrarEvento) {
-    feed.value.unshift({
+    const ev: FeedEvent = {
       id: `ev-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
       actorUserId: e.actorUserId,
       kind: e.kind,
       detalhe: e.detalhe,
       at: e.at ?? Date.now()
-    })
+    }
+    // Campos opcionais só gravados quando informados; feed antigo intacto.
+    if (e.provider !== undefined) ev.provider = e.provider
+    if (e.screenId !== undefined) ev.screenId = e.screenId
+    feed.value.unshift(ev)
     if (feed.value.length > MAX_FEED) feed.value.length = MAX_FEED
     persist()
   }
 
+  function setPresence(featureId: string, userId: string, info: TaskPresenceInfo) {
+    const da_task = tasks.value[featureId] ?? {}
+    da_task[userId] = { provider: info.provider, screenId: info.screenId }
+    tasks.value[featureId] = da_task
+  }
+
+  function clearPresence(featureId: string, userId: string) {
+    const da_task = tasks.value[featureId]
+    if (!da_task || !(userId in da_task)) return
+    delete da_task[userId]
+    if (Object.keys(da_task).length === 0) delete tasks.value[featureId]
+  }
+
+  // Roster filtrado: só usuários com presença registrada na task.
+  function getRoster(featureId: string): TaskRosterEntry[] {
+    const da_task = tasks.value[featureId] ?? {}
+    return Object.entries(da_task).map(([userId, info]) => ({
+      userId,
+      provider: info.provider,
+      screenId: info.screenId
+    }))
+  }
   // Assinatura de autoria do prompt (formato alinhado com Engenheiro 2 —
   // Frente B): 'Author: Nome (Model)' na 1a linha, sem mudar o formato M3E.
   function assinaturaAutor(userId?: string): string {
@@ -239,6 +284,9 @@ export const usePresence = defineStore('studioPresence', () => {
     setAgent,
     agenteDe,
     registrarEvento,
+    setPresence,
+    clearPresence,
+    getRoster,
     assinaturaAutor,
     atividadeTexto,
     persist

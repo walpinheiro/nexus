@@ -170,9 +170,12 @@ export const useGate = defineStore('gate', () => {
     }
     const ev = avaliarGate(alvo, graph.waivers.filter((w) => w.alvoId === alvoId).map((w) => ({ codigo: w.codigo, prazo: w.prazo })), gateId)
     if (!ev.bloqueantesOk) {
-      const motivo = `Checklist bloqueante incompleto: ${ev.bloqueantesFaltando.join(', ')}.`
+      const motivo = `Gate ${gateId} bloqueado: checklist bloqueante incompleto (${ev.bloqueantesFaltando.join(', ')}).`
       tentativas.value.unshift({ em: new Date().toISOString(), gate: gateId, alvoId, atorId: ator.id, ok: false, motivo })
+      const evAudit: AuditEvent = { id: `a-${Date.now()}`, em: new Date().toISOString(), ator_id: ator.id, acao: 'GateDenied', alvo_id: alvoId, detalhe: motivo }
+      graph.audit.unshift(evAudit)
       persist()
+      graph.persist()
       return { ok: false, motivo }
     }
     // aprova: baseline = versão atual, status approved

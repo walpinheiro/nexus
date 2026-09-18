@@ -523,10 +523,15 @@ export interface GateResumo {
 
 export function gateDesbloqueado(gateId: GateId, gates: GateResumo[]): boolean {
   const idx = ORDEM_GATES.indexOf(gateId)
-  if (idx <= 0) return true
-  const ant = gates.find((g) => g.id === ORDEM_GATES[idx - 1])
+  if (idx === -1) return false
+  if (idx === 0) return true
+  if (!Array.isArray(gates)) return false
+  const ant = gates.find((g) => g?.id === ORDEM_GATES[idx - 1])
   if (!ant) return false
-  return ant.status === 'aprovado' && ant.baselineVersao != null
+  if (typeof ant.status !== 'string' || ant.status.trim() !== 'aprovado') return false
+  const b = ant.baselineVersao
+  if (b == null) return false
+  return Number(b) > 0
 }
 
 export function gateAnterior(gateId: GateId): GateId | null {

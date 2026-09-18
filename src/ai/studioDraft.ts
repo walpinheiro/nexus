@@ -30,6 +30,41 @@ interface Regra {
   pecas: DraftSpec[]
 }
 
+// Normaliza para busca sem acento/caixa (puro, determinístico).
+function normalizar(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+const CHAVES_PIX = ['pix', 'qr', 'qrcode', 'qr code', 'cobranca', 'chave pix', 'copia e cola']
+
+function ehPix(normalizado: string): boolean {
+  return CHAVES_PIX.some((c) => normalizado.includes(c))
+}
+
+// Caminho Pix prioritário: peças cobrindo pagar → criar → confirmar → status.
+// Toda peça com label não-vazio, PT-BR, sem emoji.
+function montarPix(): DraftSpec[] {
+  return [
+    { kind: 'card', props: { label: 'Pagamento Pix', supporting: 'Cobrança via QR.', variant: 'tonal' } },
+    { kind: 'textField', props: { label: 'Chave Pix', variant: 'outlined' } },
+    { kind: 'textField', props: { label: 'Valor', variant: 'outlined' } },
+    { kind: 'button', props: { label: 'Criar cobrança Pix', variant: 'filled' } },
+    { kind: 'button', props: { label: 'Pagar com Pix', variant: 'filled' } },
+    { kind: 'button', props: { label: 'Confirmar pagamento', variant: 'tonal' } },
+    { kind: 'card', props: { label: 'Status do pagamento', supporting: 'Aguardando confirmação.', variant: 'tonal' } }
+  ]
+}
+
+// Rótulo do fallback: deriva do texto (título/descrição/fluxo/BDD colado no
+// tubo) ou 'Pagamento Pix' quando vazio. Nunca vazio.
+function rotuloFallback(texto: string): string {
+  const base = texto.trim().replace(/\s+/g, ' ').slice(0, 60)
+  return base || 'Pagamento Pix'
+}
+
 const REGRAS: Regra[] = [
   {
     chaves: ['login', 'entrar', 'senha', 'email', 'acesso'],
@@ -181,18 +216,24 @@ const REGRAS: Regra[] = [
 ]
 
 export function gerarDraft(texto: string): DraftSpec[] {
-  const t = texto.trim().toLowerCase()
-  if (!t) return []
+  const bruto = texto.trim()
+  if (!bruto) return []
+  const t = normalizar(bruto)
+  // Caminho Pix prioritário: pix/qr/cobrança cobre pagar → criar → confirmar → status.
+  if (ehPix(t)) return montarPix()
   const achadas: DraftSpec[] = []
   for (const r of REGRAS) {
-    if (r.chaves.some((c) => t.includes(c))) {
+    if (r.chaves.some((c) => t.includes(normalizar(c)))) {
       for (const p of r.pecas) achadas.push({ kind: p.kind, props: { ...p.props } })
     }
   }
   if (achadas.length > 0) return achadas.slice(0, 12)
+  // Fallback sem keyword vazia: deriva de título/descrição/fluxo/BDD colado
+  // no tubo, ou 'Pagamento Pix'. Toda peça com label não-vazio.
+  const rotulo = rotuloFallback(bruto)
   return [
-    { kind: 'topAppBar', props: { label: 'Nova tela', icon: 'menu', variant: 'filled' } },
-    { kind: 'text', props: { label: texto.trim().slice(0, 60) } },
+    { kind: 'topAppBar', props: { label: rotulo, icon: 'menu', variant: 'filled' } },
+    { kind: 'text', props: { label: rotulo } },
     { kind: 'button', props: { label: 'Continuar', variant: 'filled' } }
   ]
 }

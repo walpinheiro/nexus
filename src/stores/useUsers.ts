@@ -76,6 +76,7 @@ export const useUsers = defineStore('users', () => {
   if (localStorage.getItem(KEY) == null) persist()
 
   function trocarUsuario(id: string) {
+    if (!state.value.usuarios.some((u) => u.id === id)) return
     state.value.currentUserId = id
     persist()
   }
