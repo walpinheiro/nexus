@@ -4,7 +4,7 @@ import { useStudio } from '@/stores/useStudio'
 import { AGENTES, usePresence } from '@/stores/studioPresence'
 import M3Icon from './m3/M3Icon.vue'
 
-export type RailTab = 'parts' | 'layers' | 'colors' | 'shape' | 'type' | 'motion' | 'ai' | 'language'
+export type RailTab = 'parts' | 'layers' | 'colors' | 'shape' | 'type' | 'motion' | 'ai'
 
 const props = defineProps<{ ativo: RailTab }>()
 const emit = defineEmits<{ (e: 'selecionar', tab: RailTab): void }>()
@@ -19,8 +19,7 @@ const BOTOES: { id: RailTab; rotulo: string; icone: string }[] = [
   { id: 'shape', rotulo: 'Forma', icone: 'rounded_corner' },
   { id: 'type', rotulo: 'Tipo', icone: 'text_fields' },
   { id: 'motion', rotulo: 'Movimento', icone: 'animation' },
-  { id: 'ai', rotulo: 'IA', icone: 'auto_awesome' },
-  { id: 'language', rotulo: 'Idioma', icone: 'translate' }
+  { id: 'ai', rotulo: 'IA', icone: 'auto_awesome' }
 ]
 
 const AI_CONFIG_KEY = 'nexo.v1.studio.aiConfig'
@@ -50,11 +49,6 @@ const mostrarAi = computed(() => props.ativo === 'ai')
 function salvarAi() {
   salvarAiConfig(aiConfig.value)
 }
-
-function setIdioma(v: string) {
-  studio.doc.theme.contrast = v
-  studio.persist()
-}
 </script>
 
 <template>
@@ -79,18 +73,6 @@ function setIdioma(v: string) {
       >
         <M3Icon :name="b.icone" :size="22" :label="b.rotulo" />
       </button>
-      <a
-        href="https://github.com/lnkiai/m3e-canvas"
-        target="_blank"
-        rel="noopener"
-        title="GitHub m3e-canvas (abre em nova aba)"
-        aria-label="GitHub m3e-canvas, abre em nova aba"
-        class="flex h-11 w-11 items-center justify-center rounded-full text-nexo-muted hover:bg-nexo-canvas"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.15c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.75 2.69 1.25 3.35.95.1-.74.4-1.25.72-1.53-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.77 1.05.77 2.12v3.14c0 .3.21.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
-        </svg>
-      </a>
     </nav>
     <div v-if="ativo === 'colors'" class="w-60 shrink-0 overflow-auto border-r border-nexo-border bg-white p-3 text-xs" role="tabpanel" aria-label="Painel Cores">
       <h2 class="font-bold">Cores</h2>
@@ -152,18 +134,6 @@ function setIdioma(v: string) {
       </label>
       <p class="mt-2 text-nexo-muted">Chave armazenada só neste navegador (localStorage).</p>
       <p class="mt-1 text-nexo-muted">Desenhando como {{ presence.agenteDe('u-pm').model }}.</p>
-    </div>
-    <div v-else-if="ativo === 'language'" class="w-60 shrink-0 overflow-auto border-r border-nexo-border bg-white p-3 text-xs" role="tabpanel" aria-label="Painel Idioma">
-      <h2 class="font-bold">Idioma</h2>
-      <label class="mt-2 block">Idioma do canvas
-        <select :value="studio.doc.theme.contrast ?? 'EN'" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1" aria-label="Idioma do canvas" @change="setIdioma(($event.target as HTMLSelectElement).value)">
-          <option value="JA">JA</option>
-          <option value="EN">EN</option>
-          <option value="ZH">ZH</option>
-          <option value="KO">KO</option>
-        </select>
-      </label>
-      <p class="mt-2 text-nexo-muted">Rótulos do Studio seguem PT-BR; este seletor espelha o fonte M3E.</p>
     </div>
   </div>
 </template>
