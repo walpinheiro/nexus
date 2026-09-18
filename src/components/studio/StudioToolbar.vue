@@ -4,6 +4,8 @@ import { useStudio } from '@/stores/useStudio'
 import { encodeDoc } from '@/utils/studioShare'
 import M3Icon from './m3/M3Icon.vue'
 
+const props = defineProps<{ stageEl?: HTMLElement | null }>()
+
 const emit = defineEmits<{
   (e: 'preview'): void
   (e: 'abrir-prompt'): void
@@ -113,7 +115,7 @@ function abrirPrompt() {
       <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="inline-flex items-center justify-center rounded-btn px-1.5 py-1" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
       <span class="min-w-12 text-center" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
       <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="inline-flex items-center justify-center rounded-btn px-1.5 py-1" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
-      <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.zoom = 0.7"><M3Icon name="fit_screen" :size="18" label="Ajustar" />Ajustar</button>
+      <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.ajustarZoom(props.stageEl ?? null)"><M3Icon name="fit_screen" :size="18" label="Ajustar" />Ajustar</button>
     </span>
     <button type="button" title="Organizar (tidy)" aria-label="Organizar" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.tidy()"><M3Icon name="auto_fix" :size="18" label="Organizar" />Organizar</button>
     <button type="button" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.undo()"><M3Icon name="undo" :size="18" label="Desfazer" />Desfazer</button>

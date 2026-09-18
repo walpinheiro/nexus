@@ -304,6 +304,7 @@ export const useStudio = defineStore('studio', () => {
 
   function criarItemSemHistorico(kind: string, x: number, y: number, props?: Partial<StudioItem>): StudioItem {
     const it: StudioItem = { id: rid('it'), kind, label: rotuloDefault(kind), icon: null, variant: 'filled', x: Math.round(x), y: Math.round(y), ...(props ?? {}) } as StudioItem
+    prenderNoFrame(it)
     const max = doc.value.groups.reduce((m, g) => Math.max(m, g.order ?? 0), -1)
     doc.value.groups.push({ id: rid('g'), x: it.x, y: it.y, axis: 'x', order: max + 1, items: [it] })
     return it
@@ -312,11 +313,38 @@ export const useStudio = defineStore('studio', () => {
   function criarItem(kind: string, x: number, y: number, label?: string): StudioItem {
     pushHistory()
     const it: StudioItem = { id: rid('it'), kind, label: label ?? rotuloDefault(kind), icon: null, variant: 'filled', x: Math.round(x), y: Math.round(y) }
+    prenderNoFrame(it)
     const max = doc.value.groups.reduce((m, g) => Math.max(m, g.order ?? 0), -1)
     doc.value.groups.push({ id: rid('g'), x: it.x, y: it.y, axis: 'x', order: max + 1, items: [it] })
     selecionados.value = [it.id]
     persist()
     return it
+  }
+
+  // MOBILE 100% (M1): barras esticam à largura do frame; demais itens
+  // ficam contidos (x+w ≤ frame.x+frame.w) via clamp.
+  const BARRAS = new Set(['topAppBar', 'bottomNav'])
+
+  function frameDe(x: number) {
+    return doc.value.frames.find((f) => x >= f.x && x < f.x + f.w)
+  }
+
+  function larguraDe(it: StudioItem): number {
+    return it.w ?? (typeof it.size === 'number' ? it.size : undefined) ?? 180
+  }
+
+  function prenderNoFrame(it: StudioItem): void {
+    const f = frameDe(it.x)
+    if (!f) return
+    if (BARRAS.has(it.kind)) {
+      it.x = f.x
+      it.w = f.w
+      return
+    }
+    const w = larguraDe(it)
+    it.x = Math.min(Math.max(Math.round(it.x), f.x), f.x + f.w - Math.min(w, f.w))
+    it.y = Math.max(Math.round(it.y), f.y)
+    if (it.w != null) it.w = Math.min(Math.round(it.w), f.w)
   }
 
   function rotuloDefault(kind: string): string {
@@ -363,6 +391,7 @@ export const useStudio = defineStore('studio', () => {
       it.size = it.w
       it.size2 = it.h
     }
+    prenderNoFrame(it)
     persist()
   }
 
@@ -372,6 +401,7 @@ export const useStudio = defineStore('studio', () => {
       if (it) {
         it.x = Math.round(it.x + dx)
         it.y = Math.round(it.y + dy)
+        prenderNoFrame(it)
       }
     }
     persist()
@@ -412,13 +442,33 @@ export const useStudio = defineStore('studio', () => {
       .sort((a, b) => a.y - b.y || a.x - b.x)
     let y = f.y + 110
     for (const it of itens) {
-      if (it.kind === 'topAppBar' || it.kind === 'bottomNav') continue
+      if (it.kind === 'topAppBar' || it.kind === 'bottomNav') {
+        it.x = f.x
+        it.w = f.w
+        continue
+      }
       it.x = f.x + 16
       it.y = y
+      if (it.w != null) it.w = Math.min(it.w, f.w - 32)
       const h = it.h ?? it.size2 ?? 80
       y += h + ESPACO
     }
     persist()
+  }
+
+  // Fit (M1): zoom para caber o frame atual no viewport do stage.
+  function ajustarZoom(el: HTMLElement | null): void {
+    const f = frameAtual()
+    if (!f || !el) {
+      zoom.value = 0.7
+      return
+    }
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) {
+      zoom.value = 0.7
+      return
+    }
+    zoom.value = Math.min(rect.width / f.w, rect.height / f.h, 2)
   }
 
   function importarDoc(novo: StudioDoc): void {
@@ -464,6 +514,7 @@ export const useStudio = defineStore('studio', () => {
     removerItens,
     duplicarItens,
     tidy,
+    ajustarZoom,
     redimensionarItem,
     importarDoc
   }

@@ -14,6 +14,7 @@ const emit = defineEmits<{
   (e: 'update:ferramenta', v: 'select' | 'hand'): void
 }>()
 const props = defineProps<{ ferramenta?: 'select' | 'hand' }>()
+const stageEl = ref<HTMLDivElement | null>(null)
 const caixa = ref<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 let panAtivo = false
 let panStart = { x: 0, y: 0, px: 0, py: 0 }
@@ -296,6 +297,7 @@ defineExpose({ alternarPreview })
 
 <template>
   <div
+    ref="stageEl"
     class="canvas-dots relative min-h-[480px] flex-1 overflow-hidden rounded-card border border-nexo-border"
     :class="middlePan || panAtivo ? 'cursor-grabbing' : ''"
     tabindex="0"
@@ -312,7 +314,7 @@ defineExpose({ alternarPreview })
   >
     <div class="pointer-events-none absolute left-2 right-2 top-2 z-20 flex justify-center">
       <div class="pointer-events-auto max-w-full overflow-x-auto" style="border-radius: 28px">
-        <StudioToolbar v-model:ferramenta="ferramenta" @preview="emit('preview')" @abrir-prompt="emit('abrir-prompt')" @abrir-ask="emit('abrir-ask')" />
+        <StudioToolbar v-model:ferramenta="ferramenta" :stage-el="stageEl" @preview="emit('preview')" @abrir-prompt="emit('abrir-prompt')" @abrir-ask="emit('abrir-ask')" />
       </div>
     </div>
     <div
@@ -326,7 +328,7 @@ defineExpose({ alternarPreview })
     >
       <template v-for="fr in studio.doc.frames" :key="fr.id">
         <div
-          class="absolute rounded-card border-2 bg-white"
+          class="absolute overflow-hidden rounded-card border-2 bg-white"
           :style="{ left: fr.x + 'px', top: fr.y + 'px', width: fr.w + 'px', height: fr.h + 'px', borderColor: fr.id === studio.screenId ? '#1D4ED8' : '#CBD5E1' }"
           @pointerdown.stop="studio.screenId = fr.id; studio.persist()"
         >
