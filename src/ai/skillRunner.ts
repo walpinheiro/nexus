@@ -1,6 +1,10 @@
-// SkillRunner QUEEN-MOTOR O2/O5 — executa skill de gate via Ollama local com fallback determinístico.
-// Offline (OllamaOffline) → fallback local: diagnosticarFaltasGate + gerarPropostaPatch,
-// marcado provider:'local-fallback' (garante determinism diff0 sem rede).
+// SkillRunner QUEEN-MOTOR O2/O5 + FIX-REAL-OLLAMA R1/R2.
+// FATO PROVADO PELO DONO: o servidor real em :11434 é llama.cpp (llama-server) servindo
+// Ternary-Bonsai-2-27B, NÃO Ollama oficial. Por isso o motor usa o client dual
+// (chatComProvedor: /api/chat → /v1/chat/completions, model EFETIVO via /v1/models).
+// Offline (OllamaOffline) → fallback local HONESTO: diz "servidor inalcançável" e faz a
+// pergunta da próxima falta — NUNCA menu de comandos (o mock que o dono viu).
+// Retorno inclui SEMPRE provider:'ollama'|'llama.cpp'|'local-fallback' + model EFETIVO.
 //
 // CONTRATO INTERNO O5 (Bússola) — LEIA ANTES DE USAR NA UX:
 // - A seleção de skill é 100% INTERNA por gateId (ver `selecionarSkillInterna`): o MOTOR
@@ -24,9 +28,9 @@ import {
   obterSkillsDoGate,
   type FaltaGate
 } from '@/ai/gateSkills'
-import { chat, getConfig, OllamaOffline, type OllamaMessage } from '@/ai/ollamaClient'
+import { chatComProvedor, OllamaOffline, type OllamaMessage } from '@/ai/ollamaClient'
 
-export type SkillRunnerProvider = 'ollama' | 'local-fallback'
+export type SkillRunnerProvider = 'ollama' | 'llama.cpp' | 'local-fallback'
 
 export interface SkillRunnerResult {
   skillId: string
@@ -38,18 +42,45 @@ export interface SkillRunnerResult {
   model: string
 }
 
-function montarSystem(gateId: GateId, papelUsuario?: Role): string {
+/**
+ * R2 — grill-me via LLM de verdade.
+ * O system carrega a SKILL do gate de fato: skill interna selecionada (nome interno),
+ * checks cobertos, perguntas do DICIONARIO (pergunta/porQueBloqueia/exemplo), estado
+ * resumido do objeto e faltas diagnosticadas. O LLM é instruído a conduzir UMA pergunta
+ * por vez, extrair respostas do histórico e confirmar antes de propor patch.
+ * Sem menu de comandos: a instrução PROÍBE responder com lista de comandos
+ * ("experimente pedir...") — isso era o mock que o dono viu.
+ */
+function montarSystemGrill(
+  gateId: GateId,
+  skillId: string,
+  faltasRoteiro: FaltaGate[],
+  objeto: NexoObject,
+  papelUsuario?: Role
+): string {
   const skills = obterSkillsDoGate(gateId)
-  const desc = skills
-    .map((s) => `- ${s.id} (${s.nome}): checks [${s.checks.join(', ')}]. ${s.descricao}`)
+  const skill = skills.find((s) => s.id === skillId) ?? skills[0]
+  const checksLinha = (skill?.checks ?? []).join(', ') || '(nenhum)'
+  const perguntas = faltasRoteiro
+    .map((f) => `- [${f.codigo}] campoAlvo=${f.campoAlvo} (${f.severidade}): ${f.pergunta} Por que bloqueia: ${f.porQueBloqueia} Exemplo: "${f.exemplo}"`)
     .join('\n')
   const linhaPapel = linhaTomPorPapel(gateId, papelUsuario)
   return [
     `Você é a IA de apoio ao Gate ${gateId} do NEXO (100% local, PT-BR).`,
-    'Skills disponíveis:',
-    desc || '(nenhuma)',
+    `Skill interna em uso: ${skill?.nome ?? skillId} [${skillId}] — checks: ${checksLinha}.`,
+    `Estado atual do objeto "${objeto.titulo}" (tipo=${objeto.tipo}, id=${objeto.id}):`,
+    JSON.stringify(objeto, null, 1).slice(0, 2500),
+    '',
+    'Faltas diagnosticadas (ROTEIRO — conduza nesta ordem, UMA pergunta por vez):',
+    perguntas || '(nenhuma — todos os checks OK; confirme o estado e elogie objetivamente)',
+    '',
     linhaPapel,
-    'Responda de forma objetiva: para cada falta, cite o código do check, o campoAlvo e o valor sugerido entre aspas.'
+    'REGRAS DURAS:',
+    '1. Faça UMA única pergunta por resposta — sempre a próxima falta do roteiro acima.',
+    '2. Quando o usuário responder, extraia o valor para o campoAlvo e CONFIRME ("Anotei X para [CODIGO]") antes de avançar.',
+    '3. NUNCA responda com menu/lista de comandos como "experimente pedir: ..." — isso é proibido.',
+    '4. Para cada falta cite o código do check, o campoAlvo e o valor sugerido entre aspas.',
+    '5. Se perguntarem "qual o seu modelo?", responda apenas com fatos da conversa; nunca invente nome de modelo.'
   ].join('\n')
 }
 
@@ -224,18 +255,19 @@ export async function executarSkill(
   const skillId = selecionarSkillInterna(gateId, diag.faltas.map((f) => f.codigo))
   // O5: roteiro adaptado ao papel — mantém TODAS as perguntas, só reordena.
   const faltasRoteiro = ordenarFaltasPorPapel(diag.faltas, gateId, papelUsuario)
-  const cfg = getConfig()
 
-  // O5: Ollama primeiro ({http://localhost:11434, model queen} via getConfig);
-  // offline → OllamaOffline → fallback local silencioso (provider 'local-fallback').
+  // R1/R2: LLM de verdade primeiro (Ollama oficial ou llama.cpp via chat dual,
+  // model EFETIVO resolvido em runtime); offline → OllamaOffline → fallback local
+  // que DIZ que está offline (sem badgeamento silencioso, sem menu de comandos).
   try {
-    const resposta = await chat(
+    const llm = await chatComProvedor(
       [
-        { role: 'system', content: montarSystem(gateId, papelUsuario) },
+        { role: 'system', content: montarSystemGrill(gateId, skillId, faltasRoteiro, objeto, papelUsuario) },
         { role: 'user', content: montarUser(objeto, gateId, historico) }
       ],
-      { timeoutMs: 60000 }
+      { timeoutMs: 120000 }
     )
+    const resposta = llm.texto
     const respostas = extrairRespostasDoTexto(
       [...historico.filter((m) => m.role === 'user').map((m) => m.content), resposta].join('\n'),
       diag.faltas
@@ -247,22 +279,25 @@ export async function executarSkill(
       faltasRestantes: faltasRoteiro,
       outputParcial: resposta.slice(0, 2000),
       patchProposto: patch,
-      provider: 'ollama',
-      model: cfg.model
+      provider: llm.provider,
+      model: llm.model
     }
   } catch (e) {
     if (!(e instanceof OllamaOffline)) throw e
-    // Fallback determinístico local — sem rede, diff0 garantido
+    // Fallback local HONESTO (R2): diz que está offline e faz a pergunta da próxima
+    // falta do roteiro + registra — NUNCA menu de comandos ("experimente pedir...").
     const respostas = extrairRespostasDoTexto(
       historico.filter((m) => m.role === 'user').map((m) => m.content).join('\n'),
       diag.faltas
     )
     const patch = montarPatchLocal(objeto, faltasRoteiro, respostas)
+    const proxima = faltasRoteiro[0]
     const outputParcial =
       diag.faltas.length === 0
-        ? `Gate ${gateId}: todos os checks OK para "${objeto.titulo}" (fallback local).`
-        : `Gate ${gateId} — faltas para "${objeto.titulo}" (fallback local): ` +
-          faltasRoteiro.map((f) => `${f.codigo}(${f.campoAlvo})`).join(', ')
+        ? `Gate ${gateId}: todos os checks OK para "${objeto.titulo}" (resposta local — servidor inalcançável).`
+        : `Gate ${gateId} — "${objeto.titulo}" (resposta local — servidor inalcançável; faltas: ` +
+          faltasRoteiro.map((f) => `${f.codigo}(${f.campoAlvo})`).join(', ') +
+          `).\n\n👉 [${proxima.codigo}] ${proxima.pergunta}\nExemplo: "${proxima.exemplo}"`
     return {
       skillId,
       respostasColetadas: respostas,
