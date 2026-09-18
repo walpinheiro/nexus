@@ -241,24 +241,26 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </button>
       </span>
     </header>
-    <div class="pointer-events-none absolute left-0 right-0 top-14 z-30 flex justify-center">
-      <div class="pointer-events-auto" style="border-radius: 28px">
-        <StudioToolbar @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" />
+    <div class="relative min-h-0 flex-1">
+      <div class="pointer-events-none absolute left-0 right-0 top-2 z-30 flex justify-center">
+        <div class="pointer-events-auto" style="border-radius: 28px">
+          <StudioToolbar @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" />
+        </div>
       </div>
-    </div>
-    <div class="pointer-events-none absolute bottom-4 right-4 z-30 flex justify-end">
-      <div class="pointer-events-auto flex items-center gap-1 rounded-full border border-nexo-border bg-white px-2 py-1 text-xs shadow-card" role="group" aria-label="Zoom do stage">
-        <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="rounded-full px-1.5 py-0.5" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
-        <span class="min-w-10 text-center" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
-        <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="rounded-full px-1.5 py-0.5" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
-        <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="rounded-full border border-nexo-border px-2 py-0.5" @click="studio.zoom = 0.7"><M3Icon name="fit_screen" :size="14" label="Ajustar" /></button>
+      <div class="pointer-events-none absolute bottom-4 right-4 z-30 flex justify-end">
+        <div class="pointer-events-auto flex items-center gap-1 rounded-full border border-nexo-border bg-white px-2 py-1 text-xs shadow-card" role="group" aria-label="Zoom do stage">
+          <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="rounded-full px-1.5 py-0.5" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
+          <span class="min-w-10 text-center" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
+          <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="rounded-full px-1.5 py-0.5" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
+          <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="rounded-full border border-nexo-border px-2 py-0.5" @click="studio.zoom = 0.7"><M3Icon name="fit_screen" :size="14" label="Ajustar" /></button>
+        </div>
       </div>
-    </div>
-    <div class="flex min-h-0 flex-1 pt-14">
+      <div class="flex h-full min-h-0">
+      <StudioIconRail :ativo="railTab" @selecionar="(t) => { railTab = t; if (t === 'parts' || t === 'layers') abaEsq = t }" />
       <aside class="flex w-60 shrink-0 flex-col border-r border-nexo-border bg-white" aria-label="Paleta e layers">
         <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas da esquerda">
-          <button type="button" role="tab" :aria-selected="abaEsq === 'parts'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'parts' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaEsq = 'parts'">Parts</button>
-          <button type="button" role="tab" :aria-selected="abaEsq === 'layers'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'layers' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaEsq = 'layers'">Layers</button>
+          <button type="button" role="tab" :aria-selected="abaEsq === 'parts'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'parts' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaEsq = 'parts'; railTab = 'parts'">Parts</button>
+          <button type="button" role="tab" :aria-selected="abaEsq === 'layers'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'layers' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaEsq = 'layers'; railTab = 'layers'">Layers</button>
         </div>
         <PartsPalette v-if="abaEsq === 'parts'" class="min-h-0 flex-1 border-r-0" />
         <LayersPanel v-else class="min-h-0 flex-1" />
@@ -308,6 +310,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <p v-if="promptCopiado" class="mt-1 text-center text-nexo-approved" role="status">{{ promptCopiado }}</p>
         </div>
       </aside>
+      </div>
     </div>
     <div class="flex items-center gap-2 overflow-auto border-t border-nexo-border bg-white p-2 text-xs" aria-label="Telas">
       <button
