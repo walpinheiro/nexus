@@ -319,15 +319,103 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
 
   if (gate === 'G4') {
     const p = objeto as unknown as Record<string, unknown>
-    const bdd = Array.isArray(p['criterios_bdd']) ? (p['criterios_bdd'] as unknown[]) : []
+    const bdd = Array.isArray(p['criterios_bdd']) ? (p['criterios_bdd'] as Record<string, unknown>[]) : []
+    const scopeIn = Array.isArray(p['escopo_in']) ? (p['escopo_in'] as unknown[]) : []
+    const scopeOut = Array.isArray(p['escopo_out']) ? (p['escopo_out'] as unknown[]) : []
+    const deps = Array.isArray(p['dependencias']) ? (p['dependencias'] as string[]) : []
+    const owner = (objeto.owner ?? '').trim()
     checks.push({
-      codigo: 'PBI-001',
-      descricao: 'Definition of Ready: aceite + escopo + dependências + owner + teste',
+      codigo: 'PBI-ACEITE',
+      descricao: 'Aceite: ≥1 critério BDD Given/When/Then verificável',
       severidade: 'bloqueante',
-      ok:
-        bdd.length >= 1 &&
-        objeto.owner.trim() !== '' &&
-        String(p['estrategia_teste'] ?? '').trim() !== ''
+      ok: bdd.some((b) => String(b['given'] ?? '').trim() !== '' && String(b['when'] ?? '').trim() !== '' && String(b['then'] ?? '').trim() !== '')
+    })
+    checks.push({
+      codigo: 'PBI-ORIGEM',
+      descricao: 'Origem: feature_id + owner definidos',
+      severidade: 'bloqueante',
+      ok: String(p['feature_id'] ?? '').trim() !== '' && owner !== ''
+    })
+    checks.push({
+      codigo: 'PBI-ESCOPO',
+      descricao: 'Escopo dentro/fora explícito',
+      severidade: 'bloqueante',
+      ok: scopeIn.length >= 1 && scopeOut.length >= 1
+    })
+    checks.push({
+      codigo: 'PBI-DEP',
+      descricao: 'Dependências resolvidas; zero bloqueador aberto',
+      severidade: 'bloqueante',
+      ok: !deps.some((d) => d.toLowerCase().includes('bloquead'))
+    })
+    checks.push({
+      codigo: 'PBI-OWNER',
+      descricao: 'Owner do PBI definido',
+      severidade: 'bloqueante',
+      ok: owner !== ''
+    })
+    checks.push({
+      codigo: 'PBI-TESTE',
+      descricao: 'Estratégia de teste definida (sem teste não entra em sprint)',
+      severidade: 'bloqueante',
+      ok: String(p['estrategia_teste'] ?? '').trim() !== ''
+    })
+    checks.push({
+      codigo: 'PBI-CONTRATO',
+      descricao: 'Contratos aprovados/dispensados; público exige compatibilidade',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const c = p['contrato'] as Record<string, unknown> | undefined
+        const publico = String(p['contrato_publico'] ?? '') === 'sim' || String(c?.['publico'] ?? '') === 'sim'
+        if (!c) return !publico
+        if (publico) return String(c['compatibilidade'] ?? '').trim() !== '' && String(c['consumidor'] ?? '').trim() !== ''
+        return String(c['status'] ?? '').trim() !== ''
+      })()
+    })
+    checks.push({
+      codigo: 'PBI-BLOQ',
+      descricao: 'Zero bloqueador: sem flag bloqueadora aberta',
+      severidade: 'bloqueante',
+      ok: !String(p['flag'] ?? '').toLowerCase().includes('bloquead')
+    })
+    // Regras condicionais
+    checks.push({
+      codigo: 'PBI-COND-COMPAT',
+      descricao: 'Contrato público exige compatibilidade + consumidor',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const c = p['contrato'] as Record<string, unknown> | undefined
+        const publico = String(p['contrato_publico'] ?? '') === 'sim' || String(c?.['publico'] ?? '') === 'sim'
+        if (!publico) return true
+        return String(c?.['compatibilidade'] ?? '').trim() !== '' && String(c?.['consumidor'] ?? '').trim() !== ''
+      })()
+    })
+    checks.push({
+      codigo: 'PBI-COND-ROLLBACK',
+      descricao: 'Migration destrutiva exige plano de dados/rollback',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const destrutiva = String(p['migration_destrutiva'] ?? '') === 'sim'
+        if (!destrutiva) return true
+        return String(p['rollback'] ?? '').trim() !== '' || String(p['plano_dados'] ?? '').trim() !== ''
+      })()
+    })
+    checks.push({
+      codigo: 'PBI-COND-TELA',
+      descricao: 'Tela consome API via contrato versionado',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const telas = Array.isArray(p['telas_ids']) ? (p['telas_ids'] as unknown[]) : []
+        if (telas.length === 0) return true
+        const c = p['contrato'] as Record<string, unknown> | undefined
+        return String(c?.['versao'] ?? '').trim() !== ''
+      })()
+    })
+    checks.push({
+      codigo: 'PBI-COND-TESTE',
+      descricao: 'Sem estratégia de teste → fora da sprint',
+      severidade: 'bloqueante',
+      ok: String(p['estrategia_teste'] ?? '').trim() !== ''
     })
   }
 
