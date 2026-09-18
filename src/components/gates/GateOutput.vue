@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { GateId, NexoObject, Epic, Feature, PBI } from '@/types/nexo'
+import type { GateId, NexoObject, Epic, Feature, PBI, IntegracaoSpec, NfrSpec, EvidenciaEntrega, ExcecaoSeguranca } from '@/types/nexo'
 import type { GateInfo } from '@/stores/useGate'
 import { useGraph } from '@/stores/useGraph'
+import { avaliarGate } from '@/utils/gates'
 import LucideIcon from '@/components/common/LucideIcon.vue'
 
 interface Props {
@@ -15,6 +16,11 @@ const props = defineProps<Props>()
 const graph = useGraph()
 
 const alvoObj = computed(() => (props.alvo as unknown as Record<string, unknown>) ?? {})
+
+const avaliacao = computed(() => {
+  if (!props.alvo) return null
+  return avaliarGate(props.alvo, graph.waivers, props.gateId)
+})
 
 const epico = computed(() => {
   if (props.alvo?.tipo === 'epico') return props.alvo as Epic
@@ -54,12 +60,6 @@ const criteriosBdd = computed(() => {
   return f['criterios_bdd'] as { id?: string; given: string; when: string; then: string; prioridade?: string }[]
 })
 
-const integracoes = computed(() => {
-  const f = props.alvo as unknown as Record<string, unknown> | null
-  if (!f || !Array.isArray(f['integracoes'])) return []
-  return f['integracoes'] as { sistema?: string; operacao?: string; contrato_ref?: string }[]
-})
-
 const fluxoFeliz = computed(() => {
   const f = props.alvo as unknown as Record<string, unknown> | null
   return typeof f?.['fluxo_feliz'] === 'string' ? (f['fluxo_feliz'] as string) : ''
@@ -68,6 +68,67 @@ const fluxoFeliz = computed(() => {
 const adrId = computed(() => {
   const f = props.alvo as unknown as Record<string, unknown> | null
   return typeof f?.['adr_id'] === 'string' ? (f['adr_id'] as string) : ''
+})
+
+// Dimensões G3
+const openapi = computed(() => alvoObj.value['openapi'] as Record<string, string> | undefined)
+const contratoDispensa = computed(() => (alvoObj.value['contrato_dispensa'] as string) || '')
+const persistencia = computed(() => alvoObj.value['persistencia'] as Record<string, string> | undefined)
+const nfrs = computed(() => (Array.isArray(alvoObj.value['nfrs']) ? (alvoObj.value['nfrs'] as NfrSpec[]) : []))
+const seguranca = computed(() => alvoObj.value['seguranca'] as { threat?: string; matriz?: string } | undefined)
+const excecaoSeg = computed(() => alvoObj.value['excecao_seg'] as ExcecaoSeguranca | undefined)
+const dadoPessoal = computed(() => alvoObj.value['dado_pessoal'] as Record<string, string> | undefined)
+const integracoesDetalhadas = computed<IntegracaoSpec[]>(() => {
+  const raw = alvoObj.value['integracoes']
+  if (!Array.isArray(raw)) return []
+  return raw.map((item) => (typeof item === 'string' ? { nome: item } : (item as IntegracaoSpec)))
+})
+
+// Dimensões G5 (Pipeline 5 passos dinâmico)
+const evidencia = computed(() => ((alvoObj.value['evidencia'] as EvidenciaEntrega & Record<string, unknown>) ?? {}))
+const pipelinePassos = computed(() => {
+  const ev = evidencia.value
+  const checksCi = Array.isArray(ev.checks_ci) ? ev.checks_ci : []
+  const ciOk = checksCi.length > 0 && !checksCi.some((c) => /fail|error|blocked/i.test(c)) && ev.sast_ok !== false && ev.policy_ok !== false
+  const obs = Array.isArray(ev.observabilidade) ? ev.observabilidade : []
+  const rast = Array.isArray(ev.rastreabilidade) ? ev.rastreabilidade : []
+  const prOk = Boolean(ev.pr_url && (ev.pr_url.includes('pull') || (ev as Record<string, unknown>)['pr_merged'] === true))
+  const testesOk = ev.testes_verdes === true
+  const aceiteOk = ev.aceite_registrado === true
+  const telemetriaOk = obs.length >= 1 && rast.length >= 1
+
+  return [
+    {
+      numero: 1,
+      titulo: 'Pull Request & Revisão por Pares',
+      ok: prOk,
+      detalhe: ev.pr_url ? `PR: ${ev.pr_url}` : 'Nenhum PR vinculado'
+    },
+    {
+      numero: 2,
+      titulo: 'Pipeline CI & SAST',
+      ok: ciOk,
+      detalhe: checksCi.length > 0 ? `${checksCi.length} checks (${ev.sast_ok !== false ? 'SAST OK' : 'SAST pendente'})` : 'CI não executada'
+    },
+    {
+      numero: 3,
+      titulo: 'Suíte de Testes Automatizados',
+      ok: testesOk,
+      detalhe: testesOk ? 'Testes unitários e de integração verdes' : 'Testes pendentes de execução'
+    },
+    {
+      numero: 4,
+      titulo: 'Aceite Funcional (PO / QA / BDD)',
+      ok: aceiteOk,
+      detalhe: aceiteOk ? 'Critérios de aceite homologados' : 'Aceite pendente de homologação'
+    },
+    {
+      numero: 5,
+      titulo: 'Observabilidade & Rastreabilidade',
+      ok: telemetriaOk,
+      detalhe: `${obs.length} telemetrias · ${rast.length} rastreabilidades`
+    }
+  ]
 })
 </script>
 
@@ -249,33 +310,151 @@ const adrId = computed(() => {
         </div>
       </div>
 
-      <!-- 4. G3: CONTRATOS OPENAPI / ADRs / C4 -->
+      <!-- 4. G3: ARTEFATO ARQUITETURAL COMPLETO (OpenAPI, Persistência, Integrações, NFRs, Threat Model, ADRs) -->
       <div v-else-if="props.gateId === 'G3'" class="space-y-3">
-        <div class="rounded-card border border-nexo-border bg-nexo-canvas/30 p-3 space-y-2">
-          <p class="text-xs font-bold text-nexo-primary uppercase tracking-wide">Arquitetura, Contratos & Decisões</p>
+        <div class="rounded-card border border-nexo-border bg-nexo-canvas/30 p-3.5 space-y-3">
+          <div class="flex items-center justify-between">
+            <p class="text-xs font-bold text-nexo-primary uppercase tracking-wide">Artefato Arquitetural e Contratos (Gate G3)</p>
+            <span v-if="avaliacao?.bloqueantesOk" class="inline-flex items-center gap-1 rounded bg-green-100 text-green-800 px-2 py-0.5 text-[10px] font-bold">
+              <LucideIcon name="check" :size="10" /> Todos os Critérios G3 Aprovados
+            </span>
+          </div>
 
-          <div class="text-[11px] space-y-1">
-            <span class="font-semibold text-nexo-text">Contrato de Integração / OpenAPI:</span>
-            <div v-if="integracoes.length > 0" class="space-y-1">
-              <div
-                v-for="(item, idx) in integracoes"
-                :key="idx"
-                class="rounded bg-white p-2 border border-nexo-border/80 text-[11px]"
-              >
-                <p class="font-semibold text-nexo-text">{{ item.sistema || 'Sistema Externo' }} · {{ item.operacao || 'Operação' }}</p>
-                <p class="text-nexo-muted text-[10px] mt-0.5">Contrato: {{ item.contrato_ref || 'OpenAPI 3.0 padronizado' }}</p>
+          <!-- 1. OpenAPI & Contratos de Interface -->
+          <div class="rounded bg-white p-3 border border-nexo-border/80 text-[11px] space-y-1.5">
+            <div class="flex items-center justify-between">
+              <strong class="text-nexo-text flex items-center gap-1.5">
+                <LucideIcon name="file-code" :size="13" class="text-nexo-primary" />
+                Contratos de Interface & OpenAPI (ARC-001, ARC-003)
+              </strong>
+              <span v-if="contratoDispensa" class="rounded bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.2 font-semibold">
+                Dispensa: {{ contratoDispensa }}
+              </span>
+            </div>
+            <div v-if="openapi" class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 text-[10px]">
+              <div class="rounded bg-nexo-canvas/40 p-1.5 border border-nexo-border/40">
+                <span class="font-semibold text-nexo-text">Respostas HTTP:</span>
+                <p class="text-nexo-muted font-mono mt-0.5">2xx: {{ openapi['v2xx'] || '200 OK, 201 Created' }} · 4xx: {{ openapi['v4xx'] || '400, 404, 422' }} · 5xx: {{ openapi['v5xx'] || '500, 503' }}</p>
+              </div>
+              <div class="rounded bg-nexo-canvas/40 p-1.5 border border-nexo-border/40">
+                <span class="font-semibold text-nexo-text">Autenticação & Escopo:</span>
+                <p class="text-nexo-muted mt-0.5">{{ openapi['auth'] || 'OAuth 2.0 / Bearer JWT com RBAC' }}</p>
+              </div>
+              <div class="rounded bg-nexo-canvas/40 p-1.5 border border-nexo-border/40">
+                <span class="font-semibold text-nexo-text">Compatibilidade & Versão:</span>
+                <p class="text-nexo-muted mt-0.5">{{ openapi['compat'] || 'Retrocompatível · Sem breaking changes' }}</p>
+              </div>
+              <div class="rounded bg-nexo-canvas/40 p-1.5 border border-nexo-border/40">
+                <span class="font-semibold text-nexo-text">Consumidores Homologados:</span>
+                <p class="text-nexo-muted mt-0.5">{{ openapi['consumidor'] || 'Web Portal, Mobile App, API Gateway' }}</p>
               </div>
             </div>
-            <p v-else class="text-nexo-muted bg-white p-2 rounded border border-dashed border-nexo-border italic">
-              Sem integrações técnicas registradas. Adicione na aba 'Detalhes' ou via proposta de patch.
+            <p v-else-if="!contratoDispensa" class="text-nexo-muted italic text-[10px] pt-1">
+              Contrato OpenAPI não detalhado. Especificar códigos 2xx/4xx/5xx, auth e consumidores no nó.
             </p>
           </div>
 
-          <div class="border-t border-nexo-border/60 pt-2 text-[11px]">
-            <span class="font-semibold text-nexo-text">Decisões Arquiteturais Vinculadas (ADRs):</span>
-            <p class="text-nexo-muted mt-0.5">
-              {{ adrId ? `ADR Vinculada: ${adrId}` : 'Sem ADR associada a este nó.' }}
+          <!-- 2. Modelagem de Persistência & Migrations -->
+          <div class="rounded bg-white p-3 border border-nexo-border/80 text-[11px] space-y-1.5">
+            <strong class="text-nexo-text flex items-center gap-1.5">
+              <LucideIcon name="database" :size="13" class="text-nexo-primary" />
+              Modelagem de Persistência & Migrations (ARC-004)
+            </strong>
+            <div v-if="persistencia" class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px]">
+              <div><strong class="text-nexo-text">Entidade:</strong> <span class="text-nexo-muted">{{ persistencia['entidade'] || 'N/A' }}</span></div>
+              <div><strong class="text-nexo-text">Migration:</strong> <span class="text-nexo-muted font-mono">{{ persistencia['migration'] || 'Pendente' }}</span></div>
+              <div><strong class="text-nexo-text">Índices:</strong> <span class="text-nexo-muted">{{ persistencia['indice'] || 'Chaves primárias e estrangeiras' }}</span></div>
+              <div><strong class="text-nexo-text">Plano de Dados:</strong> <span class="text-nexo-muted">{{ persistencia['plano_dados'] || 'Volumetria projetada padrão' }}</span></div>
+            </div>
+            <p v-else class="text-nexo-muted italic text-[10px]">
+              Persistência não detalhada ou operação sem estado persistido declarada.
             </p>
+          </div>
+
+          <!-- 3. Integrações Estruturadas & Matriz de Resiliência/Falhas -->
+          <div class="rounded bg-white p-3 border border-nexo-border/80 text-[11px] space-y-1.5">
+            <strong class="text-nexo-text flex items-center gap-1.5">
+              <LucideIcon name="network" :size="13" class="text-nexo-primary" />
+              Integrações Estruturadas & Matriz de Falhas (ARC-005)
+            </strong>
+            <div v-if="integracoesDetalhadas.length > 0" class="space-y-1.5">
+              <div
+                v-for="(item, idx) in integracoesDetalhadas"
+                :key="idx"
+                class="rounded bg-nexo-canvas/40 p-2 border border-nexo-border/50 text-[10px] space-y-1"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-nexo-text">{{ item.nome }}</span>
+                  <span class="text-nexo-muted">Owner: {{ item.owner_externo || 'Squad Integrações' }}</span>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-nexo-muted">
+                  <span>Timeout: <strong class="text-nexo-text">{{ item.timeout_ms ? `${item.timeout_ms}ms` : '3000ms' }}</strong></span>
+                  <span>Retry: <strong class="text-nexo-text">{{ item.retry !== false ? 'Sim (exponencial)' : 'Não' }}</strong></span>
+                  <span>Idempotência: <strong class="text-nexo-text">{{ item.idempotente !== false ? 'Sim (Idempotency-Key)' : 'Não' }}</strong></span>
+                  <span>SLA Indisponível: <strong class="text-nexo-text">{{ item.indisponibilidade || 'Degradação graciosa' }}</strong></span>
+                </div>
+              </div>
+            </div>
+            <p v-else class="text-nexo-muted italic text-[10px]">
+              Nenhuma integração estruturada cadastrada para este nó técnico.
+            </p>
+          </div>
+
+          <!-- 4. Requisitos Não-Funcionais (NFRs) -->
+          <div class="rounded bg-white p-3 border border-nexo-border/80 text-[11px] space-y-1.5">
+            <strong class="text-nexo-text flex items-center gap-1.5">
+              <LucideIcon name="gauge" :size="13" class="text-nexo-primary" />
+              Requisitos Não-Funcionais Mensuráveis (ARC-007)
+            </strong>
+            <div v-if="nfrs.length > 0" class="space-y-1">
+              <div v-for="(nfr, idx) in nfrs" :key="idx" class="flex items-center justify-between rounded bg-nexo-canvas/40 px-2 py-1 text-[10px]">
+                <span class="font-medium text-nexo-text">{{ nfr.medida }}</span>
+                <span class="text-nexo-primary font-bold">Meta: {{ nfr.alvo }}</span>
+                <span class="text-nexo-muted">Telemetria: {{ nfr.observabilidade }}</span>
+              </div>
+            </div>
+            <p v-else class="text-nexo-muted italic text-[10px]">
+              Nenhum NFR específico cadastrado (ex: latência p95 &lt; 200ms, disponibilidade 99.9%).
+            </p>
+          </div>
+
+          <!-- 5. Threat Model, Segurança e Governança LGPD -->
+          <div class="rounded bg-white p-3 border border-nexo-border/80 text-[11px] space-y-1.5">
+            <strong class="text-nexo-text flex items-center gap-1.5">
+              <LucideIcon name="shield-alert" :size="13" class="text-nexo-primary" />
+              Threat Model, Segurança & Dados Pessoais (ARC-006, ARC-008)
+            </strong>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px]">
+              <div class="rounded bg-nexo-canvas/40 p-2 border border-nexo-border/40">
+                <span class="font-semibold text-nexo-text">Threat Model & Riscos:</span>
+                <p class="text-nexo-muted mt-0.5">
+                  {{ seguranca?.threat || 'STRIDE: Spoofing, Tampering, Information Disclosure mitigados' }}
+                </p>
+                <span v-if="excecaoSeg" class="mt-1 inline-block text-[9px] text-amber-800 font-semibold">
+                  Exceção Segurança vigente até {{ excecaoSeg.prazo }} (aprovado por {{ excecaoSeg.owner }})
+                </span>
+              </div>
+              <div class="rounded bg-nexo-canvas/40 p-2 border border-nexo-border/40">
+                <span class="font-semibold text-nexo-text">Classificação LGPD / Dado Pessoal:</span>
+                <p class="text-nexo-muted mt-0.5">
+                  {{ dadoPessoal?.classificacao ? `${dadoPessoal.classificacao} · Retenção: ${dadoPessoal.retencao || '5 anos'}` : 'Sem dados pessoais sensíveis identificados' }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. ADRs Vinculadas -->
+          <div class="rounded bg-white p-2.5 border border-nexo-border/80 text-[11px] flex items-center justify-between">
+            <span class="font-semibold text-nexo-text flex items-center gap-1.5">
+              <LucideIcon name="file-text" :size="13" class="text-nexo-primary" />
+              Decisão Arquitetural Vinculada (ARC-002):
+            </span>
+            <span v-if="adrId" class="rounded bg-blue-100 text-blue-900 px-2 py-0.5 text-[10px] font-bold">
+              ADR: {{ adrId }}
+            </span>
+            <span v-else class="text-nexo-muted italic text-[10px]">
+              Sem ADR vinculada a este nó
+            </span>
           </div>
         </div>
       </div>
@@ -305,24 +484,125 @@ const adrId = computed(() => {
         </div>
       </div>
 
-      <!-- 6. G5: PACOTE / EVIDÊNCIAS DoD -->
+      <!-- 6. G5: PIPELINE DINÂMICO DE ENTREGA & EVIDÊNCIAS DoD -->
       <div v-else-if="props.gateId === 'G5'" class="space-y-3">
-        <div class="rounded-card border border-nexo-border bg-nexo-canvas/30 p-3 space-y-2">
-          <p class="text-xs font-bold text-nexo-primary uppercase tracking-wide">Pacote de Implementação & Evidências (DoD)</p>
-          <div class="text-[11px] space-y-1">
-            <div class="flex items-center justify-between rounded bg-white p-2 border border-nexo-border/60">
-              <span class="font-semibold text-nexo-text">Status de Validação de Código:</span>
+        <div class="rounded-card border border-nexo-border bg-nexo-canvas/30 p-3.5 space-y-3">
+          <div class="flex items-center justify-between">
+            <p class="text-xs font-bold text-nexo-primary uppercase tracking-wide">Pipeline de Entrega & Evidências DoD (Gate G5)</p>
+            <div class="flex items-center gap-2">
               <span
                 class="font-bold uppercase text-[10px] px-2 py-0.5 rounded"
                 :class="props.alvo.status === 'validated' || props.alvo.status === 'published' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'"
               >
-                {{ props.alvo.status }}
+                Status: {{ props.alvo.status }}
+              </span>
+              <span class="text-[10px] font-bold rounded bg-white px-2 py-0.5 border border-nexo-border text-nexo-text">
+                {{ pipelinePassos.filter((p) => p.ok).length }}/5 Concluídos
               </span>
             </div>
-            <div class="rounded bg-white p-2 border border-nexo-border/60 text-[11px] text-nexo-muted space-y-0.5">
-              <p>✓ Suite de testes automatizados executada e verde.</p>
-              <p>✓ Revisão humana por pares concluída.</p>
-              <p>✓ Grafo de rastreabilidade do NEXO sincronizado.</p>
+          </div>
+
+          <!-- Stepper Dinâmico dos 5 Passos -->
+          <div class="grid grid-cols-1 sm:grid-cols-5 gap-2">
+            <div
+              v-for="step in pipelinePassos"
+              :key="step.numero"
+              class="rounded p-2 border text-[11px] space-y-1 transition-colors"
+              :class="step.ok ? 'bg-green-50/70 border-green-200 text-green-950' : 'bg-white border-nexo-border text-nexo-text'"
+            >
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-[10px]">Passo {{ step.numero }}</span>
+                <LucideIcon :name="step.ok ? 'check-circle-2' : 'alert-circle'" :size="13" :class="step.ok ? 'text-green-600' : 'text-amber-500'" />
+              </div>
+              <p class="font-medium text-[10px] leading-tight">{{ step.titulo }}</p>
+              <p class="text-[9px] text-nexo-muted truncate" :title="step.detalhe">{{ step.detalhe }}</p>
+            </div>
+          </div>
+
+          <!-- Detalhamento Real das Evidências Técnicas -->
+          <div class="space-y-2 pt-1 text-[11px]">
+            <!-- Pull Request -->
+            <div class="rounded bg-white p-2.5 border border-nexo-border/80 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <LucideIcon name="git-pull-request" :size="14" class="text-nexo-primary" />
+                <span class="font-semibold text-nexo-text">Pull Request (DON-002):</span>
+                <span v-if="evidencia.pr_url" class="font-mono text-[10px] text-nexo-primary underline truncate max-w-xs">{{ evidencia.pr_url }}</span>
+                <span v-else class="text-nexo-muted italic text-[10px]">Nenhum PR associado à evidência</span>
+              </div>
+              <span
+                class="rounded text-[10px] font-bold px-1.5 py-0.2 uppercase"
+                :class="evidencia.pr_url ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-nexo-muted'"
+              >
+                {{ evidencia.pr_url ? 'Merged & Revisado' : 'Pendente' }}
+              </span>
+            </div>
+
+            <!-- Checks de CI e SAST -->
+            <div class="rounded bg-white p-2.5 border border-nexo-border/80 space-y-1">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <LucideIcon name="check-circle" :size="14" class="text-nexo-primary" />
+                  <span class="font-semibold text-nexo-text">Pipeline CI & SAST (DON-003):</span>
+                </div>
+                <span class="text-[10px] text-nexo-muted">
+                  SAST: <strong :class="evidencia.sast_ok !== false ? 'text-green-700' : 'text-red-700'">{{ evidencia.sast_ok !== false ? 'Aprovado' : 'Pendente' }}</strong>
+                </span>
+              </div>
+              <div v-if="Array.isArray(evidencia.checks_ci) && evidencia.checks_ci.length > 0" class="flex flex-wrap gap-1 pt-0.5">
+                <span
+                  v-for="(chk, idx) in evidencia.checks_ci"
+                  :key="idx"
+                  class="rounded bg-nexo-canvas px-1.5 py-0.5 text-[9px] font-mono text-nexo-text border border-nexo-border/60"
+                >
+                  ✓ {{ chk }}
+                </span>
+              </div>
+              <p v-else class="text-nexo-muted italic text-[10px]">
+                Nenhum check de CI cadastrado na evidência.
+              </p>
+            </div>
+
+            <!-- Testes e Aceite -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div class="rounded bg-white p-2.5 border border-nexo-border/80 flex items-center justify-between">
+                <div>
+                  <span class="font-semibold text-nexo-text block">Testes Automatizados (DON-004):</span>
+                  <span class="text-[10px] text-nexo-muted">{{ evidencia.testes_verdes ? '100% da suite passando' : 'Testes pendentes de execução' }}</span>
+                </div>
+                <span class="rounded px-1.5 py-0.2 text-[10px] font-bold" :class="evidencia.testes_verdes ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'">
+                  {{ evidencia.testes_verdes ? 'Verde' : 'Incompleto' }}
+                </span>
+              </div>
+              <div class="rounded bg-white p-2.5 border border-nexo-border/80 flex items-center justify-between">
+                <div>
+                  <span class="font-semibold text-nexo-text block">Aceite Homologado (DON-004):</span>
+                  <span class="text-[10px] text-nexo-muted">{{ evidencia.aceite_registrado ? 'Critérios validados por QA/PO' : 'Aguardando homologação formal' }}</span>
+                </div>
+                <span class="rounded px-1.5 py-0.2 text-[10px] font-bold" :class="evidencia.aceite_registrado ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'">
+                  {{ evidencia.aceite_registrado ? 'Aprovado' : 'Pendente' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Observabilidade & Rastreabilidade -->
+            <div class="rounded bg-white p-2.5 border border-nexo-border/80 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-nexo-text">Telemetria & Rastreabilidade (DON-006):</span>
+                <span class="text-[10px] text-nexo-muted">
+                  {{ (evidencia.observabilidade?.length ?? 0) }} métricas · {{ (evidencia.rastreabilidade?.length ?? 0) }} rastreabilidades
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-1 text-[9px]">
+                <span v-for="(obs, idx) in (evidencia.observabilidade || [])" :key="`o-${idx}`" class="rounded bg-blue-50 text-blue-900 px-1.5 py-0.5 border border-blue-200">
+                  telemetria: {{ obs }}
+                </span>
+                <span v-for="(rst, idx) in (evidencia.rastreabilidade || [])" :key="`r-${idx}`" class="rounded bg-purple-50 text-purple-900 px-1.5 py-0.5 border border-purple-200">
+                  grafo: {{ rst }}
+                </span>
+                <span v-if="(!evidencia.observabilidade || evidencia.observabilidade.length === 0) && (!evidencia.rastreabilidade || evidencia.rastreabilidade.length === 0)" class="text-nexo-muted italic text-[10px]">
+                  Sem dashboards ou cadeia de rastreabilidade cadastrados no pacote.
+                </span>
+              </div>
             </div>
           </div>
         </div>

@@ -32,7 +32,7 @@ interface PassoGuia {
 // Avaliação em tempo real dos checks do alvo
 const avaliacao = computed(() => {
   if (!props.alvo) return null
-  return avaliarGate(props.alvo, props.waivers)
+  return avaliarGate(props.alvo, props.waivers, props.gateId)
 })
 
 function checkEstaOk(codigo?: string): boolean {
@@ -52,7 +52,9 @@ const passos = computed<PassoGuia[]>(() => {
       const temPublico = checkEstaOk('ENQ-002')
       const temHipotese = checkEstaOk('ENQ-003')
       const temOwner = checkEstaOk('ENQ-004')
-      const todosProntos = temProblema && temPublico && temHipotese && temOwner
+      const temEscopo = checkEstaOk('ENQ-005')
+      const temRiscos = checkEstaOk('ENQ-006')
+      const todosProntos = temProblema && temPublico && temHipotese && temOwner && temEscopo && temRiscos
 
       return [
         {
@@ -67,7 +69,7 @@ const passos = computed<PassoGuia[]>(() => {
         {
           id: 'g0-p2',
           titulo: '2. Identificar público afetado e personas',
-          descricao: 'Mapear segmentos de clientes que sofrem com o problema (mín. 1 persona).',
+          descricao: 'Mapear segmentos de clientes que sofrem com o problema (mín. 1 persona ou ator).',
           checkCodigo: 'ENQ-002',
           concluido: temPublico,
           acaoLabel: 'Adicionar personas',
@@ -76,7 +78,7 @@ const passos = computed<PassoGuia[]>(() => {
         {
           id: 'g0-p3',
           titulo: '3. Formular hipótese e métrica inicial',
-          descricao: 'Resultado esperado com critério de refutação ou indicador inicial.',
+          descricao: 'Resultado esperado com critério de refutação e ao menos 1 KPI com meta.',
           checkCodigo: 'ENQ-003',
           concluido: temHipotese,
           acaoLabel: 'Definir hipótese',
@@ -93,7 +95,25 @@ const passos = computed<PassoGuia[]>(() => {
         },
         {
           id: 'g0-p5',
-          titulo: '5. Solicitar aprovação ao PM',
+          titulo: '5. Mapear restrições e não-objetivos',
+          descricao: 'Definição explícita de escopo_in e escopo_out para delimitar o discovery.',
+          checkCodigo: 'ENQ-005',
+          concluido: temEscopo,
+          acaoLabel: 'Definir escopo in/out',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g0-p6',
+          titulo: '6. Mapear suposições e riscos críticos',
+          descricao: 'Identificar ao menos 1 risco inicial com gravidade e mitigação.',
+          checkCodigo: 'ENQ-006',
+          concluido: temRiscos,
+          acaoLabel: 'Adicionar risco',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g0-p7',
+          titulo: '7. Solicitar aprovação ao PM',
           descricao: 'PM avalia o one-pager gerado e registra a baseline de enquadramento.',
           concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
           acaoLabel: 'Solicitar approve',
@@ -106,7 +126,10 @@ const passos = computed<PassoGuia[]>(() => {
       const temProblema = checkEstaOk('EPC-001')
       const temKpi = checkEstaOk('EPC-002')
       const temEscopo = checkEstaOk('EPC-003')
-      const todosProntos = temProblema && temKpi && temEscopo
+      const temResultado = checkEstaOk('EPC-004')
+      const temRiscos = checkEstaOk('EPC-005')
+      const temPrd = checkEstaOk('EPC-006')
+      const todosProntos = temProblema && temKpi && temEscopo && temResultado && temRiscos && temPrd
 
       return [
         {
@@ -138,7 +161,34 @@ const passos = computed<PassoGuia[]>(() => {
         },
         {
           id: 'g1-p4',
-          titulo: '4. Solicitar aprovação a Negócio e PM',
+          titulo: '4. Declarar resultado observável',
+          descricao: 'Objetivo de negócio claro e verificável sem prescrever implementação.',
+          checkCodigo: 'EPC-004',
+          concluido: temResultado,
+          acaoLabel: 'Definir objetivo',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g1-p5',
+          titulo: '5. Mapear risco crítico com mitigação e owner',
+          descricao: 'Risco documentado com probabilidade, impacto, mitigação e responsável nominal.',
+          checkCodigo: 'EPC-005',
+          concluido: temRiscos,
+          acaoLabel: 'Completar riscos',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g1-p6',
+          titulo: '6. Garantir completude do PRD',
+          descricao: 'Ao menos 80% dos campos afirmativos do documento de produto preenchidos.',
+          checkCodigo: 'EPC-006',
+          concluido: temPrd,
+          acaoLabel: 'Completar PRD',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g1-p7',
+          titulo: '7. Solicitar aprovação a Negócio e PM',
           descricao: 'Validação de valor, escopo e criação da baseline do PRD.',
           concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
           acaoLabel: 'Solicitar approve',
@@ -203,24 +253,38 @@ const passos = computed<PassoGuia[]>(() => {
     }
 
     case 'G3': {
-      const temApi = checkEstaOk('ARC-001')
+      const temContrato = checkEstaOk('ARC-001')
       const temAdr = checkEstaOk('ARC-002')
-      const todosProntos = temApi && temAdr
+      const temOpenApi = checkEstaOk('ARC-003')
+      const temPersistencia = checkEstaOk('ARC-004')
+      const temIntegEstruturada = checkEstaOk('ARC-005')
+      const temDadoPessoal = checkEstaOk('ARC-006')
+      const temNfr = checkEstaOk('ARC-007')
+      const temSeguranca = checkEstaOk('ARC-008')
+      const todosProntos =
+        temContrato &&
+        temAdr &&
+        temOpenApi &&
+        temPersistencia &&
+        temIntegEstruturada &&
+        temDadoPessoal &&
+        temNfr &&
+        temSeguranca
 
       return [
         {
           id: 'g3-p1',
-          titulo: '1. Formalizar contratos de integração e APIs',
-          descricao: 'Especificação OpenAPI padronizada (2xx/4xx/5xx) e contratos com parceiros.',
+          titulo: '1. Formalizar contratos de API ou integrações',
+          descricao: 'OpenAPI com endpoints ou integrações declaradas (ou dispensa formal).',
           checkCodigo: 'ARC-001',
-          concluido: temApi,
+          concluido: temContrato,
           acaoLabel: 'Editar contratos',
           tipoAcao: 'corrigir'
         },
         {
           id: 'g3-p2',
           titulo: '2. Registrar decisões arquiteturais (ADR)',
-          descricao: 'Vínculo formal com ADR registrada documentando trade-offs e NFRs.',
+          descricao: 'Vínculo com ADR documentando decisões técnicas e justificativas.',
           checkCodigo: 'ARC-002',
           concluido: temAdr,
           acaoLabel: 'Vincular ADR',
@@ -228,8 +292,62 @@ const passos = computed<PassoGuia[]>(() => {
         },
         {
           id: 'g3-p3',
-          titulo: '3. Solicitar aprovação a Arquiteto, Tech Lead e Segurança',
-          descricao: 'Aprovação de contratos, NFRs, modelo de dados e threat model.',
+          titulo: '3. Detalhar OpenAPI (respostas, auth e compatibilidade)',
+          descricao: 'Especificação de retornos 2xx/4xx/5xx, tokens/auth e versionamento.',
+          checkCodigo: 'ARC-003',
+          concluido: temOpenApi,
+          acaoLabel: 'Detalhar OpenAPI',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g3-p4',
+          titulo: '4. Modelar persistência e migrations',
+          descricao: 'Entidade de dados, validações, plano de migration e índices.',
+          checkCodigo: 'ARC-004',
+          concluido: temPersistencia,
+          acaoLabel: 'Modelar dados',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g3-p5',
+          titulo: '5. Estruturar integrações e matriz de falhas',
+          descricao: 'Timeouts, política de retry, idempotência e fallback de indisponibilidade.',
+          checkCodigo: 'ARC-005',
+          concluido: temIntegEstruturada,
+          acaoLabel: 'Configurar resiliência',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g3-p6',
+          titulo: '6. Classificar dados pessoais (LGPD)',
+          descricao: 'Identificar categorias de dados, finalidade, retenção e controle de acesso.',
+          checkCodigo: 'ARC-006',
+          concluido: temDadoPessoal,
+          acaoLabel: 'Definir privacidade',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g3-p7',
+          titulo: '7. Definir requisitos não-funcionais (NFRs)',
+          descricao: 'Métricas de latência, disponibilidade, volumetria e observabilidade.',
+          checkCodigo: 'ARC-007',
+          concluido: temNfr,
+          acaoLabel: 'Adicionar NFRs',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g3-p8',
+          titulo: '8. Threat Model e Segurança da Informação',
+          descricao: 'Análise STRIDE, matriz de riscos ou exceção de segurança aprovada.',
+          checkCodigo: 'ARC-008',
+          concluido: temSeguranca,
+          acaoLabel: 'Revisar segurança',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g3-p9',
+          titulo: '9. Solicitar aprovação a Arquiteto, Tech Lead e Segurança',
+          descricao: 'Aprovação conjunta da arquitetura de solução e contratos.',
           concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
           acaoLabel: 'Solicitar approve',
           tipoAcao: 'solicitar'
@@ -238,32 +356,110 @@ const passos = computed<PassoGuia[]>(() => {
     }
 
     case 'G4': {
-      const temDoR = checkEstaOk('PBI-001')
-      const temOwner = Boolean(obj?.owner)
-      const todosProntos = temDoR && temOwner
+      const temAceite = checkEstaOk('PBI-ACEITE')
+      const temOrigem = checkEstaOk('PBI-ORIGEM')
+      const temEscopo = checkEstaOk('PBI-ESCOPO')
+      const temDep = checkEstaOk('PBI-DEP')
+      const temOwner = checkEstaOk('PBI-OWNER')
+      const temTeste = checkEstaOk('PBI-TESTE')
+      const temContrato = checkEstaOk('PBI-CONTRATO')
+      const temBloq = checkEstaOk('PBI-BLOQ')
+      const temCompat = checkEstaOk('PBI-COND-COMPAT')
+      const temRollback = checkEstaOk('PBI-COND-ROLLBACK')
+      const temTela = checkEstaOk('PBI-COND-TELA')
+      const temCondTeste = checkEstaOk('PBI-COND-TESTE')
+
+      const todosProntos =
+        temAceite &&
+        temOrigem &&
+        temEscopo &&
+        temDep &&
+        temOwner &&
+        temTeste &&
+        temContrato &&
+        temBloq &&
+        temCompat &&
+        temRollback &&
+        temTela &&
+        temCondTeste
 
       return [
         {
           id: 'g4-p1',
-          titulo: '1. Fatiamento e Definition of Ready (DoR)',
-          descricao: 'PBI delimitado com critérios BDD, escopo e estratégia de testes automatizados.',
-          checkCodigo: 'PBI-001',
-          concluido: temDoR,
-          acaoLabel: 'Ajustar DoR',
+          titulo: '1. Critérios de aceite BDD verificáveis',
+          descricao: 'Cenários Given / When / Then estruturados para teste automatizado.',
+          checkCodigo: 'PBI-ACEITE',
+          concluido: temAceite,
+          acaoLabel: 'Adicionar BDD',
           tipoAcao: 'corrigir'
         },
         {
           id: 'g4-p2',
-          titulo: '2. Atribuir responsável pelo PBI',
-          descricao: 'Dev ou squad owner da unidade de trabalho.',
+          titulo: '2. Vínculo à feature de origem e owner',
+          descricao: 'Feature pai declarada e responsável pelo PBI nominal.',
+          checkCodigo: 'PBI-ORIGEM',
+          concluido: temOrigem,
+          acaoLabel: 'Vincular feature',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g4-p3',
+          titulo: '3. Escopo delimitado (in e out)',
+          descricao: 'Itens inclusos e excluídos expressos com clareza.',
+          checkCodigo: 'PBI-ESCOPO',
+          concluido: temEscopo,
+          acaoLabel: 'Delimitar escopo',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g4-p4',
+          titulo: '4. Resolução de dependências técnicas',
+          descricao: 'Ausência de dependências abertas ou bloqueadoras.',
+          checkCodigo: 'PBI-DEP',
+          concluido: temDep,
+          acaoLabel: 'Checar dependências',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g4-p5',
+          titulo: '5. Atribuir owner da unidade de trabalho',
+          descricao: 'Engenheiro ou squad responsável pelo desenvolvimento.',
+          checkCodigo: 'PBI-OWNER',
           concluido: temOwner,
           acaoLabel: 'Definir owner',
           tipoAcao: 'corrigir'
         },
         {
-          id: 'g4-p3',
-          titulo: '3. Solicitar aprovação a PO, Dev e QA',
-          descricao: 'Validação de ausência de bloqueios para entrada em sprint.',
+          id: 'g4-p6',
+          titulo: '6. Definir estratégia de testes automatizados',
+          descricao: 'Testes de unidade, integração ou ponta-a-ponta especificados.',
+          checkCodigo: 'PBI-TESTE',
+          concluido: temTeste && temCondTeste,
+          acaoLabel: 'Definir testes',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g4-p7',
+          titulo: '7. Aprovação de contratos e compatibilidade',
+          descricao: 'Contratos versionados com compatibilidade garantida para consumidores.',
+          checkCodigo: 'PBI-CONTRATO',
+          concluido: temContrato && temCompat,
+          acaoLabel: 'Checar contratos',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g4-p8',
+          titulo: '8. Plano de rollback e conformidade de telas',
+          descricao: 'Salvaguardas de migração reversível e consumo contratual em interfaces.',
+          checkCodigo: 'PBI-COND-ROLLBACK',
+          concluido: temRollback && temTela && temBloq,
+          acaoLabel: 'Validar salvaguardas',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g4-p9',
+          titulo: '9. Solicitar aprovação a PO, Dev e QA',
+          descricao: 'Validação de ausência de bloqueios para entrada em sprint (DoR).',
           concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
           acaoLabel: 'Solicitar approve',
           tipoAcao: 'solicitar'
@@ -272,31 +468,74 @@ const passos = computed<PassoGuia[]>(() => {
     }
 
     case 'G5': {
-      const temDoD = checkEstaOk('DON-001') || obj?.status === 'validated' || obj?.status === 'published'
-      const statusFinal = obj?.status === 'validated' || obj?.status === 'published'
+      const temStatus = checkEstaOk('DON-001') || obj?.status === 'validated' || obj?.status === 'published'
+      const temPr = checkEstaOk('DON-002')
+      const temCi = checkEstaOk('DON-003')
+      const temTestesAceite = checkEstaOk('DON-004')
+      const temSeguranca = checkEstaOk('DON-005')
+      const temObs = checkEstaOk('DON-006')
+      const todosProntos = temStatus && temPr && temCi && temTestesAceite && temSeguranca && temObs
 
       return [
         {
           id: 'g5-p1',
-          titulo: '1. Executar pipeline de CI e suite de testes',
-          descricao: '100% de testes unitários, de componentes e de contrato verdes.',
-          concluido: temDoD,
-          acaoLabel: 'Verificar CI',
+          titulo: '1. Status do item validado para publicação',
+          descricao: 'Status promovido a validated ou published após desenvolvimento concluído.',
+          checkCodigo: 'DON-001',
+          concluido: temStatus,
+          acaoLabel: 'Validar status',
           tipoAcao: 'corrigir'
         },
         {
           id: 'g5-p2',
-          titulo: '2. Concluir revisão de Pull Request por pares',
-          descricao: 'Aprovação humana de código e conformidade com tokens e acessibilidade.',
-          concluido: statusFinal,
-          acaoLabel: 'Revisar PR',
+          titulo: '2. Pull Request merged e revisão por pares',
+          descricao: 'Código integrado na branch principal com aprovação de pares.',
+          checkCodigo: 'DON-002',
+          concluido: temPr,
+          acaoLabel: 'Vincular PR',
           tipoAcao: 'corrigir'
         },
         {
           id: 'g5-p3',
-          titulo: '3. Solicitar aprovação final e entrega (DoD)',
-          descricao: 'Registro formal da baseline de publicação e release.',
-          concluido: statusFinal,
+          titulo: '3. Pipeline CI verde e análise SAST/Policies',
+          descricao: 'Suíte de CI executada sem falhas com SAST e compliance aprovados.',
+          checkCodigo: 'DON-003',
+          concluido: temCi,
+          acaoLabel: 'Checar CI',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g5-p4',
+          titulo: '4. Aceite funcional e testes automatizados verdes',
+          descricao: '100% dos testes verdes e aceite registrado formalmente.',
+          checkCodigo: 'DON-004',
+          concluido: temTestesAceite,
+          acaoLabel: 'Validar testes',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g5-p5',
+          titulo: '5. Aprovação de segurança ou exceção com prazo',
+          descricao: 'Homologação pela equipe de segurança ou waiver formalizado.',
+          checkCodigo: 'DON-005',
+          concluido: temSeguranca,
+          acaoLabel: 'Checar segurança',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g5-p6',
+          titulo: '6. Observabilidade e rastreabilidade ponta-a-ponta',
+          descricao: 'Métricas, logs e dashboards vinculados ao commit e especificação.',
+          checkCodigo: 'DON-006',
+          concluido: temObs,
+          acaoLabel: 'Configurar telemetria',
+          tipoAcao: 'corrigir'
+        },
+        {
+          id: 'g5-p7',
+          titulo: '7. Solicitar aprovação final e entrega (DoD)',
+          descricao: 'Registro formal da baseline de publicação e release aprovada por PO, Tech Lead e QA.',
+          concluido: todosProntos,
           acaoLabel: 'Solicitar approve',
           tipoAcao: 'solicitar'
         }
