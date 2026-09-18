@@ -500,8 +500,9 @@ export function avaliarGate(
 export function aprovadoresDoGate(gate: GateId): string[] {
   switch (gate) {
     case 'G0':
-    case 'G1':
       return ['PM']
+    case 'G1':
+      return ['Negocio', 'PM']
     case 'G2':
       return ['PM', 'UX', 'TechLead']
     case 'G3':

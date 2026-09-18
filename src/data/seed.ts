@@ -322,6 +322,7 @@ export const seedEdges: Edge[] = [
 export const seedUsers: User[] = [
   { id: 'u-pm', nome: 'Paula (PM)', papel: 'PM', projeto_ids: ['proj-cobrancas'] },
   { id: 'u-po', nome: 'Paulo (PO)', papel: 'PO', projeto_ids: ['proj-cobrancas'] },
+  { id: 'u-neg', nome: 'Nina (Negócio)', papel: 'Negocio', projeto_ids: ['proj-cobrancas'] },
   { id: 'u-ux', nome: 'Ursula (UX)', papel: 'UX', projeto_ids: ['proj-cobrancas'] },
   { id: 'u-arq', nome: 'Aldo (Arquiteto)', papel: 'Arquiteto', projeto_ids: ['proj-cobrancas'] },
   { id: 'u-tl', nome: 'Tina (Tech Lead)', papel: 'TechLead', projeto_ids: ['proj-cobrancas'] },

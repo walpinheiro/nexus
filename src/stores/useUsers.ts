@@ -15,9 +15,12 @@ function load(): UsersState {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const s = JSON.parse(raw) as UsersState
-      // backfill sem perda: garante u-po (PO) em bases antigas
+      // backfill sem perda: garante u-po (PO) e u-neg (Negócio) em bases antigas
       if (!s.usuarios.some((u) => u.id === 'u-po')) {
         s.usuarios.push({ id: 'u-po', nome: 'Paulo (PO)', papel: 'PO', projeto_ids: ['proj-cobrancas'] })
+      }
+      if (!s.usuarios.some((u) => u.id === 'u-neg')) {
+        s.usuarios.push({ id: 'u-neg', nome: 'Nina (Negócio)', papel: 'Negocio', projeto_ids: ['proj-cobrancas'] })
       }
       return s
     }
@@ -31,6 +34,7 @@ function load(): UsersState {
 const MATRIZ: Record<Role, Acao[]> = {
   PM: ['visualizar', 'comentar', 'propor', 'editar', 'aprovar', 'publicar'],
   PO: ['visualizar', 'comentar', 'propor', 'editar', 'aprovar'],
+  Negocio: ['visualizar', 'comentar', 'aprovar'],
   UX: ['visualizar', 'comentar', 'propor', 'editar'],
   Arquiteto: ['visualizar', 'comentar', 'propor', 'editar', 'aprovar'],
   TechLead: ['visualizar', 'comentar', 'propor', 'editar', 'aprovar'],
@@ -41,7 +45,7 @@ const MATRIZ: Record<Role, Acao[]> = {
 
 const APROVACAO_GATE: Record<GateId, Role[]> = {
   G0: ['PM'],
-  G1: ['PM'],
+  G1: ['Negocio', 'PM'],
   G2: ['PM', 'UX', 'TechLead'],
   G3: ['Arquiteto', 'TechLead', 'Seguranca', 'Dev'],
   G4: ['PO', 'Dev', 'QA'],

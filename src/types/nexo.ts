@@ -17,7 +17,7 @@ export type Classificacao = 'internal' | 'confidential' | 'restricted'
 
 export type Fonte = 'stated' | 'inferred' | 'corporate_standard' | 'pending_decision'
 
-export type Role = 'PM' | 'PO' | 'UX' | 'Arquiteto' | 'TechLead' | 'Dev' | 'QA' | 'Seguranca'
+export type Role = 'PM' | 'PO' | 'Negocio' | 'UX' | 'Arquiteto' | 'TechLead' | 'Dev' | 'QA' | 'Seguranca'
 
 export type Acao =
   | 'visualizar'
