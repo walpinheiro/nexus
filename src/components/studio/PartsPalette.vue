@@ -156,6 +156,21 @@ function onDragStart(ev: DragEvent, kind: string) {
   ev.dataTransfer?.setData('text/studio-kind', kind)
 }
 
+const SEM_RENDERER = new Set(['splitButton', 'fabMenu', 'datePicker', 'timePicker', 'carousel', 'camera', 'map', 'badge', 'linearProgress', 'circularProgress'])
+
+function temRenderer(kind: string): boolean {
+  return !SEM_RENDERER.has(kind)
+}
+
+function iconeFallback(kind: string): string {
+  const mapa: Record<string, string> = {
+    splitButton: 'splitscreen', fabMenu: 'add', datePicker: 'calendar_month', timePicker: 'schedule',
+    carousel: 'view_carousel', camera: 'photo_camera', map: 'map', badge: 'badge',
+    linearProgress: 'progress_activity', circularProgress: 'progress_activity'
+  }
+  return mapa[kind] ?? 'circle'
+}
+
 onMounted(() => {
   document.title = document.title
 })
@@ -185,8 +200,9 @@ onMounted(() => {
             @dblclick="criarNoCentro(t.kind)"
             @keydown.enter="criarNoCentro(t.kind)"
           >
-            <div class="flex h-[64px] items-center justify-center overflow-hidden p-1" aria-hidden="true">
-              <M3Node :item="t.item" :scheme="scheme" :mini="true" />
+            <div class="flex h-[64px] items-center justify-center overflow-hidden rounded-badge border border-nexo-border bg-nexo-canvas p-1" aria-hidden="true">
+              <M3Node v-if="temRenderer(t.kind)" :item="t.item" :scheme="scheme" :mini="true" />
+              <span v-else class="flex items-center gap-1 text-nexo-muted"><M3Icon :name="iconeFallback(t.kind)" :size="20" />{{ t.rotulo }}</span>
             </div>
             <p class="truncate px-1 pb-1 text-center text-[10px] text-nexo-muted">{{ t.rotulo }}</p>
             <button

@@ -6,9 +6,13 @@ import M3Icon from './m3/M3Icon.vue'
 const studio = useStudio()
 const abertos = ref<Set<string>>(new Set())
 const arrastando = ref<string | null>(null)
+const telaFiltro = ref<string>('atual')
+
+const telas = computed(() => studio.doc.frames)
+const telaAlvo = computed(() => (telaFiltro.value === 'atual' ? (studio.frameAtual() ?? null) : (studio.doc.frames.find((f) => f.id === telaFiltro.value) ?? null)))
 
 const gruposDaTela = computed(() => {
-  const f = studio.frameAtual()
+  const f = telaAlvo.value
   if (!f) return []
   return studio.doc.groups
     .filter((g) => g.items.some((i) => i.x >= f.x && i.x < f.x + f.w))
@@ -53,6 +57,14 @@ function rotulo(g: { items: { kind: string; label?: string }[] }): string {
 
 <template>
   <div class="flex h-full flex-col" aria-label="Layers">
+    <div class="border-b border-nexo-border p-2">
+      <label class="block text-xs">Tela
+        <select v-model="telaFiltro" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-xs" aria-label="Filtrar layers por tela">
+          <option value="atual">Tela atual</option>
+          <option v-for="f in telas" :key="f.id" :value="f.id">{{ f.name }} ({{ f.w }}×{{ f.h }})</option>
+        </select>
+      </label>
+    </div>
     <div class="min-h-0 flex-1 overflow-auto p-2">
       <p v-if="gruposDaTela.length === 0" class="p-4 text-center text-xs text-nexo-muted">Sem layers nesta tela.</p>
       <ul v-else class="space-y-1">
