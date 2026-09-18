@@ -270,7 +270,7 @@ function baixarFeatureWiki(featureId: string) {
       <div class="ml-auto flex items-center gap-2">
         <button
           type="button"
-          class="flex items-center gap-1.5 rounded-btn border border-nexo-primary/40 bg-nexo-primary/10 px-3 py-1.5 text-sm font-semibold text-nexo-primary hover:bg-nexo-primary/20 transition-colors"
+          class="flex items-center gap-1.5 rounded-btn border border-nexo-primary/40 bg-nexo-primary/10 px-3 py-1.5 min-h-[32px] text-sm font-semibold text-nexo-primary hover:bg-nexo-primary/20 transition-colors"
           @click="sessaoAiAberta = !sessaoAiAberta"
         >
           <LucideIcon name="sparkles" :size="14" />
@@ -284,17 +284,11 @@ function baixarFeatureWiki(featureId: string) {
         </button>
         <button
           type="button"
-          class="rounded-btn border border-nexo-border px-3 py-1.5 text-sm hover:bg-nexo-surface"
+          class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm hover:bg-nexo-surface"
           @click="abrirNoCanvas()"
         >
           Abrir no Canvas
         </button>
-        <RouterLink
-          :to="{ path: '/studio-full', query: { from: `gates/${props.id}` } }"
-          class="rounded-btn border border-nexo-border px-3 py-1.5 text-sm hover:bg-nexo-surface"
-        >
-          Abrir Studio
-        </RouterLink>
       </div>
     </div>
 

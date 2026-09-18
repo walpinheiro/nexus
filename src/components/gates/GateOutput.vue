@@ -117,6 +117,26 @@ const artefato = computed(() => {
 })
 
 // A4: G3/G5 100% motor; G4 motor + ações secundárias (release). Legado removido.
+// W2: progresso explícito do artefato — percorre secoes[].itens[] e conta como
+// vazios os valores cujo texto contém "não informado" / "(vazio)" / "(nenhum"
+// (case-insensitive), espelhando os placeholders que o motor emite.
+const progressoArtefato = computed(() => {
+  const secoes = artefato.value?.secoes ?? []
+  let total = 0
+  let vazios = 0
+  for (const secao of secoes) {
+    for (const item of secao.itens ?? []) {
+      total += 1
+      const texto = (item.valor ?? '').toString().toLowerCase()
+      if (texto.includes('não informado') || texto.includes('nao informado') || texto.includes('(vazio)') || texto.includes('(nenhum')) {
+        vazios += 1
+      }
+    }
+  }
+  const preenchidos = total - vazios
+  const percentual = total > 0 ? Math.round((preenchidos / total) * 100) : 0
+  return { total, preenchidos, percentual }
+})
 const mostraAcoesG5 = computed(() => props.gateId === 'G5' && props.alvo != null)
 
 function baixarGateMarkdown() {
@@ -166,6 +186,17 @@ function baixarGateMarkdown() {
       <LucideIcon name="inbox" :size="24" class="mx-auto mb-2 text-nexo-muted" />
       <p class="font-medium text-nexo-text">Nenhum artefato gerado ainda</p>
       <p class="mt-1">Selecione um objeto do gate acima para visualizar os artefatos formais.</p>
+    </div>
+
+    <!-- W2: progresso explícito do artefato (somente quando artefato existir) -->
+    <div v-if="artefato" class="rounded border border-nexo-border bg-nexo-canvas/30 px-3 py-2 text-xs text-nexo-text">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-semibold">Progresso do artefato</span>
+        <span class="text-nexo-muted">{{ progressoArtefato.preenchidos }} de {{ progressoArtefato.total }} campos preenchidos</span>
+      </div>
+      <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200" role="progressbar" :aria-valuenow="progressoArtefato.percentual" aria-valuemin="0" aria-valuemax="100">
+        <div class="h-full rounded-full bg-nexo-primary transition-all" :style="{ width: progressoArtefato.percentual + '%' }"></div>
+      </div>
     </div>
 
     <!-- Artefato normativo G0..G5 via motor (A3+A4); export .md secundário dentro -->

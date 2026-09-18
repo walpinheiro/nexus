@@ -14,6 +14,27 @@ withDefaults(defineProps<Props>(), { gateInfo: null, mostrarExportar: true })
 const emit = defineEmits<{
   (e: 'exportar'): void
 }>()
+
+interface SecaoProgresso {
+  itens: Array<{ valor: string }>
+}
+
+function itemPreenchido(valor: string | null | undefined): boolean {
+  const v = (valor ?? '').trim().toLowerCase()
+  if (!v) return false
+  return !(
+    v.includes('não informado') ||
+    v.includes('(vazio)') ||
+    v.includes('(nenhum') ||
+    v.includes('(não ')
+  )
+}
+
+function progressoSecao(secao: SecaoProgresso): { feitos: number; total: number; completa: boolean } {
+  const total = secao.itens.length
+  const feitos = secao.itens.filter((item) => itemPreenchido(item.valor)).length
+  return { feitos, total, completa: total > 0 && feitos === total }
+}
 </script>
 
 <template>
@@ -70,7 +91,25 @@ const emit = defineEmits<{
       :key="secao.titulo"
       class="rounded bg-white p-3 border border-nexo-border/80 text-[11px] space-y-1.5"
     >
-      <p class="font-bold text-nexo-text text-[11px]">{{ secao.titulo }}</p>
+      <div class="flex items-center gap-2 flex-wrap">
+        <p class="font-bold text-nexo-text text-[11px]">{{ secao.titulo }}</p>
+        <LucideIcon
+          v-if="progressoSecao(secao).completa"
+          name="check"
+          :size="12"
+          class="text-green-600"
+        />
+        <span
+          class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-bold"
+          :class="
+            progressoSecao(secao).completa
+              ? 'bg-green-100 text-green-800'
+              : 'bg-nexo-canvas text-nexo-muted'
+          "
+        >
+          {{ progressoSecao(secao).feitos }}/{{ progressoSecao(secao).total }}
+        </span>
+      </div>
       <dl class="space-y-1">
         <div
           v-for="item in secao.itens"

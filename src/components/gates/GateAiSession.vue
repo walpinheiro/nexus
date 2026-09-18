@@ -149,6 +149,16 @@ const itensPreenchidos = computed(() => {
   return preenchidos
 })
 
+// W1: auxiliares reativos do progresso G0 (derivam de computeds existentes, sem watcher)
+const totalItens = computed(() => itensPreenchidos.value.length + (diagnostico.value?.faltas.length ?? 0))
+const percentualPreenchido = computed(() =>
+  totalItens.value === 0 ? 0 : Math.round((itensPreenchidos.value.length / totalItens.value) * 100)
+)
+const exemploCurto = computed(() => {
+  const ex = perguntaAtual.value?.exemplo ?? ''
+  return ex.length > 60 ? `${ex.slice(0, 60)}...` : ex
+})
+
 // Governança, papéis e travas
 const governanca = computed(() => {
   return obterGovernancaGate(props.gateId, users.currentUser, props.alvo, gates.gates)
@@ -507,6 +517,36 @@ function rejeitarPatch() {
     <div class="flex-1 overflow-y-auto p-4 text-xs">
       <!-- 1. TAB: CHAT INTERATIVO (CONDUÇÃO DA IA UMA PERGUNTA POR VEZ) -->
       <div v-if="tabAtiva === 'chat'" class="flex h-full flex-col space-y-3">
+        <!-- W1 G0: progresso reativo em tempo real (topo da aba chat, acima do histórico) -->
+        <div class="rounded-card border border-nexo-border bg-white p-2.5 shrink-0 space-y-1.5">
+          <div class="flex items-center justify-between text-xs text-nexo-text">
+            <span class="font-semibold">Preenchido {{ itensPreenchidos.length }} de {{ totalItens }}</span>
+            <span class="font-mono text-[11px] text-nexo-muted">{{ percentualPreenchido }}%</span>
+          </div>
+          <div class="h-1.5 w-full overflow-hidden rounded-full bg-nexo-canvas" role="progressbar" :aria-valuenow="percentualPreenchido" aria-valuemin="0" aria-valuemax="100">
+            <div class="h-full rounded-full bg-nexo-primary transition-all" :style="{ width: `${percentualPreenchido}%` }" />
+          </div>
+        </div>
+
+        <!-- W1 G0: próxima pergunta + sugestão clicável -->
+        <div v-if="perguntaAtual" class="rounded-card border border-nexo-border bg-white p-2.5 shrink-0 space-y-1.5">
+          <p class="text-xs text-nexo-text">
+            <span class="font-semibold">Próxima pergunta:</span>
+            {{ perguntaAtual.descricao }} — {{ perguntaAtual.pergunta }}
+          </p>
+          <NeChip
+            variant="neutral"
+            icon="file-text"
+            :label="exemploCurto"
+            :title="perguntaAtual.exemplo"
+            class="max-w-full min-h-[32px] text-sm"
+            @click="enviarMensagem(perguntaAtual.exemplo)"
+          />
+        </div>
+        <div v-else class="rounded-card border border-nexo-border bg-white p-2.5 shrink-0">
+          <p class="text-xs text-nexo-text font-medium">Todos os critérios preenchidos. Objeto apto para aprovação.</p>
+        </div>
+
         <!-- Card Foco da Pergunta Atual (se houver critério pendente) -->
         <div
           v-if="perguntaAtual"
