@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import type { GateId, NexoObject, PatchMudanca } from '@/types/nexo'
 import { useGraph } from '@/stores/useGraph'
 import { useUsers } from '@/stores/useUsers'
@@ -12,6 +13,7 @@ import {
   diagnosticarFaltasGate,
   obterGovernancaGate,
   gerarPropostaPatch,
+  processarMensagemWizard,
   DICIONARIO_PERGUNTAS,
   type FaltaGate
 } from '@/ai/gateSkills'
@@ -40,6 +42,7 @@ const emit = defineEmits<{
 const graph = useGraph()
 const users = useUsers()
 const gates = useGate()
+const route = useRoute()
 
 // Abas da sessão (chat-first como solicitado: chat padrão, faltas e governanca)
 const tabAtiva = ref<'chat' | 'faltas' | 'governanca'>('chat')
@@ -159,6 +162,9 @@ const exemploCurto = computed(() => {
   return ex.length > 60 ? `${ex.slice(0, 60)}...` : ex
 })
 
+// W4: modo wizard (?modo=wizard, G0) — pergunta 1 falta por vez via processarMensagemWizard
+const modoWizard = computed(() => route.query.modo === 'wizard' && props.gateId === 'G0')
+
 // Governança, papéis e travas
 const governanca = computed(() => {
   return obterGovernancaGate(props.gateId, users.currentUser, props.alvo, gates.gates)
@@ -225,6 +231,33 @@ async function enviarMensagem(textoCustom?: string) {
 
   if (!textoCustom) {
     inputMensagem.value = ''
+  }
+
+  // W4 wizard: 1 falta por vez via processarMensagemWizard; pula fluxo normal executarSkill/patch
+  if (modoWizard.value) {
+    try {
+      const res = processarMensagemWizard(txt, {
+        objeto: props.alvo,
+        gateId: props.gateId,
+        user: users.currentUser ?? null,
+        gates: gates.gates.map((g) => ({ id: g.id, status: g.status, baselineVersao: g.baselineVersao })),
+        waivers: graph.waivers.map((w) => ({ codigo: w.codigo, prazo: w.prazo }))
+      })
+      historicoChat.value.push({
+        id: `ia-${Date.now()}`,
+        autor: 'ia',
+        texto: res.texto,
+        timestamp: agora
+      })
+    } catch (err) {
+      historicoChat.value.push({
+        id: `err-${Date.now()}`,
+        autor: 'ia',
+        texto: `Erro ao processar mensagem: ${err instanceof Error ? err.message : String(err)}`,
+        timestamp: agora
+      })
+    }
+    return
   }
 
   gerandoOutputAoVivo.value = true
@@ -517,6 +550,13 @@ function rejeitarPatch() {
     <div class="flex-1 overflow-y-auto p-4 text-xs">
       <!-- 1. TAB: CHAT INTERATIVO (CONDUÇÃO DA IA UMA PERGUNTA POR VEZ) -->
       <div v-if="tabAtiva === 'chat'" class="flex h-full flex-col space-y-3">
+        <!-- W4: badge modo wizard (texto-xs, neutro) -->
+        <span
+          v-if="modoWizard"
+          class="inline-flex w-fit items-center rounded border border-nexo-border bg-nexo-canvas px-2 py-0.5 text-xs text-nexo-muted"
+        >
+          Modo wizard
+        </span>
         <!-- W1 G0: progresso reativo em tempo real (topo da aba chat, acima do histórico) -->
         <div class="rounded-card border border-nexo-border bg-white p-2.5 shrink-0 space-y-1.5">
           <div class="flex items-center justify-between text-xs text-nexo-text">
