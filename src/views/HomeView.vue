@@ -75,9 +75,19 @@ function abrirDialog() {
   avisoG0002.value = ''
 }
 
-function aoIngestaoConcluido() {
+// LIGA-TIPOS: recebe payload { projetoId, epicoId } do IngestaoDialog, conclui
+// via MOTOR (concluirIngestaoExistente), troca namespaces e navega à rotaGate.
+function aoIngestaoConcluido(payload: { projetoId: string; epicoId: string }) {
+  const r = projects.concluirIngestaoExistente(payload, users.state.currentUserId)
+  if (!r.ok || !r.projetoId || !r.rotaGate) {
+    erros.value = r.erros
+    return
+  }
+  graph.trocarProjeto(r.projetoId)
+  gates.trocarProjeto(r.projetoId)
   dialogAberto.value = false
   tipoProjeto.value = 'novo'
+  router.push(r.rotaGate)
 }
 
 function aoIngestaoCancelar() {
