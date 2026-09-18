@@ -1,4 +1,4 @@
-// Artefatos formais por gate — ARTEFATOS-FORMAIS-MOTOR (A1: G0+G1+G2).
+// Artefatos formais por gate — ARTEFATOS-FORMAIS-MOTOR (A1+A2: G0..G5).
 // Cada gate tem ARTEFATO normativo (specs 05-10 + fichas 13-16), não wiki.md
 // genérica — export .md (exportWiki.ts) vira secundário e é preservado.
 // Builders PUROS: dados reais do objeto + ctx (nos/gates/vinculos/regras),
@@ -12,10 +12,15 @@ import type {
   ArtefatoSecao,
   CriterioBdd,
   Epic,
+  EvidenciaEntrega,
+  ExcecaoSeguranca,
   Feature,
   GateId,
+  IntegracaoSpec,
   MapaRegrasValidacao,
   NexoObject,
+  NfrSpec,
+  PBI,
   PermissaoPolicy,
   RiscoEstruturado,
   TelaEstado,
@@ -160,6 +165,179 @@ export function montarArtefatoG1(objeto: NexoObject, ctx?: ArtefatoContexto): Ar
         ['DoD do épico', txt(r['dod'])]
       ])
     ]
+  }
+}
+
+// ── G3 (spec 08): domínios/entidades, APIs/eventos, modelo dados,
+// NFRs medida+alvo+observabilidade, auth/LGPD, ameaças/controles, ADRs,
+// rollout/rollback ────────────────────────────────────────────────────────────
+export function montarArtefatoG3(objeto: NexoObject, ctx?: ArtefatoContexto): Artefato {
+  const r = rec(objeto)
+  const openapi = r['openapi'] as Rec | undefined
+  const persist = r['persistencia'] as Rec | undefined
+  const integRaw = r['integracoes']
+  const integ: IntegracaoSpec[] = Array.isArray(integRaw)
+    ? (integRaw as unknown[]).map((x) => (typeof x === 'string' ? { nome: x } : (x as IntegracaoSpec)))
+    : []
+  const nfrs: NfrSpec[] = Array.isArray(r['nfrs']) ? (r['nfrs'] as NfrSpec[]) : []
+  const seg = r['seguranca'] as Rec | undefined
+  const dado = r['dado_pessoal'] as Rec | undefined
+  const exc = r['excecao_seg'] as ExcecaoSeguranca | undefined
+  const dispensa = txt(r['contrato_dispensa'])
+  return {
+    gate: 'G3',
+    titulo: `Arquitetura da solução — ${objeto.titulo}`,
+    secoes: [
+      ...cabecalho(objeto, 'G3', '', ctx),
+      secao('Domínios e entidades', [
+        ['Domínios', juntar(r['dominios'])],
+        ['Entidade principal', txt(persist?.['entidade'])],
+        ['Validações', juntar(persist?.['validacoes'])]
+      ]),
+      secao('APIs e eventos', [
+        ['Contrato/OpenAPI', openapi
+          ? `2xx ${txt(openapi['v2xx'])} · 4xx ${txt(openapi['v4xx'])} · 5xx ${txt(openapi['v5xx'])} · auth ${txt(openapi['auth'])} · compat ${txt(openapi['compat'])} · consumidor ${txt(openapi['consumidor'])}`
+          : (dispensa !== 'não informado' ? `Dispensa: ${dispensa}` : 'não informado')],
+        ['Eventos', juntar(r['eventos'])],
+        ['Integrações', integ.length > 0 ? integ.map((x) => x.nome).join('; ') : 'não informado']
+      ]),
+      secao('Modelo de dados', [
+        ['Migration', txt(persist?.['migration'])],
+        ['Índices', txt(persist?.['indice'])],
+        ['Plano de dados', txt(persist?.['plano_dados'])]
+      ]),
+      secao('NFRs', [
+        ['Requisitos (medida+alvo+observabilidade)', nfrs.length > 0
+          ? nfrs.map((n) => `${txt(n.medida)} alvo ${txt(n.alvo)} obs. ${txt(n.observabilidade)}`).join('; ')
+          : 'não informado']
+      ]),
+      secao('Auth e LGPD', [
+        ['Auth', txt(openapi?.['auth'])],
+        ['Dado pessoal (classificação/finalidade/retenção/acesso)', dado
+          ? `${txt(dado['classificacao'])}/${txt(dado['finalidade'])}/${txt(dado['retencao'])}/${txt(dado['acesso'])}`
+          : 'não informado']
+      ]),
+      secao('Ameaças e controles', [
+        ['Threat model', txt(seg?.['threat'])],
+        ['Matriz de riscos', txt(seg?.['matriz'])],
+        ['Exceção de segurança', exc ? `owner ${txt(exc.owner)} · prazo ${txt(exc.prazo)} · aceite ${txt(exc.aceite)}` : 'não informado']
+      ]),
+      secao('ADRs', [['Decisões vinculadas', txt(r['adr_id'])]]),
+      secao('Rollout e rollback', [
+        ['Rollout', txt(r['rollout'])],
+        ['Rollback', txt(r['rollback'])]
+      ])
+    ]
+  }
+}
+
+// ── G4 (spec 09 + fichas 15/16): PBIs priorizados+estimativas+dependências+
+// DoR+plano release+pacote implementação ──────────────────────────────────────
+export function montarArtefatoG4(objeto: NexoObject, ctx?: ArtefatoContexto): Artefato {
+  const pbis = (ctx?.nos ?? []).filter((n): n is PBI & NexoObject => {
+    if (n.tipo !== 'pbi') return false
+    const p = n as unknown as PBI
+    return p.feature_id === objeto.id || p.id === objeto.id
+  })
+  const ordenados = [...pbis].sort((a, b) => {
+    const pa = String((a as unknown as Rec)['prioridade'] ?? 'z')
+    const pb = String((b as unknown as Rec)['prioridade'] ?? 'z')
+    return pa < pb ? -1 : pa > pb ? 1 : a.id < b.id ? -1 : 1
+  })
+  const linhas = ordenados.length > 0
+    ? ordenados.map((p) => {
+      const pr = p as unknown as Rec
+      const bdds = Array.isArray(p.criterios_bdd) ? (p.criterios_bdd as CriterioBdd[]) : []
+      const dor = [
+        `aceite ${bdds.length > 0 ? `${bdds.length} BDD` : 'não informado'}`,
+        `origem ${txt(pr['feature_id'])}+${txt(p.owner)}`,
+        `escopo ${juntar(pr['escopo_in'])}/${juntar(pr['escopo_out'])}`,
+        `teste ${txt(pr['estrategia_teste'])}`,
+        `contrato ${txt((pr['contrato'] as Rec)?.['status'])}`
+      ].join('; ')
+      return `${p.titulo} [est. ${txt(pr['estimativa'])}; deps ${juntar(pr['dependencias'])}] — DoR: ${dor}`
+    }).join(' | ')
+    : 'não informado'
+  return {
+    gate: 'G4',
+    titulo: `Plano de entrega — ${objeto.titulo}`,
+    secoes: [
+      ...cabecalho(objeto, 'G4', '', ctx),
+      secao('PBIs priorizados', [['Backlog ordenado', linhas]]),
+      secao('Estimativas e dependências', [
+        ['Estimativas', ordenados.length > 0 ? ordenados.map((p) => `${p.titulo}: ${txt((p as unknown as Rec)['estimativa'])}`).join('; ') : 'não informado'],
+        ['Dependências', ordenados.length > 0 ? ordenados.map((p) => `${p.titulo} ← ${juntar((p as unknown as Rec)['dependencias'])}`).join('; ') : 'não informado']
+      ]),
+      secao('Definition of Ready', [
+        ['Critério DoR por PBI', ordenados.length > 0
+          ? ordenados.map((p) => {
+            const pr = p as unknown as Rec
+            const bdds = Array.isArray(p.criterios_bdd) ? (p.criterios_bdd as CriterioBdd[]) : []
+            return `${p.titulo}: ${bdds.length} BDD, teste ${txt(pr['estrategia_teste'])}, owner ${txt(p.owner)}, flag ${txt(pr['flag'])}`
+          }).join(' | ')
+          : 'não informado']
+      ]),
+      secao('Plano de release', [
+        ['Release', txt(rec(objeto)['plano_release'])],
+        ['Rollout/rollback', `${txt(rec(objeto)['rollout'])} / ${txt(rec(objeto)['rollback'])}`]
+      ]),
+      secao('Pacote de implementação', [
+        ['Pacote (SFCs/APIs/migrations/specs)', juntar(rec(objeto)['pacote_implementacao'])]
+      ])
+    ]
+  }
+}
+
+// ── G5 (spec 10): SFCs/APIs/migrations/specs, evidências CI, link PR, aceite ──
+export function montarArtefatoG5(objeto: NexoObject, ctx?: ArtefatoContexto): Artefato {
+  const r = rec(objeto)
+  const ev = (r['evidencia'] as (EvidenciaEntrega & Rec) | undefined) ?? {}
+  const checks = Array.isArray(ev.checks_ci) ? (ev.checks_ci as string[]) : []
+  const obs = juntar(ev.observabilidade)
+  const rast = juntar(ev.rastreabilidade)
+  const exc = ev.excecao as Rec | undefined
+  return {
+    gate: 'G5',
+    titulo: `Evidências de entrega — ${objeto.titulo}`,
+    secoes: [
+      ...cabecalho(objeto, 'G5', '', ctx),
+      secao('Pacote entregue (SFCs/APIs/migrations/specs)', [
+        ['SFCs/APIs', juntar(r['sfcs'] ?? r['apis'])],
+        ['Migrations', juntar(r['migrations'])],
+        ['Specs', juntar(r['specs'])]
+      ]),
+      secao('Evidências de CI', [
+        ['Checks CI', checks.length > 0 ? checks.join('; ') : 'não informado'],
+        ['SAST/policy', `sast ${ev.sast_ok !== false ? 'aprovado' : 'pendente'} · policy ${ev.policy_ok !== false ? 'aprovado' : 'pendente'}`],
+        ['Testes verdes', ev.testes_verdes === true ? 'sim — 100% da suíte' : 'não informado']
+      ]),
+      secao('Pull Request', [
+        ['Link PR', typeof ev.pr_url === 'string' && ev.pr_url ? String(ev.pr_url) : 'não informado'],
+        ['Merged', ev.pr_merged === true ? 'sim' : 'não informado']
+      ]),
+      secao('Aceite', [
+        ['Aceite registrado', ev.aceite_registrado === true ? 'sim (QA/PO)' : 'não informado'],
+        ['Segurança', ev.seg_aprovado === true ? 'aprovada' : exc ? `exceção até ${txt(exc['prazo'])}` : 'não informado'],
+        ['Observabilidade/rastreabilidade', `${obs} / ${rast}`]
+      ])
+    ]
+  }
+}
+
+/** Dispatcher: monta o artefato normativo do gate (null p/ objeto nulo). */
+export function montarArtefato(
+  objeto: NexoObject | null,
+  gateId: GateId,
+  ctx?: ArtefatoContexto
+): Artefato | null {
+  if (!objeto) return null
+  switch (gateId) {
+    case 'G0': return montarArtefatoG0(objeto, ctx)
+    case 'G1': return montarArtefatoG1(objeto, ctx)
+    case 'G2': return montarArtefatoG2(objeto, ctx)
+    case 'G3': return montarArtefatoG3(objeto, ctx)
+    case 'G4': return montarArtefatoG4(objeto, ctx)
+    case 'G5': return montarArtefatoG5(objeto, ctx)
   }
 }
 
