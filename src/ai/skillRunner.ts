@@ -43,20 +43,24 @@ export interface SkillRunnerResult {
 }
 
 /**
- * R2 — grill-me via LLM de verdade.
+ * R2/R5 — grill-me via LLM de verdade (PROVADO no server real do dono).
  * O system carrega a SKILL do gate de fato: skill interna selecionada (nome interno),
  * checks cobertos, perguntas do DICIONARIO (pergunta/porQueBloqueia/exemplo), estado
  * resumido do objeto e faltas diagnosticadas. O LLM é instruído a conduzir UMA pergunta
  * por vez, extrair respostas do histórico e confirmar antes de propor patch.
  * Sem menu de comandos: a instrução PROÍBE responder com lista de comandos
  * ("experimente pedir...") — isso era o mock que o dono viu.
+ * G2 (pedido do dono): o system inclui o PORTFÓLIO de features do G0/épico para o LLM
+ * estimar quantas features faltam (previsão), mas a CONDUÇÃO continua 1 feature por vez:
+ * `featureFoco` = a feature em pauta; `outrasFeatures` = contexto p/ previsão de escopo.
  */
 function montarSystemGrill(
   gateId: GateId,
   skillId: string,
   faltasRoteiro: FaltaGate[],
   objeto: NexoObject,
-  papelUsuario?: Role
+  papelUsuario?: Role,
+  contextoG2?: { epico?: NexoObject | null; features?: NexoObject[] }
 ): string {
   const skills = obterSkillsDoGate(gateId)
   const skill = skills.find((s) => s.id === skillId) ?? skills[0]
@@ -65,6 +69,23 @@ function montarSystemGrill(
     .map((f) => `- [${f.codigo}] campoAlvo=${f.campoAlvo} (${f.severidade}): ${f.pergunta} Por que bloqueia: ${f.porQueBloqueia} Exemplo: "${f.exemplo}"`)
     .join('\n')
   const linhaPapel = linhaTomPorPapel(gateId, papelUsuario)
+  // G2 (pedido do dono): portfólio p/ previsão de escopo — quantas features o G0 prevê.
+  let blocoPortifolio = ''
+  if (gateId === 'G2' && contextoG2) {
+    const feats = (contextoG2.features ?? []).filter((x) => x.id !== objeto.id)
+    const linhasFeats = feats.length > 0
+      ? feats.map((x) => `- ${x.titulo} (id=${x.id}, status=${x.status}, v${x.versao})`).join('\n')
+      : '(nenhuma outra feature no grafo)'
+    const epi = contextoG2.epico
+    blocoPortifolio = [
+      '',
+      `PORTFÓLIO G2 (contexto p/ previsão de escopo — CONDUZA SÓ "${objeto.titulo}"):`,
+      `Épico de origem: ${epi ? `"${epi.titulo}" — ${epi.descricao}` : 'não informado'}.`,
+      'Outras features já mapeadas:',
+      linhasFeats,
+      'Com base no épico + no que já existe, ao final (quando as faltas zerarem) estime em 1 frase quantas features no TOTAL o G0 prevê e quais faltam detalhar. NUNCA conduza 2 features na mesma resposta.'
+    ].join('\n')
+  }
   return [
     `Você é a IA de apoio ao Gate ${gateId} do NEXO (100% local, PT-BR).`,
     `Skill interna em uso: ${skill?.nome ?? skillId} [${skillId}] — checks: ${checksLinha}.`,
@@ -73,6 +94,7 @@ function montarSystemGrill(
     '',
     'Faltas diagnosticadas (ROTEIRO — conduza nesta ordem, UMA pergunta por vez):',
     perguntas || '(nenhuma — todos os checks OK; confirme o estado e elogie objetivamente)',
+    blocoPortifolio,
     '',
     linhaPapel,
     'REGRAS DURAS:',
@@ -244,11 +266,19 @@ function montarPatchLocal(objeto: NexoObject, faltas: FaltaGate[], respostas: Re
   return null
 }
 
+export interface SkillRunnerContexto {
+  /** G2: épico de origem p/ previsão de escopo (pedido do dono). */
+  epico?: NexoObject | null
+  /** G2: todas as features do grafo (foco = `objeto`, resto = contexto). */
+  features?: NexoObject[]
+}
+
 export async function executarSkill(
   gateId: GateId,
   objeto: NexoObject,
   historico: OllamaMessage[],
-  papelUsuario?: Role
+  papelUsuario?: Role,
+  contexto?: SkillRunnerContexto
 ): Promise<SkillRunnerResult> {
   const diag = diagnosticarFaltasGate(objeto, gateId)
   // O5: skill invisível — seleção 100% interna por gateId; skillId = rastreio interno.
@@ -262,7 +292,7 @@ export async function executarSkill(
   try {
     const llm = await chatComProvedor(
       [
-        { role: 'system', content: montarSystemGrill(gateId, skillId, faltasRoteiro, objeto, papelUsuario) },
+        { role: 'system', content: montarSystemGrill(gateId, skillId, faltasRoteiro, objeto, papelUsuario, contexto ? { epico: contexto.epico, features: contexto.features } : undefined) },
         { role: 'user', content: montarUser(objeto, gateId, historico) }
       ],
       { timeoutMs: 120000 }

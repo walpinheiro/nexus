@@ -254,7 +254,10 @@ async function enviarMensagem(textoCustom?: string) {
       let outputParcialLlm = ''
 
       if (usarOllama.value) {
-        const res = await executarSkill(props.gateId, props.alvo, historico, users.currentUser?.papel)
+        // R5/G2: contexto de portfólio p/ previsão de escopo — foco continua 1 feature.
+        const epico = graph.state.nos.find((n) => n.tipo === 'epico') ?? null
+        const features = graph.state.nos.filter((n) => n.tipo === 'feature')
+        const res = await executarSkill(props.gateId, props.alvo, historico, users.currentUser?.papel, { epico, features })
         provedorEfetivo.value = res.provider
         modeloEfetivo.value = res.model
         ollamaStatus.value = res.provider === 'local-fallback' ? 'offline' : 'online'

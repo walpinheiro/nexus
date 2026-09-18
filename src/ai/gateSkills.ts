@@ -1011,6 +1011,11 @@ export function processarMensagemGate(
   const gov = obterGovernancaGate(gateId, user, objeto, gates)
 
   // 1. Perguntas de status / o que falta / governança
+  // NOTA ANTI-MOCK (dono): este ramo só responde DIAGNÓSTICO (checks reais do
+  // avaliarGate). A condução pergunta-a-pergunta é feita pelo LLM real via
+  // executarSkill (GateAiSession sempre chama o LLM primeiro); este fallback só
+  // aparece quando o servidor está inalcançável — e mesmo assim SEM menu de
+  // comandos, só diagnóstico + próxima pergunta (ver fallback no fim do arquivo).
   if (
     msg.includes('o que falta') ||
     msg.includes('pendencias') ||
