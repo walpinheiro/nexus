@@ -1,4 +1,4 @@
-import type { Edge, Epic, Feature, GateId, PBI, TelaVinculo, User } from '@/types/nexo'
+import type { Edge, Epic, Feature, GateId, MapaRegrasValidacao, PBI, TelaVinculo, User } from '@/types/nexo'
 import type { GateInfo } from '@/stores/useGate'
 
 // Seed local — textos das 4 features EXATOS do nexo-interface-proposal-static.png.
@@ -105,6 +105,136 @@ export const seedVinculosTela: TelaVinculo[] = [
 
 export function telasSeedDaFeature(featureId: string): string[] {
   return seedVinculosTela.filter((v) => v.featureId === featureId).map((v) => v.telaId)
+}
+
+// ONDA2 Y2 — seed declarativo de regras de validação por tela (SEM mock:
+// cada regra deriva de criterios_bdd/alternativos REAIS da feature ft-pagar):
+// - ft-pagar AC-001 given "fatura aberta pertence ao cliente autenticado"
+//   → ft-pagar-t1.faturaId obrigatório (sem fatura não há pagamento).
+// - ft-pagar AC-001 then "retorna QR Code, código copiável e expiração"
+//   → ft-pagar-t2.qrCode obrigatório + qrExpiracao custom nao-expirado
+//   (QR expirado→erro: espelha o alternativo de ft-criar "QR Code expirado
+//   permite regenerar nova cobrança").
+// - ft-pagar alternativo "PSP fora do ar exibe erro com tentar de novo"
+//   → ft-pagar-alt1.tentarNovamente obrigatório (ação de retry presente).
+// Outras features/telas: carregarRegras() retorna [] (VUE trata como sem regras).
+export const seedRegrasValidacao: MapaRegrasValidacao = {
+  'ft-pagar-t1': [
+    {
+      campoId: 'faturaId',
+      mensagemSucesso: 'Fatura identificada com sucesso.',
+      regras: [
+        {
+          id: 'rv-ft-pagar-t1-faturaId-obrigatorio',
+          campoId: 'faturaId',
+          tipo: 'obrigatorio',
+          mensagemErro: 'Informe a fatura a pagar (obrigatório — AC-001).',
+          mensagemSucesso: 'Fatura identificada com sucesso.'
+        },
+        {
+          id: 'rv-ft-pagar-t1-faturaId-formato',
+          campoId: 'faturaId',
+          tipo: 'regex',
+          parametro: '^[A-Za-z0-9-]{3,}$',
+          mensagemErro: 'Fatura inválida: use ao menos 3 caracteres alfanuméricos.',
+          mensagemSucesso: 'Fatura identificada com sucesso.'
+        }
+      ]
+    },
+    {
+      campoId: 'valor',
+      mensagemSucesso: 'Valor válido para pagamento.',
+      regras: [
+        {
+          id: 'rv-ft-pagar-t1-valor-obrigatorio',
+          campoId: 'valor',
+          tipo: 'obrigatorio',
+          mensagemErro: 'Informe o valor a pagar (obrigatório).',
+          mensagemSucesso: 'Valor válido para pagamento.'
+        },
+        {
+          id: 'rv-ft-pagar-t1-valor-positivo',
+          campoId: 'valor',
+          tipo: 'custom',
+          parametro: 'positivo',
+          mensagemErro: 'Valor deve ser maior que zero.',
+          mensagemSucesso: 'Valor válido para pagamento.'
+        }
+      ]
+    }
+  ],
+  'ft-pagar-t2': [
+    {
+      campoId: 'qrCode',
+      mensagemSucesso: 'QR Code válido gerado.',
+      regras: [
+        {
+          id: 'rv-ft-pagar-t2-qrCode-obrigatorio',
+          campoId: 'qrCode',
+          tipo: 'obrigatorio',
+          mensagemErro: 'QR Code ausente: regenere a cobrança (AC-001).',
+          mensagemSucesso: 'QR Code válido gerado.'
+        },
+        {
+          id: 'rv-ft-pagar-t2-qrCode-tamanho',
+          campoId: 'qrCode',
+          tipo: 'min',
+          parametro: 10,
+          mensagemErro: 'QR Code inválido: código copia-e-cola incompleto.',
+          mensagemSucesso: 'QR Code válido gerado.'
+        }
+      ]
+    },
+    {
+      campoId: 'qrExpiracao',
+      mensagemSucesso: 'QR Code dentro da validade.',
+      regras: [
+        {
+          id: 'rv-ft-pagar-t2-qrExpiracao-obrigatorio',
+          campoId: 'qrExpiracao',
+          tipo: 'obrigatorio',
+          mensagemErro: 'Expiração do QR ausente: regenere a cobrança.',
+          mensagemSucesso: 'QR Code dentro da validade.'
+        },
+        {
+          id: 'rv-ft-pagar-t2-qrExpiracao-vigente',
+          campoId: 'qrExpiracao',
+          tipo: 'custom',
+          parametro: 'nao-expirado',
+          mensagemErro: 'QR expirado: gere uma nova cobrança para continuar.',
+          mensagemSucesso: 'QR Code dentro da validade.'
+        }
+      ]
+    }
+  ],
+  'ft-pagar-alt1': [
+    {
+      campoId: 'tentarNovamente',
+      mensagemSucesso: 'Nova tentativa registrada.',
+      regras: [
+        {
+          id: 'rv-ft-pagar-alt1-retry-obrigatorio',
+          campoId: 'tentarNovamente',
+          tipo: 'obrigatorio',
+          mensagemErro: 'PSP fora do ar: confirme "tentar de novo" para prosseguir.',
+          mensagemSucesso: 'Nova tentativa registrada.'
+        }
+      ]
+    },
+    {
+      campoId: 'emailAviso',
+      mensagemSucesso: 'Aviso será enviado a este e-mail.',
+      regras: [
+        {
+          id: 'rv-ft-pagar-alt1-email-formato',
+          campoId: 'emailAviso',
+          tipo: 'email',
+          mensagemErro: 'E-mail de aviso inválido: confira o formato.',
+          mensagemSucesso: 'Aviso será enviado a este e-mail.'
+        }
+      ]
+    }
+  ]
 }
 
 export const seedFeatures: Feature[] = [

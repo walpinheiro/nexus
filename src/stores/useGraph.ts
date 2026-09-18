@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AuditEvent, Edge, ImpactPlan, NexoObject, NexoStatus, OrigemVinculoTela, ProposePatch, TelaVinculo, Waiver } from '@/types/nexo'
-import { seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedPbis, seedVinculosTela } from '@/data/seed'
+import type { AuditEvent, Edge, ImpactPlan, MapaRegrasValidacao, NexoObject, NexoStatus, OrigemVinculoTela, ProposePatch, ResultadoValidacao, TelaVinculo, ValidacaoCampo, Waiver } from '@/types/nexo'
+import { seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedPbis, seedRegrasValidacao, seedVinculosTela } from '@/data/seed'
+import { validarFormulario } from '@/utils/validacao'
 import { useProjects } from '@/stores/useProjects'
 
 const KEY = 'nexo.v1.graph'
 const KEY_PATCH = 'nexo.v1.patches'
 const KEY_AUDIT = 'nexo.v1.audit'
 const KEY_VINCULOS = 'nexo.v1.vinculos-tela'
+const KEY_REGRAS = 'nexo.v1.regras-validacao'
 
 interface GraphState {
   nos: NexoObject[]
@@ -648,6 +650,36 @@ export const useGraph = defineStore('graph', () => {
     return n
   }
 
+  // ONDA2 Y2 — regras de validação por tela (seed declarativo seedRegrasValidacao).
+  // Contrato p/ VUE (M3TextField + M3Snackbar via Preview): carregarRegras retorna o
+  // schema da feature (telas vinculadas + fallback montarEntradaStudio) e validarPreview
+  // roda a engine pura. SEM DOM, SEM rede — determinístico.
+  const regrasValidacao = ref<MapaRegrasValidacao>(
+    loadJson<MapaRegrasValidacao>(KEY_REGRAS, { ...seedRegrasValidacao })
+  )
+
+  /**
+   * Schema de validação da feature: para cada tela vinculada (telasDaFeature),
+   * retorna {telaId, campos}. Telas sem regra entram com campos [] (VUE = sem regras).
+   */
+  function carregarRegras(featureId: string): { telaId: string; campos: ValidacaoCampo[] }[] {
+    const vinculos = vinculosTela.value.filter((v) => v.featureId === featureId)
+    return vinculos.map((v) => ({
+      telaId: v.telaId,
+      campos: (regrasValidacao.value[v.telaId] ?? []).map((c) => ({
+        campoId: c.campoId,
+        mensagemSucesso: c.mensagemSucesso,
+        regras: c.regras.map((r) => ({ ...r }))
+      }))
+    }))
+  }
+
+  /** Valida valores de UMA tela contra o schema seed (engine pura validarFormulario). */
+  function validarPreview(telaId: string, valores: Record<string, unknown>): ResultadoValidacao {
+    const schema = regrasValidacao.value[telaId] ?? []
+    return validarFormulario(valores, schema)
+  }
+
   return {
     state,
     patches,
@@ -692,6 +724,9 @@ export const useGraph = defineStore('graph', () => {
     telasDaFeature,
     featureDaTela,
     vincularEntradaStudio,
+    regrasValidacao,
+    carregarRegras,
+    validarPreview,
     resetSeed
   }
 })
