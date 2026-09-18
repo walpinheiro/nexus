@@ -58,6 +58,17 @@ const objetosDoNivel = computed(() => {
   return graph.state.nos
 })
 
+// G7: aba Telas (Studio) só existe via-feature (query feature= ou seleção feature)
+const podeVerTelas = computed(() => {
+  const q = route.query.feature
+  if (typeof q === 'string' && q) return true
+  const selId = (typeof route.query.selecionado === 'string' && route.query.selecionado)
+    || objetoSel.value
+    || graph.state.selecionadoId
+  if (!selId) return false
+  return graph.noPorId(selId)?.tipo === 'feature'
+})
+
 function abrirGrafo() {
   project.abrirNivel(nivelSel.value)
   if (objetoSel.value && graph.noPorId(objetoSel.value)) graph.selecionar(objetoSel.value)
@@ -72,10 +83,10 @@ function abrirGrafo() {
   <div class="flex h-full min-h-0 w-full flex-col gap-2">
     <div class="flex shrink-0 items-center gap-2 text-sm" role="tablist" aria-label="Vista do canvas">
       <button type="button" role="tab" :aria-selected="vista !== 'studio'" class="rounded-btn border px-3 py-1" :class="vista !== 'studio' ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'" @click="irVista('canvas')">Grafo NEXO</button>
-      <button type="button" role="tab" :aria-selected="vista === 'studio'" class="rounded-btn border px-3 py-1" :class="vista === 'studio' ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'" @click="irVista('studio')">Telas (Studio)</button>
+      <button v-if="podeVerTelas" type="button" role="tab" :aria-selected="vista === 'studio'" class="rounded-btn border px-3 py-1" :class="vista === 'studio' ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'" @click="irVista('studio')">Telas (Studio)</button>
     </div>
 
-    <template v-if="vista === 'studio'">
+    <template v-if="vista === 'studio' && podeVerTelas">
       <StudioView />
     </template>
 

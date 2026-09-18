@@ -199,6 +199,11 @@ function verChecklist(id: string) {
   checklistAlvo.value = id
   checklistRef.value?.definirAlvo(id)
 }
+
+// G7: label Ver-telas/Gerar-telas por feature (via-feature; destino com feature= preservado)
+function temTelas(featureId: string): boolean {
+  return graph.telasDaFeature(featureId).length > 0
+}
 </script>
 
 <template>
@@ -336,9 +341,9 @@ function verChecklist(id: string) {
                 <LucideIcon name="layout" :size="14" />
                 Ver tela
               </RouterLink>
-              <RouterLink :to="{ path: '/studio-full', query: { feature: fg.no.id, from: 'backlog' } }" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white hover:opacity-95" :title="`Abrir Studio da feature ${fg.no.titulo}`">
+              <RouterLink :to="{ path: '/studio-full', query: { feature: fg.no.id, from: 'backlog' } }" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white hover:opacity-95" :title="`${temTelas(fg.no.id) ? 'Ver telas da feature' : 'Gerar telas da feature'} ${fg.no.titulo}`">
                 <LucideIcon name="layout" :size="14" />
-                Abrir Studio
+                {{ temTelas(fg.no.id) ? 'Ver-telas' : 'Gerar-telas' }}
               </RouterLink>
               <button type="button" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text hover:bg-slate-50" @click="abrirPreview(fg.no.id)">
                 <LucideIcon name="eye" :size="14" />
