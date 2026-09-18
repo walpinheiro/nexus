@@ -573,7 +573,7 @@ export function obterPerguntasDoCheck(codigoCheck: string): PerguntaCheck | unde
 // Avalia o objeto e retorna as faltas detalhadas com perguntas reflexivas PT-BR
 export function diagnosticarFaltasGate(
   objeto: NexoObject,
-  _gateId: GateId,
+  gateId: GateId,
   waivers?: { codigo: string; prazo: string }[]
 ): {
   checks: GateCheck[]
@@ -581,7 +581,7 @@ export function diagnosticarFaltasGate(
   bloqueantesFaltando: string[]
   aprovado: boolean
 } {
-  const ev = avaliarGate(objeto, waivers)
+  const ev = avaliarGate(objeto, waivers, gateId)
   const faltas: FaltaGate[] = []
 
   for (const c of ev.checks) {

@@ -10,7 +10,8 @@ import GateAiSession from '@/components/gates/GateAiSession.vue'
 import GateGuide from '@/components/gates/GateGuide.vue'
 import GateOutput from '@/components/gates/GateOutput.vue'
 import LucideIcon from '@/components/common/LucideIcon.vue'
-import type { GateId } from '@/types/nexo'
+import type { GateId, NexoObject } from '@/types/nexo'
+import { seedEnquadramento } from '@/data/seed'
 
 const props = defineProps<{ id: string }>()
 const route = useRoute()
@@ -27,15 +28,14 @@ const motivoBloqueio = computed(() =>
 )
 
 // Filtro estrito de alvos por tipo conforme o Gate, garantindo seed visível no G0 e apenas features no G2
-const alvos = computed(() => {
+const alvos = computed<NexoObject[]>(() => {
   if (props.id === 'G0') {
-    const nosG0 = graph.state.nos.filter((n) => n.gate === 'G0')
+    const nosG0 = graph.state.nos.filter((n) => n.gate === 'G0' || n.id === 'enq-pix')
     if (nosG0.length > 0) return nosG0
-    // Alvo seed G0 derivado do épico de enquadramento de Cobranças
-    return graph.state.nos.filter((n) => n.tipo === 'epico')
+    return [seedEnquadramento as NexoObject]
   }
   if (props.id === 'G1') {
-    return graph.state.nos.filter((n) => n.tipo === 'epico')
+    return graph.state.nos.filter((n) => n.tipo === 'epico' && n.id !== 'enq-pix' && n.gate !== 'G0')
   }
   if (props.id === 'G2') {
     // Apenas nós do tipo feature no G2 (corrige anomalia que trazia ep-pix)
@@ -48,7 +48,11 @@ const alvos = computed(() => {
     return graph.state.nos.filter((n) => n.tipo === 'pbi')
   }
   if (props.id === 'G5') {
-    return graph.state.nos.filter((n) => n.tipo === 'pbi' || n.tipo === 'feature')
+    const emG5 = graph.state.nos.filter((n) => n.gate === 'G5')
+    if (emG5.length > 0) return emG5
+    const validados = graph.state.nos.filter((n) => (n.tipo === 'pbi' || n.tipo === 'feature') && (n.status === 'validated' || n.status === 'published'))
+    if (validados.length > 0) return validados
+    return []
   }
   return graph.state.nos.filter((n) => n.gate === props.id)
 })
@@ -71,12 +75,24 @@ watch(
   { immediate: true }
 )
 
-const objetoAlvo = computed(() => (alvoId.value ? graph.noPorId(alvoId.value) ?? null : null))
+const objetoAlvo = computed(() => {
+  if (alvoId.value) {
+    const no = graph.noPorId(alvoId.value)
+    if (no) return no
+    if (props.id === 'G0' && alvoId.value === 'enq-pix') return seedEnquadramento as NexoObject
+  }
+  return null
+})
 
 const pendenciasCount = computed(() => {
   if (!objetoAlvo.value) return 0
-  const ev = avaliarGate(objetoAlvo.value, graph.waivers)
+  const ev = avaliarGate(objetoAlvo.value, graph.waivers, props.id as GateId)
   return ev.checks.filter((c) => !c.ok).length
+})
+
+const checklistAlvo = computed(() => {
+  if (!objetoAlvo.value) return []
+  return avaliarGate(objetoAlvo.value, graph.waivers, props.id as GateId).checks
 })
 
 // Solicitações pendentes para este Gate
@@ -220,7 +236,7 @@ function corrigirNoObjeto(id: string) {
             <label class="flex items-center gap-2 text-sm font-semibold text-nexo-text">
               Objeto do gate:
               <select v-model="alvoId" class="rounded-btn border border-nexo-border px-2.5 py-1.5 bg-white text-xs font-normal">
-                <option value="">(selecionar)</option>
+                <option value="">{{ alvos.length === 0 ? '(nenhum item elegível para este gate)' : '(selecionar)' }}</option>
                 <option v-for="n in alvos" :key="n.id" :value="n.id">
                   {{ n.titulo }} ({{ n.status }} v{{ n.versao }})
                 </option>
@@ -242,6 +258,13 @@ function corrigirNoObjeto(id: string) {
                 Solicitar approve
               </button>
             </div>
+          </div>
+
+          <div v-if="props.id === 'G5' && alvos.length === 0" class="rounded border border-dashed border-nexo-border/80 bg-nexo-canvas/40 p-3 text-center space-y-1">
+            <p class="text-xs font-semibold text-nexo-text">Nenhum pacote de entrega pronto para o Gate G5</p>
+            <p class="text-[11px] text-nexo-muted max-w-md mx-auto">
+              O Gate G5 valida a Definition of Done (DoD) de itens que completaram o ciclo nos gates anteriores (G0 a G4). Conclua os critérios dos itens ou use o chat da IA para preparar o pacote de release.
+            </p>
           </div>
 
           <p v-if="mensagemSolicitacao" class="text-xs text-nexo-primary font-medium">
@@ -340,10 +363,10 @@ function corrigirNoObjeto(id: string) {
         />
 
         <!-- Checklist Bloqueante em Tempo Real -->
-        <div v-if="alvoId && graph.noPorId(alvoId)" class="rounded-card border border-nexo-border bg-white p-3 text-xs space-y-2">
+        <div v-if="objetoAlvo" class="rounded-card border border-nexo-border bg-white p-3 text-xs space-y-2">
           <p class="font-semibold text-nexo-text">Checklist bloqueante (tempo real):</p>
           <ul class="space-y-1">
-            <li v-for="c in avaliarGate(graph.noPorId(alvoId)!).checks" :key="c.codigo" class="flex items-center gap-1.5">
+            <li v-for="c in checklistAlvo" :key="c.codigo" class="flex items-center gap-1.5">
               <LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" :class="c.ok ? 'text-green-600' : 'text-red-600'" />
               <span>{{ c.codigo }} — {{ c.descricao }} [{{ c.severidade }}]</span>
               <span v-if="!c.ok && c.severidade === 'bloqueante'">

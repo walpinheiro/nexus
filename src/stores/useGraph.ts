@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AuditEvent, Edge, ImpactPlan, NexoObject, NexoStatus, ProposePatch, Waiver } from '@/types/nexo'
-import { seedEdges, seedEpico, seedFeatures, seedPbis } from '@/data/seed'
+import { seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedPbis } from '@/data/seed'
 import { useProjects } from '@/stores/useProjects'
 
 const KEY = 'nexo.v1.graph'
@@ -21,6 +21,7 @@ function loadGraph(): GraphState {
       const s = JSON.parse(raw) as GraphState
       // migração: garante x/y/z em nós antigos
       const coords: Record<string, { x: number; y: number; z: number }> = {
+        'enq-pix': { x: 600, y: -100, z: 0 },
         'ft-pagar': { x: 120, y: 220, z: 1 },
         'ft-confirmar': { x: 480, y: 330, z: 2 },
         'ft-criar': { x: 840, y: 220, z: 3 },
@@ -43,13 +44,16 @@ function loadGraph(): GraphState {
         if (!('nfrs' in r)) r['nfrs'] = []
         i++
       }
+      if (!s.nos.some((n) => n.gate === 'G0' || n.id === 'enq-pix')) {
+        s.nos.unshift(seedEnquadramento as NexoObject)
+      }
       return s
     }
   } catch {
     // ignora e usa seed
   }
   return {
-    nos: [seedEpico as NexoObject, ...(seedFeatures as NexoObject[]), ...(seedPbis as NexoObject[])],
+    nos: [seedEnquadramento as NexoObject, seedEpico as NexoObject, ...(seedFeatures as NexoObject[]), ...(seedPbis as NexoObject[])],
     arestas: seedEdges,
     selecionadoId: 'ft-confirmar'
   }
@@ -374,9 +378,10 @@ export const useGraph = defineStore('graph', () => {
     if (!p || !no || p.status !== 'pendente') return false
     pushHistory()
     for (const m of p.mudancas) {
-      if ((m.campo === 'criterios_bdd' || m.campo === 'regras_ids') && m.para.trim().startsWith('[')) {
+      const trimmed = m.para.trim()
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
         try {
-          ;(no as unknown as Record<string, unknown>)[m.campo] = JSON.parse(m.para)
+          ;(no as unknown as Record<string, unknown>)[m.campo] = JSON.parse(trimmed)
           continue
         } catch {
           // cai no fallback textual

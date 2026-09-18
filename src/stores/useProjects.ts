@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AuditEvent, Classificacao, Edge, Epic, NexoObject, Projeto } from '@/types/nexo'
-import { gatesZerados, seedEdges, seedEpico, seedFeatures, seedGates, seedPbis, seedProjeto } from '@/data/seed'
+import { gatesZerados, seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedGates, seedPbis, seedProjeto } from '@/data/seed'
 import type { GateInfo } from '@/stores/useGate'
 
 const KEY = 'nexo.v1.projects'
@@ -155,7 +155,7 @@ export const useProjects = defineStore('projects', () => {
       updatedAt: '2026-01-01T00:00:00.000Z'
     }
     escrever(graphKey(p.id), {
-      nos: [seedEpico as NexoObject, ...(seedFeatures as NexoObject[]), ...(seedPbis as NexoObject[])],
+      nos: [seedEnquadramento as NexoObject, seedEpico as NexoObject, ...(seedFeatures as NexoObject[]), ...(seedPbis as NexoObject[])],
       arestas: seedEdges,
       selecionadoId: 'ft-confirmar'
     })

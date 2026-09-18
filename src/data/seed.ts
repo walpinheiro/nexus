@@ -17,6 +17,38 @@ const base = {
   updated_at: '2026-01-01T00:00:00.000Z'
 }
 
+export const seedEnquadramento: Epic = {
+  ...base,
+  id: 'enq-pix',
+  tipo: 'epico',
+  titulo: 'Enquadramento: Cobranças via Pix',
+  descricao: 'Definição estratégica e discovery de pagamentos de faturas via Pix com rapidez e segurança.',
+  status: 'approved',
+  gate: 'G0',
+  owner: 'u-pm',
+  contribuidores: ['u-pm', 'u-ux'],
+  versao: 1,
+  baseline: 1,
+  parent_id: null,
+  x: 600,
+  y: -100,
+  z: 0,
+  problema: 'Clientes sem cartão precisam pagar faturas com rapidez e segurança.',
+  objetivo: 'Permitir pagamento de faturas via Pix',
+  kpis: [{ nome: 'Adoção Pix', unidade: '%', alvo: '40', janela: '90d', responsavel: 'u-pm' }],
+  personas: ['Cliente com fatura'],
+  escopo_in: ['Pagar, criar e confirmar cobrança via Pix'],
+  escopo_out: ['Boleto e cartão'],
+  riscos: [
+    {
+      probabilidade: 'alta',
+      impacto: 'alto',
+      mitigacao: 'retry com idempotência + fallback manual',
+      owner: 'u-dev'
+    }
+  ]
+}
+
 export const seedEpico: Epic = {
   ...base,
   id: 'ep-pix',
@@ -367,7 +399,7 @@ export function seedMultiProjeto(): {
     projetoTitulo: seedProjeto.titulo,
     epicoId: seedEpico.id,
     epicoTitulo: seedEpico.titulo,
-    nos: [seedEpico, ...seedFeatures, ...seedPbis],
+    nos: [seedEnquadramento, seedEpico, ...seedFeatures, ...seedPbis],
     arestas: seedEdges,
     gates: seedGates
   }
