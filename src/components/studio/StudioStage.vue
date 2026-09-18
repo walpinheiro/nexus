@@ -163,10 +163,11 @@ function onMoverParte(id: string, ev: PointerEvent) {
       if (it) {
         it.x = nx
         it.y = ny
+        studio.prenderNoFrame(it)
         for (const o of itens.value) {
           if (o.id === aid) continue
-          if (Math.abs(o.x - nx) <= 4) guides.value.v.push(o.x)
-          if (Math.abs(o.y - ny) <= 4) guides.value.h.push(o.y)
+          if (Math.abs(o.x - it.x) <= 4) guides.value.v.push(o.x)
+          if (Math.abs(o.y - it.y) <= 4) guides.value.h.push(o.y)
         }
       }
     }

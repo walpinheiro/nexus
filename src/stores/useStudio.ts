@@ -8,8 +8,43 @@ function rid(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 }
 
+// MOBILE 100% (M1): barras esticam à largura do frame; demais itens
+// ficam contidos (x+w ≤ frame.x+frame.w) via clamp.
+const BARRAS = new Set(['topAppBar', 'bottomNav'])
+
+function frameDe(frames: StudioFrame[], x: number) {
+  return frames.find((f) => x >= f.x && x < f.x + f.w)
+}
+
+function larguraDe(it: StudioItem): number {
+  return it.w ?? (typeof it.size === 'number' ? it.size : undefined) ?? 180
+}
+
+function prenderEm(it: StudioItem, frames: StudioFrame[]): void {
+  const f = frameDe(frames, it.x)
+  if (!f) return
+  if (BARRAS.has(it.kind)) {
+    it.x = f.x
+    it.w = f.w
+    if (it.size != null) it.size = f.w
+    return
+  }
+  const w = Math.min(larguraDe(it), f.w)
+  it.x = Math.min(Math.max(Math.round(it.x), f.x), f.x + f.w - w)
+  it.y = Math.max(Math.round(it.y), f.y)
+  if (it.w != null) it.w = Math.min(Math.round(it.w), f.w)
+  if (typeof it.size === 'number' && it.w == null) it.size = Math.min(Math.round(it.size), f.w)
+}
+
+// Normalização única: aplica clamp em todo doc (load+seed+import).
+function normalizarDoc(d: StudioDoc): StudioDoc {
+  if ((d.platform as string) !== 'web') d.platform = 'web'
+  for (const g of d.groups) for (const it of g.items) prenderEm(it, d.frames)
+  return d
+}
+
 function seedDoc(): StudioDoc {
-  return {
+  const d: StudioDoc = {
     title: 'Cobranças Pix',
     brief: 'Protótipo de telas do pagamento por Pix (espelha as 4 features NEXO).',
     frame: 'phone',
@@ -35,7 +70,7 @@ function seedDoc(): StudioDoc {
         y: 0,
         axis: 'x',
         order: 1,
-        items: [{ id: 'bar1', kind: 'topAppBar', label: 'Pagamento Pix', icon: 'menu', variant: 'filled', x: 1400, y: 0 }]
+        items: [{ id: 'bar1', kind: 'topAppBar', label: 'Pagamento Pix', icon: 'menu', variant: 'filled', x: 1400, y: 0, w: 412 }]
       },
       {
         id: 'g-list',
@@ -44,9 +79,9 @@ function seedDoc(): StudioDoc {
         axis: 'y',
         order: 2,
         items: [
-          { id: 'c1', kind: 'card', label: 'Pagar fatura com Pix', supporting: 'Pix de forma simples e segura.', variant: 'filled', action: { to: 'checkout', transition: 'slide' }, x: 1416, y: 112 },
-          { id: 'c2', kind: 'card', label: 'Confirmação idempotente', supporting: 'Sem transações duplicadas.', variant: 'filled', x: 1416, y: 350 },
-          { id: 'c3', kind: 'card', label: 'Status de pagamento', supporting: 'Exibe o status da cobrança.', variant: 'outlined', x: 1416, y: 588 }
+          { id: 'c1', kind: 'card', label: 'Pagar fatura com Pix', supporting: 'Pix de forma simples e segura.', variant: 'filled', action: { to: 'checkout', transition: 'slide' }, x: 1416, y: 112, w: 380 },
+          { id: 'c2', kind: 'card', label: 'Confirmação idempotente', supporting: 'Sem transações duplicadas.', variant: 'filled', x: 1416, y: 350, w: 380 },
+          { id: 'c3', kind: 'card', label: 'Status de pagamento', supporting: 'Exibe o status da cobrança.', variant: 'outlined', x: 1416, y: 588, w: 380 }
         ]
       },
       {
@@ -55,10 +90,11 @@ function seedDoc(): StudioDoc {
         y: 700,
         axis: 'x',
         order: 3,
-        items: [{ id: 'b1', kind: 'button', label: 'Pagar com Pix', variant: 'filled', size: 380, action: { to: 'checkout', transition: 'slide' }, note: 'Cria cobrança e abre o checkout.', x: 1416, y: 700 }]
+        items: [{ id: 'b1', kind: 'button', label: 'Pagar com Pix', variant: 'filled', size: 380, w: 380, action: { to: 'checkout', transition: 'slide' }, note: 'Cria cobrança e abre o checkout.', x: 1416, y: 700 }]
       }
     ]
   }
+  return normalizarDoc(d)
 }
 
 function load(): { doc: StudioDoc; screenId: string } {
@@ -89,6 +125,7 @@ function load(): { doc: StudioDoc; screenId: string } {
           i++
         }
         ;(s.doc as unknown as Record<string, unknown>).v = 2
+        normalizarDoc(s.doc)
         return s
       }
     }
@@ -321,30 +358,8 @@ export const useStudio = defineStore('studio', () => {
     return it
   }
 
-  // MOBILE 100% (M1): barras esticam à largura do frame; demais itens
-  // ficam contidos (x+w ≤ frame.x+frame.w) via clamp.
-  const BARRAS = new Set(['topAppBar', 'bottomNav'])
-
-  function frameDe(x: number) {
-    return doc.value.frames.find((f) => x >= f.x && x < f.x + f.w)
-  }
-
-  function larguraDe(it: StudioItem): number {
-    return it.w ?? (typeof it.size === 'number' ? it.size : undefined) ?? 180
-  }
-
   function prenderNoFrame(it: StudioItem): void {
-    const f = frameDe(it.x)
-    if (!f) return
-    if (BARRAS.has(it.kind)) {
-      it.x = f.x
-      it.w = f.w
-      return
-    }
-    const w = larguraDe(it)
-    it.x = Math.min(Math.max(Math.round(it.x), f.x), f.x + f.w - Math.min(w, f.w))
-    it.y = Math.max(Math.round(it.y), f.y)
-    if (it.w != null) it.w = Math.min(Math.round(it.w), f.w)
+    prenderEm(it, doc.value.frames)
   }
 
   function rotuloDefault(kind: string): string {
@@ -473,7 +488,7 @@ export const useStudio = defineStore('studio', () => {
 
   function importarDoc(novo: StudioDoc): void {
     pushHistory()
-    if ((novo.platform as string) !== 'web') novo.platform = 'web'
+    normalizarDoc(novo)
     doc.value = novo
     screenId.value = novo.frames[0]?.id ?? screenId.value
     selecionados.value = []
@@ -510,6 +525,7 @@ export const useStudio = defineStore('studio', () => {
     removerFrame,
     criarItem,
     criarItemSemHistorico,
+    prenderNoFrame,
     moverItens,
     removerItens,
     duplicarItens,
