@@ -23,6 +23,7 @@ function load(): UsersState {
 // Matriz papel x ação base (gate refina aprovação em useGate).
 const MATRIZ: Record<Role, Acao[]> = {
   PM: ['visualizar', 'comentar', 'propor', 'editar', 'aprovar', 'publicar'],
+  PO: ['visualizar', 'comentar', 'propor', 'editar', 'aprovar'],
   UX: ['visualizar', 'comentar', 'propor', 'editar'],
   Arquiteto: ['visualizar', 'comentar', 'propor', 'editar', 'aprovar'],
   TechLead: ['visualizar', 'comentar', 'propor', 'editar', 'aprovar'],
@@ -34,9 +35,9 @@ const MATRIZ: Record<Role, Acao[]> = {
 const APROVACAO_GATE: Record<GateId, Role[]> = {
   G0: ['PM'],
   G1: ['PM'],
-  G2: ['PM'],
-  G3: ['Arquiteto', 'TechLead', 'Seguranca'],
-  G4: ['Dev', 'QA', 'TechLead'],
+  G2: ['PM', 'UX', 'TechLead'],
+  G3: ['Arquiteto', 'TechLead', 'Seguranca', 'Dev'],
+  G4: ['PO', 'Dev', 'QA'],
   G5: ['Dev', 'QA', 'TechLead']
 }
 

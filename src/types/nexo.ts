@@ -17,7 +17,7 @@ export type Classificacao = 'internal' | 'confidential' | 'restricted'
 
 export type Fonte = 'stated' | 'inferred' | 'corporate_standard' | 'pending_decision'
 
-export type Role = 'PM' | 'UX' | 'Arquiteto' | 'TechLead' | 'Dev' | 'QA' | 'Seguranca'
+export type Role = 'PM' | 'PO' | 'UX' | 'Arquiteto' | 'TechLead' | 'Dev' | 'QA' | 'Seguranca'
 
 export type Acao =
   | 'visualizar'
@@ -117,10 +117,62 @@ export interface PBI extends NexoObject {
   escopo_out: string[]
   dependencias: string[]
   estrategia_teste: string
+  criterios_bdd: CriterioBdd[]
   estimativa?: string
   flag?: string
   rollout?: string
   rollback?: string
+}
+
+// DADOS+REGRAS G2/G3/G5: permissões/policy, telas com estados,
+// integrações estruturadas, NFRs e evidências de entrega.
+
+export interface PermissaoPolicy {
+  recurso: string
+  acao: string
+  policy: string
+}
+
+export interface TelaEstado {
+  tela_id: string
+  loading: boolean
+  vazio: boolean
+  erro: boolean
+  sucesso: boolean
+}
+
+export interface IntegracaoSpec {
+  nome: string
+  owner_externo?: string
+  timeout_ms?: number
+  retry?: boolean
+  idempotente?: boolean
+  falha?: string
+  indisponibilidade?: string
+}
+
+export interface NfrSpec {
+  medida: string
+  alvo: string
+  observabilidade: string
+}
+
+export interface ExcecaoSeguranca {
+  owner: string
+  prazo: string
+  aceite: string
+}
+
+export interface EvidenciaEntrega {
+  pr_url?: string
+  checks_ci?: string[]
+  testes_verdes?: boolean
+  aceite_registrado?: boolean
+  sast_ok?: boolean
+  policy_ok?: boolean
+  observabilidade?: string[]
+  rastreabilidade?: string[]
+  excecao?: ExcecaoSeguranca | null
 }
 
 export interface User {

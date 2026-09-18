@@ -194,11 +194,13 @@ export function aprovadoresDoGate(gate: GateId): string[] {
   switch (gate) {
     case 'G0':
     case 'G1':
-    case 'G2':
       return ['PM']
+    case 'G2':
+      return ['PM', 'UX', 'TechLead']
     case 'G3':
-      return ['Arquiteto', 'TechLead', 'Seguranca']
+      return ['Arquiteto', 'TechLead', 'Seguranca', 'Dev']
     case 'G4':
+      return ['PO', 'Dev', 'QA']
     case 'G5':
       return ['Dev', 'QA', 'TechLead']
     default:
