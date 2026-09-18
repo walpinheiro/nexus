@@ -248,11 +248,11 @@ const passos = computed<PassoGuia[]>(() => {
         {
           id: 'g2-p5',
           titulo: '5. Estados de tela mapeados',
-          descricao: 'Cobertura de estados de tela (loading, vazio, erro, sucesso).',
+          descricao: 'Cobertura de estados de tela (loading, vazio, erro, sucesso) no Studio.',
           checkCodigo: 'FTR-005',
           concluido: temEstadosTela,
-          acaoLabel: 'Mapear telas',
-          tipoAcao: 'corrigir'
+          acaoLabel: 'Abrir no Studio',
+          tipoAcao: 'studio'
         },
         {
           id: 'g2-p6',

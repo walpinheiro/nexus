@@ -190,6 +190,11 @@ function corrigirNoObjeto(id: string) {
   graph.selecionar(id)
   router.push(`/canvas?view=canvas&selecionado=${id}&tab=texto`)
 }
+
+function abrirStudioParaFeature() {
+  const id = alvoId.value || alvos.value[0]?.id || ''
+  router.push({ path: '/studio-full', query: { feature: id, from: `gates/${props.id}` } })
+}
 </script>
 
 <template>
@@ -437,6 +442,7 @@ function corrigirNoObjeto(id: string) {
           :waivers="graph.waivers"
           @solicitar="solicitarApprove"
           @corrigir="corrigirNoObjeto"
+          @abrir-studio="abrirStudioParaFeature"
         />
 
         <!-- Checklist Bloqueante em Tempo Real -->

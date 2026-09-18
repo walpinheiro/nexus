@@ -5,6 +5,8 @@ import type { GateInfo } from '@/stores/useGate'
 import { useGraph } from '@/stores/useGraph'
 import { avaliarGate } from '@/utils/gates'
 import LucideIcon from '@/components/common/LucideIcon.vue'
+import { montarEntradaStudio, isFeatureProntaParaStudio } from '@/ai/gateParaStudio'
+import { useGate } from '@/stores/useGate'
 
 interface Props {
   gateId: GateId
@@ -14,6 +16,17 @@ interface Props {
 
 const props = defineProps<Props>()
 const graph = useGraph()
+const gatesStore = useGate()
+
+const prontaParaStudio = computed(() => {
+  if (!props.alvo || props.alvo.tipo !== 'feature') return false
+  return isFeatureProntaParaStudio(props.alvo.id, gatesStore.gates)
+})
+
+const entradaStudio = computed(() => {
+  if (!props.alvo || props.alvo.tipo !== 'feature') return null
+  return montarEntradaStudio(props.alvo.id, graph.state.nos)
+})
 
 const alvoObj = computed(() => (props.alvo as unknown as Record<string, unknown>) ?? {})
 
@@ -314,6 +327,53 @@ const pipelinePassos = computed(() => {
             <div v-else class="rounded bg-white p-3 text-center border border-dashed border-nexo-border text-[11px] text-nexo-muted">
               Sem critérios BDD cadastrados ainda. Crie via IA na aba 'Chat Interativo' ou na aba 'Texto' do Canvas.
             </div>
+          </div>
+        </div>
+
+        <!-- Bloco Pronto-pra-Studio (V3) -->
+        <div
+          class="rounded-card border p-3 text-xs space-y-2 shadow-xs transition-colors"
+          :class="prontaParaStudio ? 'border-green-300 bg-green-50/60' : 'border-amber-300 bg-amber-50/50'"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <LucideIcon :name="prontaParaStudio ? 'check-circle-2' : 'clock'" :size="15" :class="prontaParaStudio ? 'text-green-700' : 'text-amber-700'" />
+              <span class="font-bold uppercase tracking-wide text-[11px]" :class="prontaParaStudio ? 'text-green-900' : 'text-amber-900'">
+                {{ prontaParaStudio ? 'Pronto para Studio' : 'Pendente de Baseline G2 para Studio' }}
+              </span>
+            </div>
+            <RouterLink
+              v-if="props.alvo"
+              :to="{ path: '/studio-full', query: { feature: props.alvo.id, from: 'gates/G2' } }"
+              class="inline-flex items-center gap-1 rounded-btn px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs transition-colors"
+              :class="prontaParaStudio ? 'bg-green-700 hover:bg-green-800' : 'bg-amber-600 hover:bg-amber-700'"
+            >
+              <LucideIcon name="external-link" :size="12" />
+              Abrir no Studio
+            </RouterLink>
+          </div>
+
+          <p class="text-[11px] leading-relaxed" :class="prontaParaStudio ? 'text-green-900' : 'text-amber-900'">
+            {{ prontaParaStudio
+              ? 'Esta feature atingiu baseline formal aprovada no Gate G2. Seus fluxos, exceções e critérios BDD estão prontos para compor o canvas do Studio.'
+              : 'Para qualificar esta feature para o Studio com baseline garantida, complete todos os requisitos bloqueantes e obtenha aprovação formal no Gate G2.'
+            }}
+          </p>
+
+          <div v-if="entradaStudio" class="rounded bg-white p-2.5 border border-nexo-border/70 text-[11px] space-y-1.5">
+            <div class="flex items-center justify-between font-semibold text-nexo-text">
+              <span>Telas & Estados Prontos para Studio ({{ entradaStudio.telas.length }}):</span>
+              <span class="text-[10px] text-nexo-muted font-normal">{{ entradaStudio.navegacao.length }} transições BDD mapeadas</span>
+            </div>
+            <ul class="space-y-1 pl-1">
+              <li v-for="t in entradaStudio.telas" :key="t.id" class="flex items-start gap-1.5 text-[10px] text-nexo-text">
+                <span class="rounded bg-nexo-primary/10 text-nexo-primary px-1 font-mono text-[9px] font-bold shrink-0">
+                  {{ t.origem === 'fluxo_feliz' ? 'passo' : 'exceção' }}
+                </span>
+                <span class="font-medium">{{ t.nome }}:</span>
+                <span class="text-nexo-muted truncate">{{ t.descricao }}</span>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
