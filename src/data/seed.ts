@@ -1,4 +1,4 @@
-import type { Edge, Epic, Feature, GateId, MapaRegrasValidacao, PBI, TelaVinculo, User } from '@/types/nexo'
+import type { Edge, Epic, Feature, GateId, IngestaoDoc, MapaRegrasValidacao, PBI, TelaVinculo, User } from '@/types/nexo'
 import type { GateInfo } from '@/stores/useGate'
 
 // Seed local — textos das 4 features EXATOS do nexo-interface-proposal-static.png.
@@ -584,6 +584,95 @@ export function gatesZerados(): GateInfo[] {
     G5: 'Entrega'
   }
   return (Object.keys(titulos) as GateId[]).map((id) => ({ id, titulo: titulos[id], status: 'rascunho' as const }))
+}
+
+// W5 seedParcialExistente — épico + feature PARCIAIS honestos (fonte 'inferred',
+// derivados de ingestão de texto; ids NOVOS sem colidir com o seed atual).
+const baseParcial = {
+  ...base,
+  fonte: 'inferred' as const,
+  fonte_refs: ['ingestao-parcial-001']
+}
+
+export const seedEpicoParcial: Epic = {
+  ...baseParcial,
+  id: 'ep-parcial-reembolso',
+  tipo: 'epico',
+  titulo: 'Reembolso via Pix (parcial — inferido)',
+  descricao:
+    'Épico PARCIAL inferido de ingestão de texto: intenção de reembolso via Pix mencionada sem critérios completos. Problema/objetivo/KPIs abaixo são inferências honestas e parciais, pendentes de validação com o dono.',
+  status: 'draft',
+  gate: 'G1',
+  owner: 'u-pm',
+  contribuidores: ['u-pm'],
+  versao: 1,
+  baseline: null,
+  parent_id: null,
+  x: 600,
+  y: 200,
+  z: 0,
+  problema: 'Trecho ingerido sugere fricção em reembolsos (parcial: sem volume nem segmento confirmados).',
+  objetivo: 'Esboçar reembolso via Pix para validação posterior (parcial: escopo e SLA indefinidos).',
+  kpis: [
+    { nome: 'Tempo de reembolso (parcial)', unidade: 'dias', alvo: 'a definir', janela: 'a definir', responsavel: 'u-pm' }
+  ],
+  personas: ['Cliente aguardando reembolso (parcial)'],
+  escopo_in: ['Reembolso via Pix (parcial)'],
+  escopo_out: ['Boleto e cartão (parcial, a confirmar)'],
+  riscos: ['Risco parcial inferido: regra de compensação indefinida — validar com negócio']
+}
+
+export const seedFeatureParcial: Feature = {
+  ...baseParcial,
+  id: 'ft-parcial-reembolso',
+  tipo: 'feature',
+  titulo: 'Solicitar reembolso via Pix (parcial — inferida)',
+  descricao:
+    'Feature PARCIAL inferida do épico ep-parcial-reembolso: solicitação de reembolso mencionada sem fluxo completo. Critérios BDD e integrações pendentes de definição.',
+  status: 'draft',
+  gate: 'G2',
+  owner: 'u-pm',
+  contribuidores: ['u-pm'],
+  versao: 1,
+  baseline: null,
+  parent_id: 'ep-parcial-reembolso',
+  x: 600,
+  y: 340,
+  z: 1,
+  ator: 'cliente com pagamento Pix (parcial)',
+  beneficio: 'pedir reembolso sem fricção (parcial, a validar)',
+  gatilho: 'cliente solicita reembolso de pagamento Pix (inferido)',
+  precondicoes: ['pagamento Pix existente (parcial, a confirmar)'],
+  fluxo_feliz: 'cliente solicita reembolso e acompanha status (parcial: passos detalhados indefinidos)',
+  alternativos: ['regra de recusa/estorno indefinida (parcial)'],
+  regras_ids: [],
+  telas_ids: [],
+  integracoes: [],
+  criterios_bdd: [
+    {
+      id: 'AC-PARCIAL-001',
+      given: 'pagamento Pix existente (parcial)',
+      when: 'cliente solicita reembolso (inferido)',
+      then: 'sistema registra pedido com status pendente (parcial, a validar)',
+      prioridade: 'must'
+    }
+  ]
+}
+
+export const seedIngestaoParcial: IngestaoDoc = {
+  fonte: 'texto',
+  texto: 'Relato parcial do atendimento: alguns clientes pedem reembolso do Pix pago a maior, sem detalhar prazo nem canal de confirmação. Intenção registrada como parcial para discovery.',
+  projetoId: 'proj-cobrancas'
+}
+
+export const seedParcialExistente: {
+  epico: Epic
+  feature: Feature
+  ingestao: IngestaoDoc
+} = {
+  epico: seedEpicoParcial,
+  feature: seedFeatureParcial,
+  ingestao: seedIngestaoParcial
 }
 
 // Pacote multi-projeto (DELTA Passo 1): projeto Cobranças completo.

@@ -283,6 +283,17 @@ export interface Projeto {
   updatedAt: string
 }
 
+export type TipoProjeto = 'novo' | 'existente'
+
+export interface IngestaoDoc {
+  fonte: 'texto' | 'arquivo' | 'repo' | 'wiki'
+  texto: string
+  projetoId: string
+  arquivoNome?: string
+  repoUrl?: string
+  wikiUrl?: string
+}
+
 // Dispensa de item de checklist de severidade 'aviso' (DELTA Passo 4).
 export interface Waiver {
   id: string

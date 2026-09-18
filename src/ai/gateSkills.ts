@@ -1715,3 +1715,59 @@ export function processarMensagemGate(
     texto: `Gate ${gateId} - "${objeto.titulo}": checks OK.\nSolicite a aprovacao da baseline.`
   }
 }
+
+// Wizard (1 falta por vez): reaproveita diagnosticarFaltasGate, sem alterar
+// o bloco G0 atual nem processarMensagemGate. Max 8 linhas, 1 falta por vez,
+// zero emoji, PT-BR.
+export function processarMensagemWizard(
+  mensagem: string,
+  contexto: {
+    objeto: NexoObject | null
+    gateId: GateId
+    user: User | null
+    gates: { id: GateId; status: string; baselineVersao?: number | null }[]
+    waivers?: { codigo: string; prazo: string }[]
+  }
+): GateChatResult {
+  void mensagem
+  const { objeto, gateId, user, gates, waivers } = contexto
+
+  if (!objeto) {
+    return {
+      texto: `Nenhum objeto selecionado no Gate ${gateId}. Selecione um objeto na lista para iniciar o wizard.`
+    }
+  }
+
+  const diag = diagnosticarFaltasGate(objeto, gateId, waivers)
+
+  if (diag.aprovado) {
+    const gov = obterGovernancaGate(gateId, user, objeto, gates)
+    const linhas = [
+      `Gate ${gateId} - "${objeto.titulo}": checks OK.`,
+      gov.sequenciaOk ? 'Sequencia liberada.' : `Sequencia bloqueada: ${gov.motivoSequencia}`.slice(0, 160),
+      gov.papelOk ? 'Papel apto a aprovar.' : `Papel atual sem permissao. Exige: ${gov.aprovadoresExigidos.join(', ')}.`,
+      'Solicite a aprovacao da baseline.'
+    ]
+    return { texto: linhas.slice(0, 4).join('\n') }
+  }
+
+  const primeira = diag.faltas[0]
+  if (!primeira) {
+    return { texto: `Gate ${gateId} - "${objeto.titulo}": checks OK.\nSolicite a aprovacao da baseline.` }
+  }
+
+  if (gateId === 'G0') {
+    return { texto: formatarRespostaG0Sucinta(objeto.titulo, primeira, diag.faltas.length) }
+  }
+
+  const sugestao = gerarSugestaoG0(primeira.codigo, objeto).slice(0, 160)
+  const linhas = [
+    `Gate ${gateId} - falta 1 de ${diag.faltas.length}: [${primeira.codigo}].`,
+    `Pergunta: ${primeira.pergunta}`,
+    `Por que bloqueia: ${primeira.porQueBloqueia}`,
+    sugestao ? `Responda com: "${sugestao}"` : `Responda com: "${primeira.exemplo.slice(0, 160)}"`,
+    `Objeto: ${objeto.titulo}`,
+    `Restam ${diag.faltas.length} pendencias. Responda em texto livre para avancar.`
+  ]
+  return { texto: linhas.slice(0, 8).join('\n') }
+}

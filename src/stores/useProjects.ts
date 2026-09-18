@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AuditEvent, Classificacao, Edge, Epic, NexoObject, Projeto } from '@/types/nexo'
+import type { AuditEvent, Classificacao, Edge, Epic, IngestaoDoc, NexoObject, Projeto } from '@/types/nexo'
 import { gatesZerados, seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedGates, seedPbis, seedProjeto } from '@/data/seed'
 import type { GateInfo } from '@/stores/useGate'
 
@@ -45,6 +45,13 @@ export interface CriarProjetoInput {
   naoObjetivos: string[]
   owner: string
   classificacao: Classificacao
+}
+
+export interface CriarProjetoExistenteInput {
+  titulo: string
+  owner: string
+  ingestao: IngestaoDoc
+  contextoParcial?: Partial<Epic>
 }
 
 export interface CriarProjetoResult {
@@ -318,6 +325,79 @@ export const useProjects = defineStore('projects', () => {
     return { ok: true, erros: todos.filter((e) => e.codigo === 'G0-002'), projeto }
   }
 
+  function criarProjetoExistente(input: CriarProjetoExistenteInput, atorId: string): CriarProjetoResult {
+    const erros: CriarProjetoResult['erros'] = []
+    if (!input.titulo.trim()) {
+      erros.push({ campo: 'titulo', codigo: 'G0-001', mensagem: 'Título é obrigatório (G0-001).' })
+    }
+    if (!input.owner.trim()) {
+      erros.push({ campo: 'owner', codigo: 'G0-003', mensagem: 'Owner é obrigatório (G0-003).' })
+    }
+    const textoIngestao = input.ingestao?.texto?.trim() ?? ''
+    if (textoIngestao.length === 0) {
+      erros.push({ campo: 'ingestao', codigo: 'G0-004', mensagem: 'Ingestão com texto vazio não gera contexto parcial (G0-004).' })
+    }
+    if (erros.length > 0) return { ok: false, erros }
+    const agora = new Date().toISOString()
+    const id = `${slug(input.titulo)}-${Math.random().toString(36).slice(2, 6)}`
+    const epicoId = `ep-${Math.random().toString(36).slice(2, 6)}`
+    const parcial = input.contextoParcial ?? {}
+    const fonteRef = input.ingestao.repoUrl || input.ingestao.wikiUrl || input.ingestao.arquivoNome || 'texto'
+    const epico: Epic = {
+      id: epicoId,
+      project_id: id,
+      tipo: 'epico',
+      titulo: parcial.titulo || input.titulo.slice(0, 140),
+      descricao: parcial.descricao ?? textoIngestao.slice(0, 500),
+      status: parcial.status ?? 'draft',
+      gate: parcial.gate ?? 'G0',
+      owner: parcial.owner ?? input.owner,
+      contribuidores: parcial.contribuidores ?? [input.owner],
+      classificacao: parcial.classificacao ?? 'internal',
+      fonte: parcial.fonte ?? 'inferred',
+      fonte_refs: parcial.fonte_refs ?? [`${input.ingestao.fonte}:${fonteRef}`],
+      versao: 1,
+      baseline: parcial.baseline ?? null,
+      parent_id: parcial.parent_id ?? null,
+      causa_stale: parcial.causa_stale ?? null,
+      x: parcial.x ?? 480,
+      y: parcial.y ?? 200,
+      z: parcial.z ?? 0,
+      grupo: parcial.grupo ?? null,
+      created_at: agora,
+      updated_at: agora,
+      problema: parcial.problema ?? '',
+      objetivo: parcial.objetivo ?? '',
+      kpis: parcial.kpis ?? [],
+      personas: parcial.personas ?? [],
+      escopo_in: parcial.escopo_in ?? [],
+      escopo_out: parcial.escopo_out ?? [],
+      riscos: parcial.riscos ?? []
+    }
+    const projeto: Projeto = {
+      id,
+      titulo: input.titulo.slice(0, 60),
+      descricao: textoIngestao.slice(0, 200),
+      epicoId,
+      epicoTitulo: epico.titulo,
+      owner: input.owner,
+      classificacao: epico.classificacao,
+      createdAt: agora,
+      updatedAt: agora
+    }
+    escrever(graphKey(id), { nos: [epico], arestas: [], selecionadoId: epicoId })
+    escrever(gatesKey(id), gatesZerados())
+    escrever(patchesKey(id), [])
+    escrever(auditKey(id), [
+      { id: rid('a'), em: agora, ator_id: atorId, acao: 'ProjectCreated', alvo_id: epicoId, detalhe: `projeto existente "${projeto.titulo}" criado a partir de ingestão ${input.ingestao.fonte}.` }
+    ])
+    escrever(tentKey(id), [])
+    state.value.projetos.push(projeto)
+    state.value.atualId = id
+    registrarGlobal('ProjectCreated', `projeto existente "${projeto.titulo}" (${id})`, atorId)
+    return { ok: true, erros: [], projeto }
+  }
+
   function removerProjeto(id: string, confirmacao: string, atorId: string): { ok: boolean; motivo: string } {
     const p = state.value.projetos.find((x) => x.id === id)
     if (!p) return { ok: false, motivo: 'Projeto não encontrado.' }
@@ -364,5 +444,5 @@ export const useProjects = defineStore('projects', () => {
     persist()
   }
 
-  return { state, atual, persist, selecionar, criarProjeto, removerProjeto, resetCobrancas, graphKey, gatesKey, patchesKey, auditKey, tentKey }
+  return { state, atual, persist, selecionar, criarProjeto, criarProjetoExistente, removerProjeto, resetCobrancas, graphKey, gatesKey, patchesKey, auditKey, tentKey }
 })
