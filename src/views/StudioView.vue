@@ -12,6 +12,8 @@ import FramePanel from '@/components/studio/FramePanel.vue'
 import PreviewModal from '@/components/studio/PreviewModal.vue'
 import NewFrameDialog from '@/components/studio/NewFrameDialog.vue'
 import AiTube from '@/components/studio/AiTube.vue'
+import StudioIconRail, { type RailTab } from '@/components/studio/StudioIconRail.vue'
+import StudioFooterPills from '@/components/studio/StudioFooterPills.vue'
 import PresenceAvatars from '@/components/studio/PresenceAvatars.vue'
 import PresenceAgentSelect from '@/components/studio/PresenceAgentSelect.vue'
 import M3Icon from '@/components/studio/m3/M3Icon.vue'
@@ -32,6 +34,7 @@ const route = useRoute()
 const router = useRouter()
 const renomeando = ref('')
 const abaEsq = ref<'parts' | 'layers'>('parts')
+const railTab = ref<RailTab>('parts')
 const abaDir = ref<'edit' | 'prompt'>('edit')
 const previewAberto = ref(false)
 const dialogNovaTela = ref(false)
@@ -74,14 +77,15 @@ function abrirPreview() {
   previewAberto.value = true
 }
 
-function abrirPromptPainel() {
-  abaDir.value = 'prompt'
-  gerarPrompt()
+function fixarWeb() {
+  if (studio.doc.platform !== 'web') {
+    studio.doc.platform = 'web'
+    studio.persist()
+  }
 }
 
-function trocarPlataforma(plat: 'android' | 'web') {
-  studio.doc.platform = plat
-  studio.persist()
+function abrirPromptPainel() {
+  abaDir.value = 'prompt'
   gerarPrompt()
 }
 
@@ -182,6 +186,7 @@ function onKey(e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKey)
+  fixarWeb()
   nextTick(() => {
     setTimeout(() => {
       const el = (stageRef.value?.$el ?? document.querySelector('[role="application"]')) as HTMLElement | null
@@ -270,33 +275,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </div>
         <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden p-3 text-xs">
           <p class="font-semibold">Prompt da tela</p>
-
-          <!-- Plataforma: Radio Android | Web (M3E paridade) -->
-          <div class="mt-2">
-            <span class="mb-1 block font-semibold text-nexo-muted">Plataforma</span>
-            <div class="flex rounded-btn border border-nexo-border p-0.5" role="radiogroup" aria-label="Plataforma de destino">
-              <button
-                type="button"
-                role="radio"
-                :aria-checked="studio.doc.platform === 'android'"
-                class="flex flex-1 items-center justify-center gap-1 rounded-btn py-1 text-xs transition"
-                :class="studio.doc.platform === 'android' ? 'bg-nexo-primary font-semibold text-white' : 'text-nexo-text hover:bg-slate-50'"
-                @click="trocarPlataforma('android')"
-              >
-                <M3Icon name="android" :size="15" label="Android" /> Android
-              </button>
-              <button
-                type="button"
-                role="radio"
-                :aria-checked="studio.doc.platform === 'web'"
-                class="flex flex-1 items-center justify-center gap-1 rounded-btn py-1 text-xs transition"
-                :class="studio.doc.platform === 'web' ? 'bg-nexo-primary font-semibold text-white' : 'text-nexo-text hover:bg-slate-50'"
-                @click="trocarPlataforma('web')"
-              >
-                <M3Icon name="language" :size="15" label="Web" /> Web
-              </button>
-            </div>
-          </div>
+          <p class="mt-1 text-nexo-muted">Destino: Web (Vue 3 + TS + Tailwind).</p>
 
           <!-- Badge do Autor e Modelo da IA -->
           <div v-if="draftHistory.ultimoDraft" class="mt-2 flex items-center gap-1.5 rounded-badge bg-slate-100 px-2 py-1 text-[11px] text-nexo-muted" role="status">

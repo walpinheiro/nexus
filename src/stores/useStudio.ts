@@ -67,6 +67,8 @@ function load(): { doc: StudioDoc; screenId: string } {
     if (raw) {
       const s = JSON.parse(raw) as { doc: StudioDoc; screenId: string; v?: number }
       if (s.doc && Array.isArray(s.doc.frames)) {
+        // web-only (diretriz Bússola): migra docs antigos android → web
+        if ((s.doc.platform as string) !== 'web') s.doc.platform = 'web'
         // backfill order: grupos antigos sem order ganham índice estável (sem empates)
         let i = 0
         const vistos = new Set<number>()
