@@ -420,11 +420,52 @@ export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; praz
   }
 
   if (gate === 'G5') {
+    const e = objeto as unknown as Record<string, unknown>
+    const ev = (e['evidencia'] as Record<string, unknown> | undefined) ?? {}
     checks.push({
       codigo: 'DON-001',
       descricao: 'Definition of Done: evidência de aceite + testes verdes + rastreabilidade',
       severidade: 'bloqueante',
       ok: objeto.status === 'validated' || objeto.status === 'published'
+    })
+    checks.push({
+      codigo: 'DON-002',
+      descricao: 'PR merged com aprovação humana + link do PR',
+      severidade: 'bloqueante',
+      ok: String(ev['pr_url'] ?? '').trim() !== '' && (ev['pr_merged'] === true || String(ev['pr_url'] ?? '').includes('pull'))
+    })
+    checks.push({
+      codigo: 'DON-003',
+      descricao: 'Checks de CI verdes (SAST/teste/policy falho bloqueia)',
+      severidade: 'bloqueante',
+      ok: (() => {
+        const checks = Array.isArray(ev['checks_ci']) ? (ev['checks_ci'] as string[]) : []
+        if (checks.length === 0) return false
+        return !checks.some((c) => /fail|error|blocked/i.test(c)) && (ev['sast_ok'] !== false) && (ev['policy_ok'] !== false)
+      })()
+    })
+    checks.push({
+      codigo: 'DON-004',
+      descricao: 'Aceite funcional + testes vinculados verdes',
+      severidade: 'bloqueante',
+      ok: ev['aceite_registrado'] === true && ev['testes_verdes'] === true
+    })
+    checks.push({
+      codigo: 'DON-005',
+      descricao: 'Segurança aprovada ou exceção vigente com prazo',
+      severidade: 'bloqueante',
+      ok: (() => {
+        if (ev['seg_aprovado'] === true) return true
+        const exc = ev['excecao'] as Record<string, unknown> | undefined
+        return !!exc && new Date(String(exc['prazo'] ?? '')).getTime() > Date.now()
+      })()
+    })
+    checks.push({
+      codigo: 'DON-006',
+      descricao: 'Observabilidade + rastreabilidade (objetivo→código) atualizadas',
+      severidade: 'bloqueante',
+      ok: (Array.isArray(ev['observabilidade']) ? (ev['observabilidade'] as unknown[]).length : 0) >= 1 &&
+        (Array.isArray(ev['rastreabilidade']) ? (ev['rastreabilidade'] as unknown[]).length : 0) >= 1
     })
   }
 
