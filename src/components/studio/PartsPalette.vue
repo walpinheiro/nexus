@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { CATEGORIES } from './m3/tokens'
 import { paletteOf } from './m3/theme'
@@ -9,21 +9,11 @@ import type { StudioItem } from '@/types/studio'
 
 const studio = useStudio()
 const busca = ref('')
-const favoritos = ref<string[]>(carregarFav())
+const recolhidas = ref<Set<string>>(new Set())
 
-function carregarFav(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem('nexo.v1.studioFav') ?? '[]') as string[]
-  } catch {
-    return []
-  }
-}
-
-function alternarFav(kind: string) {
-  favoritos.value = favoritos.value.includes(kind)
-    ? favoritos.value.filter((k) => k !== kind)
-    : [...favoritos.value, kind]
-  localStorage.setItem('nexo.v1.studioFav', JSON.stringify(favoritos.value))
+function alternarCat(id: string) {
+  if (recolhidas.value.has(id)) recolhidas.value.delete(id)
+  else recolhidas.value.add(id)
 }
 
 const scheme = computed(() => paletteOf(studio.doc.paletteKey, false))
@@ -131,11 +121,6 @@ const tiles = computed<Tile[]>(() => {
       item: { id: `tile-${kind}`, kind, x: 0, y: 0, ...(defaults[kind] ?? {}) } as StudioItem
     })
   }
-  out.sort((a, b) => {
-    const fa = favoritos.value.includes(a.kind) ? 0 : 1
-    const fb = favoritos.value.includes(b.kind) ? 0 : 1
-    return fa - fb
-  })
   return out
 })
 
@@ -155,25 +140,6 @@ function criarNoCentro(kind: string) {
 function onDragStart(ev: DragEvent, kind: string) {
   ev.dataTransfer?.setData('text/studio-kind', kind)
 }
-
-const SEM_RENDERER = new Set(['splitButton', 'fabMenu', 'datePicker', 'timePicker', 'carousel', 'camera', 'map', 'badge', 'linearProgress', 'circularProgress'])
-
-function temRenderer(kind: string): boolean {
-  return !SEM_RENDERER.has(kind)
-}
-
-function iconeFallback(kind: string): string {
-  const mapa: Record<string, string> = {
-    splitButton: 'splitscreen', fabMenu: 'add', datePicker: 'calendar_month', timePicker: 'schedule',
-    carousel: 'view_carousel', camera: 'photo_camera', map: 'map', badge: 'badge',
-    linearProgress: 'progress_activity', circularProgress: 'progress_activity'
-  }
-  return mapa[kind] ?? 'circle'
-}
-
-onMounted(() => {
-  document.title = document.title
-})
 </script>
 
 <template>
@@ -183,10 +149,11 @@ onMounted(() => {
     </div>
     <div class="min-h-0 flex-1 overflow-auto p-2 pt-0">
       <section v-for="cat in porCategoria" :key="cat.id" :aria-label="cat.rotulo">
-        <h3 class="flex items-center gap-1.5 px-1 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-nexo-muted">
+        <button type="button" class="flex w-full items-center gap-1.5 px-1 pb-1 pt-2 text-left text-[11px] font-semibold uppercase tracking-wider text-nexo-muted" :aria-expanded="!recolhidas.has(cat.id)" :aria-label="recolhidas.has(cat.id) ? `Expandir ${cat.rotulo}` : `Recolher ${cat.rotulo}`" @click="alternarCat(cat.id)">
           <M3Icon :name="cat.icon" :size="14" />{{ cat.rotulo }}
-        </h3>
-        <div class="grid gap-1.5" style="grid-template-columns: repeat(auto-fill, minmax(78px, 1fr))">
+          <M3Icon :name="recolhidas.has(cat.id) ? 'chevron_right' : 'expand_more'" :size="14" />
+        </button>
+        <div v-if="!recolhidas.has(cat.id)" class="grid gap-1.5" style="grid-template-columns: repeat(auto-fill, minmax(78px, 1fr))">
           <div
             v-for="t in cat.items"
             :key="t.kind"
@@ -195,27 +162,15 @@ onMounted(() => {
             role="button"
             :aria-label="`Adicionar ${t.rotulo}`"
             :title="`${t.rotulo} — arraste para o stage ou duplo-clique`"
-            class="relative cursor-grab overflow-hidden rounded-badge border border-nexo-border bg-white hover:border-nexo-primary"
+            class="cursor-grab overflow-hidden rounded-badge border border-nexo-border bg-white hover:border-nexo-primary"
             @dragstart="onDragStart($event, t.kind)"
             @dblclick="criarNoCentro(t.kind)"
             @keydown.enter="criarNoCentro(t.kind)"
           >
             <div class="flex h-[64px] items-center justify-center overflow-hidden rounded-badge border border-nexo-border bg-nexo-canvas p-1" aria-hidden="true">
-              <M3Node v-if="temRenderer(t.kind)" :item="t.item" :scheme="scheme" :mini="true" />
-              <span v-else class="flex items-center gap-1 text-nexo-muted"><M3Icon :name="iconeFallback(t.kind)" :size="20" />{{ t.rotulo }}</span>
+              <M3Node :item="t.item" :scheme="scheme" :mini="true" />
             </div>
             <p class="truncate px-1 pb-1 text-center text-[10px] text-nexo-muted">{{ t.rotulo }}</p>
-            <button
-              type="button"
-              :aria-label="favoritos.includes(t.kind) ? `Desfavoritar ${t.rotulo}` : `Favoritar ${t.rotulo}`"
-              :aria-pressed="favoritos.includes(t.kind)"
-              :title="favoritos.includes(t.kind) ? 'Desfavoritar' : 'Favoritar'"
-              class="absolute right-0.5 top-0.5"
-              :class="favoritos.includes(t.kind) ? 'text-nexo-primary' : 'text-nexo-muted'"
-              @click.stop="alternarFav(t.kind)"
-            >
-              <M3Icon :name="favoritos.includes(t.kind) ? 'star' : 'star_outline'" :size="14" :fill="favoritos.includes(t.kind)" />
-            </button>
           </div>
         </div>
       </section>
