@@ -209,10 +209,6 @@ function verChecklist(id: string) {
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <RouterLink :to="{ path: '/studio-full', query: { from: 'backlog' } }" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-medium text-nexo-text hover:bg-slate-50">
-        <LucideIcon name="layout" :size="14" />
-        Abrir Studio
-      </RouterLink>
       <input v-model="filtro" placeholder="Filtrar por título…" aria-label="Filtrar backlog" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text" />
       <select v-model="filtroEstado" aria-label="Filtrar por estado" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
         <option value="">Todos os estados</option>

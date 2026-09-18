@@ -73,7 +73,6 @@ function abrirGrafo() {
     <div class="flex shrink-0 items-center gap-2 text-sm" role="tablist" aria-label="Vista do canvas">
       <button type="button" role="tab" :aria-selected="vista !== 'studio'" class="rounded-btn border px-3 py-1" :class="vista !== 'studio' ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'" @click="irVista('canvas')">Grafo NEXO</button>
       <button type="button" role="tab" :aria-selected="vista === 'studio'" class="rounded-btn border px-3 py-1" :class="vista === 'studio' ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'" @click="irVista('studio')">Telas (Studio)</button>
-      <RouterLink :to="{ path: '/studio-full', query: { from: 'canvas' } }" class="rounded-btn border border-nexo-border px-3 py-1">Abrir Studio tela toda</RouterLink>
     </div>
 
     <template v-if="vista === 'studio'">
