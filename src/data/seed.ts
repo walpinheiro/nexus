@@ -744,6 +744,63 @@ export function seedCoerentePix(): { epicoId: string; aplicados: string[] } {
   }
   return { epicoId, aplicados }
 }
+
+// aplicarSeedCoerenteCriacao — mesma lógica de preenchimento padrão Pix do
+// seedCoerentePix (problema/objetivo/personas/BDD quando vazio + menção Pix),
+// mas operando nos OBJETOS PASSADOS (épico+features da criação Novo/Existente,
+// não no seed global). Retorna ids aplicados. Não renomeia ids, não remove
+// campos, puro/determinístico (sem Date/Math.random, PT-BR, sem emoji).
+export function aplicarSeedCoerenteCriacao(epico: Epic, features: Feature[]): string[] {
+  const aplicados: string[] = []
+  if (mencionaPix(epico.titulo, epico.descricao, epico.problema)) {
+    let aplicouEpico = false
+    if (textoVazio(epico.problema)) {
+      epico.problema = PROBLEMA_PADRAO_PIX
+      aplicouEpico = true
+    }
+    if (textoVazio(epico.objetivo)) {
+      epico.objetivo = OBJETIVO_PADRAO_PIX
+      aplicouEpico = true
+    }
+    if (epico.personas.length === 0) {
+      epico.personas = [PERSONA_PADRAO_PIX]
+      aplicouEpico = true
+    }
+    if (aplicouEpico) aplicados.push(epico.id)
+  }
+  for (const f of features) {
+    const rec = f as unknown as Record<string, unknown>
+    const problemaAtual = typeof rec['problema'] === 'string' ? (rec['problema'] as string) : undefined
+    if (!mencionaPix(f.titulo, f.descricao, problemaAtual)) continue
+    let aplicou = false
+    if (typeof rec['problema'] !== 'string' || textoVazio(rec['problema'] as string)) {
+      rec['problema'] = PROBLEMA_PADRAO_PIX
+      aplicou = true
+    }
+    if (typeof rec['objetivo'] !== 'string' || textoVazio(rec['objetivo'] as string)) {
+      rec['objetivo'] = OBJETIVO_PADRAO_PIX
+      aplicou = true
+    }
+    if (!Array.isArray(rec['personas']) || (rec['personas'] as unknown[]).length === 0) {
+      rec['personas'] = [PERSONA_PADRAO_PIX]
+      aplicou = true
+    }
+    if (f.criterios_bdd.length === 0) {
+      f.criterios_bdd = [
+        {
+          id: 'AC-SEED-001',
+          given: 'fatura aberta com cobrança Pix pertence ao cliente autenticado',
+          when: 'cliente paga a fatura via Pix',
+          then: 'sistema confirma o pagamento Pix com comprovante e expiração resolvida',
+          prioridade: 'must'
+        }
+      ]
+      aplicou = true
+    }
+    if (aplicou) aplicados.push(f.id)
+  }
+  return aplicados
+}
 export function seedMultiProjeto(): {
   projetoId: string
   projetoTitulo: string

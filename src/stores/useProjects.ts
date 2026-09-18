@@ -55,7 +55,8 @@ export interface CriarProjetoExistenteInput {
 }
 
 export interface RespostasWizardCriacao {
-  usuario: string
+  // OPCIONAL e ignorado: owner sempre deriva do usuario logado (atorId).
+  usuario?: string
   problema: string
   objetivo: string
   usuarios: string
@@ -527,10 +528,12 @@ export const useProjects = defineStore('projects', () => {
   }
 
   function criarProjetoComIA(respostas: RespostasWizardCriacao, atorId: string): CriarProjetoResult {
+    // Titulo e campos sugeridos pela IA e confirmados pelo usuario na tela
+    // (respostas.problema/objetivo/usuarios/escopo ja ajustadas). Sem campo
+    // responsavel no fluxo IA: owner sempre = atorId (usuario logado).
     const problema = respostas.problema?.trim() ?? ''
     const objetivo = respostas.objetivo?.trim() ?? ''
     const usuarios = respostas.usuarios?.trim() ?? ''
-    const usuario = respostas.usuario?.trim() ?? ''
     const escopo = respostas.escopo ?? ''
     const titulo = (objetivo || problema).slice(0, 60)
     let contexto = problema
@@ -549,7 +552,7 @@ export const useProjects = defineStore('projects', () => {
       metricaNome: 'Adoção inicial',
       restricoes,
       naoObjetivos: [],
-      owner: usuario,
+      owner: atorId,
       classificacao: 'internal'
     }
     return criarProjeto(input, atorId)

@@ -9,9 +9,12 @@
 // - Timeout de chat 120s (27B quantizado é lento).
 // Erro de rede NUNCA quebra chamadores: lança OllamaOffline para fallback local.
 
+export type ProvedorIaLocal = 'ollama' | 'llama.cpp' | 'local'
+
 export interface OllamaConfig {
   baseUrl: string
   model: string
+  provider: ProvedorIaLocal
 }
 
 export interface OllamaMessage {
@@ -23,7 +26,14 @@ export const OLLAMA_STORAGE_KEY = 'nexo.v1.ai.ollama'
 
 export const DEFAULT_OLLAMA_CONFIG: OllamaConfig = {
   baseUrl: 'http://localhost:11434',
-  model: 'queen'
+  model: 'queen',
+  provider: 'ollama'
+}
+
+function normalizarProvider(v: unknown): ProvedorIaLocal {
+  return v === 'ollama' || v === 'llama.cpp' || v === 'local'
+    ? v
+    : DEFAULT_OLLAMA_CONFIG.provider
 }
 
 /** Timeout default de chat: 120s — modelo 27B quantizado é lento (R1). */
@@ -57,7 +67,8 @@ export function getConfig(): OllamaConfig {
     const p = JSON.parse(raw) as Partial<OllamaConfig>
     return {
       baseUrl: typeof p.baseUrl === 'string' && p.baseUrl.trim() ? p.baseUrl.trim() : DEFAULT_OLLAMA_CONFIG.baseUrl,
-      model: typeof p.model === 'string' && p.model.trim() ? p.model.trim() : DEFAULT_OLLAMA_CONFIG.model
+      model: typeof p.model === 'string' && p.model.trim() ? p.model.trim() : DEFAULT_OLLAMA_CONFIG.model,
+      provider: normalizarProvider(p.provider)
     }
   } catch {
     return { ...DEFAULT_OLLAMA_CONFIG }
@@ -68,7 +79,8 @@ export function saveConfig(cfg: Partial<OllamaConfig>): OllamaConfig {
   const atual = getConfig()
   const next: OllamaConfig = {
     baseUrl: cfg.baseUrl?.trim() ? cfg.baseUrl.trim() : atual.baseUrl,
-    model: cfg.model?.trim() ? cfg.model.trim() : atual.model
+    model: cfg.model?.trim() ? cfg.model.trim() : atual.model,
+    provider: cfg.provider !== undefined ? normalizarProvider(cfg.provider) : atual.provider
   }
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
@@ -78,6 +90,11 @@ export function saveConfig(cfg: Partial<OllamaConfig>): OllamaConfig {
     }
   }
   return next
+}
+
+/** Provedor padrao configurado, para uso na criacao Novo e Existente. */
+export function getProviderPadrao(): ProvedorIaLocal {
+  return getConfig().provider
 }
 
 async function fetchComTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {

@@ -1900,3 +1900,69 @@ export function wizardCriacao(
   }
   return { texto: linhas.slice(0, 8).join('\n') }
 }
+
+// Wizard de criacao iterativo: ingestao autonoma a partir de infos + wiki/dados.
+// Nao altera PASSOS_WIZARD_CRIACAO, wizardCriacao, processarMensagemWizard nem o bloco G0.
+// Junta infos + wikiDados (+ mensagem atual), analisa via extrairRespostasG0DoTexto +
+// inferirProblemaObjetivo + diagnosticarFaltasGate (quando ha objeto, sem bloquear).
+// Responde em ate 8 linhas PT-BR sem emoji, como pre-preenchido inferido.
+export function wizardCriacaoIterativo(
+  mensagem: string,
+  infos: string,
+  wikiDados: string,
+  objeto: NexoObject | null,
+  gateId: GateId
+): GateChatResult {
+  const combinado = normalizarEspacos(`${infos ?? ''} ${mensagem ?? ''} ${wikiDados ?? ''}`)
+
+  if (!combinado) {
+    return {
+      texto: 'Nada anotado ainda: informe o resumo e os dados wiki para eu montar o pre-preenchido.'
+    }
+  }
+
+  const extraido = extrairRespostasG0DoTexto(combinado)
+  const inferido = inferirProblemaObjetivo(combinado, objeto?.titulo ?? '')
+  const problema = resumirWizard(extraido['problema'] || inferido.problema || combinado, 120)
+  const objetivo = resumirWizard(extraido['objetivo'] || inferido.objetivo || '', 120)
+  const publico = resumirWizard(extraido['personas'] || '', 120)
+  const dentro = resumirWizard(extraido['escopo_in'] || '', 80)
+  const fora = resumirWizard(extraido['escopo_out'] || '', 80)
+  const restricoes = fora ? `Fora: ${fora}.` : dentro ? `Dentro: ${dentro}.` : ''
+  const riscos = resumirWizard(extraido['riscos'] || '', 120)
+
+  let pendencias = 0
+  let primeiraFalta: FaltaGate | null = null
+  if (objeto) {
+    const diag = diagnosticarFaltasGate(objeto, gateId)
+    pendencias = diag.faltas.length
+    primeiraFalta = diag.faltas[0] ?? null
+  }
+
+  const faltantes: string[] = []
+  if (!problema) faltantes.push('problema')
+  if (!objetivo) faltantes.push('objetivo')
+  if (!publico) faltantes.push('publico')
+  if (!restricoes) faltantes.push('restricoes')
+  if (!riscos) faltantes.push('riscos')
+
+  const linhas: string[] = []
+  linhas.push(`Anotei pre-preenchido: problema "${problema}"; objetivo "${objetivo || 'a definir'}".`)
+  linhas.push(`Publico: ${publico || 'nao informado'}.`)
+  linhas.push(`Restricoes: ${restricoes || 'a definir'}.`)
+  linhas.push(`Riscos: ${riscos || 'a mapear'}.`)
+  if (primeiraFalta) {
+    linhas.push(`Falta: ${primeiraFalta.codigo} em "${objeto?.titulo ?? 'objeto'}".`)
+    linhas.push(`Sugestao: ${resumirWizard(primeiraFalta.exemplo, 120)}`)
+  } else if (faltantes.length > 0) {
+    linhas.push(`Falta: ${faltantes.join(', ')}.`)
+    linhas.push(`Sugestao: informe ${faltantes[0]} em texto livre para completar o pre-preenchido.`)
+  } else {
+    linhas.push('Falta: nenhuma, pre-preenchido completo para revisao.')
+    linhas.push('Sugestao: revise os 5 pontos na tela e crie o projeto.')
+  }
+  if (pendencias > 1) {
+    linhas.push(`Restam ${pendencias} pendencias no Gate ${gateId}.`)
+  }
+  return { texto: linhas.slice(0, 8).join('\n') }
+}

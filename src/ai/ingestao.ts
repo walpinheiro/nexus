@@ -124,3 +124,11 @@ export function analisarIngestao(texto: string): AnaliseIngestao {
 
   return { problema, objetivo, publico, restricoes, riscos, bdd }
 }
+
+/** Ingestão automática do campo wiki/dados: concatena infos + wikiDados e delega a analisarIngestao. */
+export function ingerirWikiDados(infos: string, wikiDados: string): AnaliseIngestao {
+  const a = normalizarEspacos(infos ?? '')
+  const b = normalizarEspacos(wikiDados ?? '')
+  const combinado = normalizarEspacos([a, b].filter((p) => p.length > 0).join(' '))
+  return analisarIngestao(combinado)
+}
