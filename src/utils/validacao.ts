@@ -29,6 +29,9 @@ function numeroOuTamanho(v: unknown): number | null {
 
 function testaRegra(valor: unknown, regra: RegraValidacao): boolean {
   const t = texto(valor).trim()
+  // Campo opcional: valor vazio passa em qualquer regra exceto 'obrigatorio'.
+  // (Ex.: emailAviso em ft-pagar-alt1 só valida formato quando preenchido.)
+  if (t.length === 0 && regra.tipo !== 'obrigatorio') return true
   switch (regra.tipo) {
     case 'obrigatorio':
       return t.length > 0
