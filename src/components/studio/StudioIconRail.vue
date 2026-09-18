@@ -73,7 +73,7 @@ function setIdioma(v: string) {
         :title="b.rotulo"
         :aria-label="b.rotulo"
         class="flex h-11 w-11 items-center justify-center rounded-full"
-        :style="ativo === b.id ? { background: '#E8DEF8', color: '#4A4458' } : {}"
+        :style="ativo === b.id ? { background: '#DCE4FF', color: '#1E3A5F' } : {}"
         :class="ativo === b.id ? '' : 'text-nexo-muted hover:bg-nexo-canvas'"
         @click="emit('selecionar', b.id)"
       >
