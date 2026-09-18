@@ -8,13 +8,17 @@ import LucideIcon from '@/components/common/LucideIcon.vue'
 import {
   diagnosticarFaltasGate,
   obterGovernancaGate,
-  processarMensagemGate,
   gerarPropostaPatch,
   DICIONARIO_PERGUNTAS,
   type FaltaGate
 } from '@/ai/gateSkills'
 import { getConfig, saude, type OllamaMessage } from '@/ai/ollamaClient'
-import { executarSkill, extrairRespostasDoTexto, ordenarFaltasPorPapel } from '@/ai/skillRunner'
+import {
+  executarSkill,
+  extrairRespostasDoTexto,
+  ordenarFaltasPorPapel,
+  type SkillRunnerProvider
+} from '@/ai/skillRunner'
 
 interface Props {
   gateId: GateId
@@ -44,10 +48,12 @@ const patchPendente = ref<{
   mudancas: PatchMudanca[]
 } | null>(null)
 
-// Estado do motor Ollama / Fallback Local (default Ollama queen; toggle local só se já existir)
+// Estado do motor Ollama / llama.cpp (FIX-REAL-OLLAMA R1/R2)
 const usarOllama = ref(true)
 const ollamaStatus = ref<'online' | 'offline'>('offline')
-const ollamaModel = ref('queen')
+const modeloEfetivo = ref('Ternary-Bonsai-2-27B')
+const ollamaModel = modeloEfetivo
+const provedorEfetivo = ref<SkillRunnerProvider>('local-fallback')
 
 // Streaming / Output ao vivo
 const gerandoOutputAoVivo = ref(false)
@@ -55,12 +61,18 @@ const outputAoVivoTexto = ref('')
 
 async function checarOllama() {
   try {
-    const res = await saude(1500)
-    ollamaStatus.value = res.ok ? 'online' : 'offline'
-    const cfg = getConfig()
-    ollamaModel.value = cfg.model || 'queen'
+    const res = await saude(2000)
+    if (res.ok) {
+      ollamaStatus.value = 'online'
+      provedorEfetivo.value = res.provider
+      modeloEfetivo.value = res.models[0] || getConfig().model || 'Ternary-Bonsai-2-27B'
+    } else {
+      ollamaStatus.value = 'offline'
+      provedorEfetivo.value = 'local-fallback'
+    }
   } catch {
     ollamaStatus.value = 'offline'
+    provedorEfetivo.value = 'local-fallback'
   }
 }
 
@@ -147,18 +159,14 @@ watch(
 
     const diag = diagnosticarFaltasGate(props.alvo, props.gateId, graph.waivers)
 
-    let msgInicial = `Olá! Sou a IA de apoio para o **Gate ${props.gateId}**.\n`
-    msgInicial += `Analisando o objeto **"${props.alvo.titulo}"** (seu papel atual: **${users.currentUser?.papel || 'Colaborador'}**):\n\n`
-
+    let msgInicial = ''
     if (diag.aprovado) {
-      msgInicial += `🎉 Todos os critérios de qualidade estão 100% preenchidos! O objeto está apto para aprovação formal de baseline.`
+      msgInicial = `🎉 Todos os critérios do Gate ${props.gateId} para "${props.alvo.titulo}" estão 100% preenchidos! O objeto está apto para aprovação formal de baseline.`
     } else {
+      // R3 Grill-me: ao abrir, a IA faz a 1ª pergunta da próxima falta (sem saudação prolixa nem menu mockado)
       const faltas = ordenarFaltasPorPapel(diag.faltas, props.gateId, users.currentUser?.papel)
       const primeira = faltas[0]
-      msgInicial += `Identifiquei **${diag.faltas.length} critério(s) pendente(s)**.\n`
-      msgInicial += `Vamos preenchê-los por conversa, uma pergunta por vez:\n\n`
-      msgInicial += `👉 **[${primeira.codigo}] ${primeira.pergunta}**\n\n`
-      msgInicial += `*Exemplo de resposta:* "${primeira.exemplo}"`
+      msgInicial = `👉 **[${primeira.codigo}] ${primeira.pergunta}**\n\n*Exemplo sugerido:* "${primeira.exemplo}"`
     }
 
     historicoChat.value = [
@@ -173,7 +181,7 @@ watch(
   { immediate: true }
 )
 
-// Envio de mensagem e extração conversacional
+// Envio de mensagem e condução grill-me (R3)
 async function enviarMensagem(textoCustom?: string) {
   const txt = (textoCustom ?? inputMensagem.value).trim()
   if (!txt || !props.alvo) return
@@ -196,91 +204,118 @@ async function enviarMensagem(textoCustom?: string) {
   try {
     const falta = perguntaAtual.value
 
-    if (falta) {
-      const codigo = falta.codigo
+    // R3 — "Qual o seu modelo?" responde provider+model EFETIVOS do skillRunner/saude, nunca ignora nem exibe menu
+    const ehPerguntaModelo =
+      /qual.*(seu\s+)?(modelo|model|provedor|provider|engine|ia|llm)/i.test(txt) ||
+      /(qual|que)\s+modelo/i.test(txt) ||
+      /quem\s+.*(voce|você)/i.test(txt)
 
-      if (usarOllama.value && ollamaStatus.value === 'online') {
-        outputAoVivoTexto.value = `Consultando Ollama (${ollamaModel.value}) para [${codigo}]...`
-        const historico: OllamaMessage[] = [
-          ...historicoChat.value.map((h) => ({
-            role: (h.autor === 'usuario' ? 'user' : 'assistant') as 'user' | 'assistant',
-            content: h.texto
-          }))
-        ]
-        const res = await executarSkill(props.gateId, props.alvo, historico, users.currentUser?.papel)
-        if (res.patchProposto) {
-          patchPendente.value = {
-            alvoId: props.alvo.id,
-            justificativa: res.patchProposto.justificativa,
-            mudancas: res.patchProposto.mudancas
-          }
-          historicoChat.value.push({
-            id: `ia-${Date.now()}`,
-            autor: 'ia',
-            texto: `Anotado para **[${codigo}]** (${falta.campoAlvo}) via Ollama.\n\n${res.patchProposto.justificativa}\n\nGerei a proposta formal de patch abaixo. Revise e aceite para aplicarmos ao objeto.`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          })
-          return
+    if (ehPerguntaModelo) {
+      try {
+        const s = await saude(1500)
+        if (s.ok) {
+          ollamaStatus.value = 'online'
+          provedorEfetivo.value = s.provider
+          modeloEfetivo.value = s.models[0] || getConfig().model || 'Ternary-Bonsai-2-27B'
         }
+      } catch {
+        // segue com status local se offline
       }
 
-      // Motor local conversacional
-      const extraidos = extrairRespostasDoTexto(txt, [falta])
-      const valor = extraidos[codigo] || txt
-      const prop = gerarPropostaPatch(props.alvo, codigo, valor)
+      const prov = ollamaStatus.value === 'online' ? provedorEfetivo.value : 'local-fallback (servidor inalcançável)'
+      const mod = ollamaStatus.value === 'online' ? modeloEfetivo.value : 'local'
+      let msgResp = `🤖 **Provedor:** \`${prov}\`\n**Modelo efetivo:** \`${mod}\`\n**Status:** ${ollamaStatus.value === 'online' ? '🟢 Online' : '⚪ Offline (resposta local)'}`
 
-      if (prop) {
-        patchPendente.value = {
-          alvoId: props.alvo.id,
-          justificativa: prop.justificativa,
-          mudancas: prop.mudancas
-        }
-        historicoChat.value.push({
-          id: `ia-${Date.now()}`,
-          autor: 'ia',
-          texto: `Entendido! Anotei para **[${codigo}]** (${falta.campoAlvo}):\n> "${valor}"\n\nGerei a proposta formal de patch abaixo com as alterações correspondentes. Revise e clique em **Aceitar** para prosseguirmos para a próxima pergunta.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        })
-      } else {
-        const resp = processarMensagemGate(txt, {
-          objeto: props.alvo,
-          gateId: props.gateId,
-          user: users.currentUser,
-          gates: gates.gates,
-          waivers: graph.waivers
-        })
-        historicoChat.value.push({
-          id: `ia-${Date.now()}`,
-          autor: 'ia',
-          texto: resp.texto,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        })
+      if (falta) {
+        msgResp += `\n\nContinuando o Gate ${props.gateId}:\n👉 **[${falta.codigo}] ${falta.pergunta}**\n\n*Exemplo sugerido:* "${falta.exemplo}"`
       }
-    } else {
-      // Sem faltas pendentes — chat livre com o copilot
-      const resp = processarMensagemGate(txt, {
-        objeto: props.alvo,
-        gateId: props.gateId,
-        user: users.currentUser,
-        gates: gates.gates,
-        waivers: graph.waivers
-      })
+
       historicoChat.value.push({
         id: `ia-${Date.now()}`,
         autor: 'ia',
-        texto: resp.texto,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        texto: msgResp,
+        timestamp: agora
       })
-      if (resp.propostaPatch) {
-        patchPendente.value = resp.propostaPatch
+      return
+    }
+
+    if (falta) {
+      const codigo = falta.codigo
+      outputAoVivoTexto.value = `Processando [${codigo}] com ${usarOllama.value ? 'motor de IA' : 'regras locais'}...`
+
+      const historico: OllamaMessage[] = [
+        ...historicoChat.value.map((h) => ({
+          role: (h.autor === 'usuario' ? 'user' : 'assistant') as 'user' | 'assistant',
+          content: h.texto
+        }))
+      ]
+
+      let valorExtraido = ''
+      let patchResultado: { justificativa: string; mudancas: PatchMudanca[] } | null = null
+      let outputParcialLlm = ''
+
+      if (usarOllama.value) {
+        const res = await executarSkill(props.gateId, props.alvo, historico, users.currentUser?.papel)
+        provedorEfetivo.value = res.provider
+        modeloEfetivo.value = res.model
+        ollamaStatus.value = res.provider === 'local-fallback' ? 'offline' : 'online'
+
+        valorExtraido = res.respostasColetadas[codigo] || ''
+        patchResultado = res.patchProposto
+        outputParcialLlm = res.outputParcial
       }
+
+      if (!valorExtraido) {
+        const extraidos = extrairRespostasDoTexto(txt, [falta])
+        valorExtraido = extraidos[codigo] || txt
+      }
+
+      // R3: cada resposta vira extração + proposta formal de patch + próxima pergunta pós-aceite
+      if (!patchResultado) {
+        const prop = gerarPropostaPatch(props.alvo, codigo, valorExtraido)
+        if (prop) {
+          patchResultado = prop
+        } else {
+          patchResultado = {
+            justificativa: `[IA Gate ${props.gateId}] Preencher ${falta.campoAlvo} para resolver ${codigo}`,
+            mudancas: [{ campo: falta.campoAlvo, de: '', para: valorExtraido }]
+          }
+        }
+      }
+
+      patchPendente.value = {
+        alvoId: props.alvo.id,
+        justificativa: patchResultado.justificativa,
+        mudancas: patchResultado.mudancas
+      }
+
+      let textoConfirmacao = `Entendido! Anotei para **[${codigo}]** (${falta.campoAlvo}):\n> "${valorExtraido}"\n\n`
+      if (outputParcialLlm && provedorEfetivo.value !== 'local-fallback') {
+        textoConfirmacao += `${outputParcialLlm}\n\n`
+      }
+      textoConfirmacao += `Gerei a proposta formal de patch abaixo com as alterações correspondentes. Revise e clique em **Aceitar** para atualizar o objeto e irmos para a próxima pergunta.`
+
+      historicoChat.value.push({
+        id: `ia-${Date.now()}`,
+        autor: 'ia',
+        texto: textoConfirmacao,
+        timestamp: agora
+      })
+    } else {
+      // Sem faltas pendentes — todos os checks já cumpridos (REMOVIDO menu mockado 'experimente pedir')
+      historicoChat.value.push({
+        id: `ia-${Date.now()}`,
+        autor: 'ia',
+        texto: `🎉 Todos os critérios do Gate ${props.gateId} para "${props.alvo.titulo}" já estão 100% preenchidos e em conformidade! O objeto está apto para aprovação formal de baseline.`,
+        timestamp: agora
+      })
     }
   } catch (err) {
     historicoChat.value.push({
       id: `err-${Date.now()}`,
       autor: 'ia',
       texto: `Erro ao processar mensagem: ${err instanceof Error ? err.message : String(err)}`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: agora
     })
   } finally {
     gerandoOutputAoVivo.value = false
