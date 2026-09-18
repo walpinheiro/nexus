@@ -32,6 +32,7 @@ const renomeando = ref('')
 const abaEsq = ref<'parts' | 'layers' | 'telas'>('parts')
 const railTab = ref<RailTab>('parts')
 const abaDir = ref<'edit' | 'prompt'>('edit')
+const ferramentaStage = ref<'select' | 'hand'>('select')
 const previewAberto = ref(false)
 const dialogNovaTela = ref(false)
 const askAiAberto = ref(false)
@@ -239,7 +240,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       </span>
     </header>
     <div class="flex h-12 shrink-0 items-center border-b border-nexo-border bg-nexo-surface px-3" role="toolbar" aria-label="Toolbar do Studio">
-      <StudioToolbar @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" @abrir-ask="askAiAberto = true" />
+      <StudioToolbar v-model:ferramenta="ferramentaStage" @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" @abrir-ask="askAiAberto = true" />
     </div>
     <div class="relative min-h-0 flex-1">
       <div class="flex h-full min-h-0">
@@ -280,7 +281,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <button type="button" title="Criar tela (abre diálogo)" class="mt-2 rounded-btn border border-nexo-primary px-3 py-1.5 font-semibold text-nexo-primary" @click="dialogNovaTela = true">+ Nova tela</button>
         </div>
       </aside>
-      <StudioStage ref="stageRef" class="m-2" @preview="abrirPreview()" />
+      <StudioStage ref="stageRef" v-model:ferramenta="ferramentaStage" class="m-2" @preview="abrirPreview()" />
       <aside class="flex w-72 shrink-0 flex-col border-l border-nexo-border bg-white" aria-label="Painel direito">
         <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas da direita">
           <button type="button" role="tab" :aria-selected="abaDir === 'edit'" class="flex-1 rounded-btn px-2 py-1" :class="abaDir === 'edit' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaDir = 'edit'">Editar</button>
