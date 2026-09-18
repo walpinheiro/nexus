@@ -11,6 +11,14 @@ const emit = defineEmits<{ (e: 'preview'): void }>()
 const caixa = ref<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 let panAtivo = false
 let panStart = { x: 0, y: 0, px: 0, py: 0 }
+// Middle-pan (CANVAS A): botão do meio move em qualquer ferramenta.
+const middlePan = ref(false)
+
+function iniciarPan(ev: PointerEvent) {
+  panAtivo = true
+  panStart = { x: ev.clientX, y: ev.clientY, px: studio.pan[0], py: studio.pan[1] }
+  ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
+}
 const ferramenta = ref<'select' | 'hand'>('select')
 const modo = ref<'edit' | 'preview'>('edit')
 const historico = ref<string[]>([])
@@ -50,10 +58,15 @@ const dragBase = new Map<string, { x: number; y: number }>()
 
 function onPointerDownFundo(ev: PointerEvent) {
   if ((ev.target as HTMLElement).closest('[data-part],button,input,select,textarea,a')) return
+  // Middle-press inicia pan em qualquer ferramenta; suprime caixa e autoscroll.
+  if (ev.button === 1) {
+    ev.preventDefault()
+    middlePan.value = true
+    iniciarPan(ev)
+    return
+  }
   if (ferramenta.value === 'hand') {
-    panAtivo = true
-    panStart = { x: ev.clientX, y: ev.clientY, px: studio.pan[0], py: studio.pan[1] }
-    ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
+    iniciarPan(ev)
     return
   }
   const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
@@ -77,6 +90,7 @@ function onPointerMoveFundo(ev: PointerEvent) {
 
 function onPointerUpFundo() {
   panAtivo = false
+  middlePan.value = false
   if (caixa.value) {
     const c = caixa.value
     const x1 = Math.min(c.x1, c.x2)
@@ -284,10 +298,13 @@ defineExpose({ alternarPreview })
 <template>
   <div
     class="canvas-dots relative min-h-[480px] flex-1 overflow-hidden rounded-card border border-nexo-border"
+    :class="middlePan || panAtivo ? 'cursor-grabbing' : ''"
     tabindex="0"
     role="application"
     aria-label="Stage do Studio"
     @keydown="onKeydown"
+    @mousedown="($event.button === 1 ? $event.preventDefault() : undefined)"
+    @auxclick="($event.button === 1 ? $event.preventDefault() : undefined)"
     @wheel.prevent="
       $event.ctrlKey || $event.metaKey
         ? (studio.zoom = Math.min(2, Math.max(0.3, studio.zoom * ($event.deltaY < 0 ? 1.1 : 0.9))))

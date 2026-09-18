@@ -109,18 +109,32 @@ function snap(v: number, semSnap: boolean): number {
 }
 
 // --- pan do fundo / caixa de seleção ---
+// Middle-pan (CANVAS A): botão do meio move em qualquer ferramenta.
+const middlePan = ref(false)
+
+function iniciarPan(ev: PointerEvent) {
+  panAtivo = true
+  panStart = { x: ev.clientX, y: ev.clientY, px: panX.value, py: panY.value }
+  ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
+}
+
 function onPointerDownFundo(ev: PointerEvent) {
   if ((ev.target as HTMLElement).closest('[role="button"], button, input, textarea, select, a')) return
   if (conexao.value) return
+  // Middle-press inicia pan em qualquer ferramenta; suprime caixa e autoscroll.
+  if (ev.button === 1) {
+    ev.preventDefault()
+    middlePan.value = true
+    iniciarPan(ev)
+    return
+  }
   const querPan = ui.state.ferramenta === 'hand' || spaceOn
   if (!querPan) {
     const p = paraMundo(ev)
     caixa.value = { x1: p.x, y1: p.y, x2: p.x, y2: p.y }
     return
   }
-  panAtivo = true
-  panStart = { x: ev.clientX, y: ev.clientY, px: panX.value, py: panY.value }
-  ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
+  iniciarPan(ev)
 }
 function onPointerMoveFundo(ev: PointerEvent) {
   if (conexao.value) {
@@ -141,6 +155,7 @@ function onPointerMoveFundo(ev: PointerEvent) {
 }
 function onPointerUpFundo() {
   panAtivo = false
+  middlePan.value = false
   if (caixa.value) {
     const c = caixa.value
     const x1 = Math.min(c.x1, c.x2)
@@ -404,11 +419,14 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
 
       <div
         ref="canvasRef"
-        class="canvas-dots relative h-[560px] overflow-hidden rounded-card border border-nexo-border"
+        class="canvas-dots relative h-full min-h-0 w-full flex-1 overflow-hidden rounded-card border border-nexo-border"
+        :class="middlePan || panAtivo ? 'cursor-grabbing' : ''"
         tabindex="0"
         role="application"
         aria-label="Canvas NEXO — arraste o fundo para mover, Ctrl+scroll para zoom"
         @keydown="onKeydownCanvas"
+        @mousedown="($event.button === 1 ? $event.preventDefault() : undefined)"
+        @auxclick="($event.button === 1 ? $event.preventDefault() : undefined)"
       >
         <div
           ref="espacoRef"
