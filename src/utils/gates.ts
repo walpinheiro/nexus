@@ -10,10 +10,6 @@ export interface GateEval {
   bloqueantesFaltando: string[]
 }
 
-function isFeature(o: NexoObject): boolean {
-  return o.tipo === 'feature'
-}
-
 function getFeatureFields(o: NexoObject): {
   ator: string
   fluxo: string
@@ -156,7 +152,7 @@ export function avaliarGate(
     })
   }
 
-  if (gate === 'G2' || (isFeature(objeto) && gate >= 'G2')) {
+  if (gate === 'G2') {
     const f = getFeatureFields(objeto)
     const ff = objeto as unknown as Record<string, unknown>
     const regrasIds = Array.isArray(ff['regras_ids']) ? (ff['regras_ids'] as unknown[]) : []

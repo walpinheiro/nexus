@@ -290,6 +290,38 @@ export const seedPbis: PBI[] = [
         prioridade: 'must'
       }
     ]
+  },
+  {
+    ...base,
+    id: 'pbi-entrega-pix',
+    tipo: 'pbi',
+    titulo: 'Entrega Cobrança Pix em produção',
+    descricao: 'Publica a cobrança Pix com PR merged, CI verde, aceite e observabilidade.',
+    status: 'draft',
+    gate: 'G5',
+    owner: 'u-dev',
+    contribuidores: ['u-dev', 'u-qa'],
+    versao: 1,
+    baseline: null,
+    parent_id: 'ep-pix',
+    causa_stale: null,
+    x: 480,
+    y: 850,
+    z: 7,
+    feature_id: 'ft-confirmar',
+    escopo_in: ['publicação da cobrança Pix'],
+    escopo_out: ['novas features'],
+    dependencias: [],
+    estrategia_teste: 'e2e + contrato',
+    criterios_bdd: [
+      {
+        id: 'AC-G5-001',
+        given: 'PR merged com CI verde',
+        when: 'publica a cobrança Pix',
+        then: 'aceite registrado com observabilidade ativa',
+        prioridade: 'must'
+      }
+    ]
   }
 ]
 
