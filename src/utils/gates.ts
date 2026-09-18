@@ -36,6 +36,36 @@ function getFeatureFields(o: NexoObject): {
 export function avaliarGate(objeto: NexoObject, waivers?: { codigo: string; prazo: string }[]): GateEval {
   const checks: GateCheck[] = []
   const gate = objeto.gate
+  if (gate === 'G0') {
+    const o = objeto as unknown as Record<string, unknown>
+    const desc = String(objeto.descricao ?? '')
+    const prob = String(o['problema'] ?? '')
+    const personas = Array.isArray(o['personas']) ? (o['personas'] as unknown[]) : []
+    checks.push({
+      codigo: 'ENQ-001',
+      descricao: 'Problema ou oportunidade descrito (mín. 20 caracteres)',
+      severidade: 'bloqueante',
+      ok: desc.trim().length >= 20 || prob.trim().length >= 20
+    })
+    checks.push({
+      codigo: 'ENQ-002',
+      descricao: 'Público-alvo ou personas identificadas',
+      severidade: 'bloqueante',
+      ok: personas.length >= 1 || String(o['ator'] ?? '').trim().length > 0 || desc.toLowerCase().includes('para') || desc.toLowerCase().includes('usuário')
+    })
+    checks.push({
+      codigo: 'ENQ-003',
+      descricao: 'Hipótese de valor com métrica observável',
+      severidade: 'bloqueante',
+      ok: String(o['objetivo'] ?? '').trim().length >= 10 || desc.toLowerCase().includes('métrica') || desc.toLowerCase().includes('kpi') || desc.trim().length >= 30
+    })
+    checks.push({
+      codigo: 'ENQ-004',
+      descricao: 'Owner/sponsor definido',
+      severidade: 'bloqueante',
+      ok: (objeto.owner ?? '').trim().length > 0
+    })
+  }
 
   if (gate === 'G1') {
     const e = objeto as unknown as Record<string, unknown>
