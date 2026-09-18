@@ -294,6 +294,37 @@ export interface Waiver {
   em: string
 }
 
+// Payload gate→Studio (OLLAMA-QUEEN-MOTOR O3): tudo derivado do objeto, sem mock.
+export type OrigemTelaStudio = 'fluxo_feliz' | 'alternativo' | 'bdd'
+
+export interface TelaParaStudio {
+  id: string
+  nome: string
+  origem: OrigemTelaStudio
+  descricao: string
+}
+
+export interface NavegacaoParaStudio {
+  de: string
+  para: string
+  gatilho: string
+}
+
+export interface FeatureParaStudio {
+  featureId: string
+  titulo: string
+  ator: string
+  telas: TelaParaStudio[]
+  navegacao: NavegacaoParaStudio[]
+  contexto: {
+    fluxo_feliz: string
+    alternativos: string[]
+    criterios_bdd: CriterioBdd[]
+    integracoes: string[]
+    pbiIds: string[]
+  }
+}
+
 // Solicitação de aprovação de Gate (governança com SoD e fila)
 export type SolicitacaoGateStatus = 'pendente' | 'aprovada' | 'negada'
 
