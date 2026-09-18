@@ -311,14 +311,14 @@ function aceitarPatch() {
       historicoChat.value.push({
         id: `sys-${Date.now()}`,
         autor: 'ia',
-        texto: `✅ **Patch aceito!** O objeto foi atualizado para **v${props.alvo.versao}**.\n\nPróxima pergunta da skill:\n👉 **[${prox.codigo}] ${prox.pergunta}**\n\n*Exemplo sugerido:* "${prox.exemplo}"`,
+        texto: `✅ **Patch aceito!** O objeto foi atualizado para **v${props.alvo.versao}**.\n\nPróxima pergunta da IA do Gate:\n👉 **[${prox.codigo}] ${prox.pergunta}**\n\n*Exemplo sugerido:* "${prox.exemplo}"`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       })
     } else {
       historicoChat.value.push({
         id: `sys-${Date.now()}`,
         autor: 'ia',
-        texto: `🎉 **Todos os critérios da skill do Gate ${props.gateId} foram preenchidos com sucesso!**\nO objeto está 100% em conformidade e pronto para solicitar aprovação formal.`,
+        texto: `🎉 **Todos os critérios da IA do Gate ${props.gateId} foram preenchidos com sucesso!**\nO objeto está 100% em conformidade e pronto para solicitar aprovação formal.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       })
     }
@@ -456,7 +456,7 @@ function rejeitarPatch() {
           <div class="flex items-center justify-between text-[11px]">
             <span class="font-bold text-nexo-primary flex items-center gap-1">
               <LucideIcon name="help-circle" :size="13" />
-              Pergunta Atual da Skill (1 por vez)
+              Pergunta Atual da IA do Gate (1 por vez)
             </span>
             <span class="rounded bg-nexo-primary/10 text-nexo-primary px-1.5 py-0.2 font-mono text-[9px] font-bold">
               {{ perguntaAtual.codigo }}

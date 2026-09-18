@@ -19,7 +19,8 @@ import { gerarPromptStudio } from '@/utils/studioPrompt'
 import { useGraph } from '@/stores/useGraph'
 import { usePresence } from '@/stores/studioPresence'
 import { useUsers } from '@/stores/useUsers'
-import { montarEntradaStudio } from '@/ai/gateParaStudio'
+import { useGate } from '@/stores/useGate'
+import { montarEntradaStudio, listarFeaturesElegiveis } from '@/ai/gateParaStudio'
 import type { StudioFrame, StudioGroup } from '@/types/studio'
 
 const studio = useStudio()
@@ -27,6 +28,7 @@ const projects = useProjects()
 const graph = useGraph()
 const presence = usePresence()
 const users = useUsers()
+const gates = useGate()
 const modalPromptFullscreen = ref(false)
 const route = useRoute()
 const router = useRouter()
@@ -47,12 +49,31 @@ const itemMenuAberto = ref<number>(0)
 const itensMenu = ['voltar', 'backlog', 'gates', 'canvas', 'fechar'] as const
 const stageRef = ref<{ $el: HTMLElement } | null>(null)
 
-// Integração Condicional com Features do Gate G2 (V2)
+// Integração Condicional com Features do Gate G2 (V2/O-STUDIO)
 const featureId = computed(() => (typeof route.query.feature === 'string' ? route.query.feature : ''))
 const featureSelecionadaId = ref(featureId.value)
-const featuresDisponiveis = computed(() => graph.state.nos.filter((n) => n.tipo === 'feature'))
+// Seletor mostra SÓ G2-aprovadas com baseline (gateParaStudio.ts:111-121)
+const featuresDisponiveis = computed(() => listarFeaturesElegiveis(graph.state.nos, gates.gates))
 const entradaStudio = computed(() => (featureId.value ? montarEntradaStudio(featureId.value, graph.state.nos) : null))
 const mensagemGeracao = ref('')
+
+// Identificadores dos frames padrão gerados pelo seedDoc() de useStudio
+const SEED_FRAME_IDS = new Set(['checkout', 'pagpix'])
+
+// Rastreia se o usuário interagiu explicitamente para trabalhar no canvas existente
+const usuarioTrabalhouNoCanvas = ref(false)
+
+// Telas criadas ativamente pelo usuário (exclui os frames estáticos do seedDoc)
+const framesCriadosPeloUsuario = computed(() => {
+  return studio.doc.frames.filter((f) => !SEED_FRAME_IDS.has(f.id))
+})
+
+// EmptyState honesto + seletor: exibido quando NÃO há ?feature= E o usuário NÃO criou telas nem optou por trabalhar no canvas seed
+const exibirEmptyState = computed(() => {
+  if (featureId.value || entradaStudio.value) return false
+  if (framesCriadosPeloUsuario.value.length > 0 || usuarioTrabalhouNoCanvas.value) return false
+  return true
+})
 
 watch(featureId, (novo) => {
   if (novo) featureSelecionadaId.value = novo
@@ -65,6 +86,7 @@ function selecionarFeature(fId: string) {
 
 function gerarNoCanvas() {
   if (!entradaStudio.value) return
+  usuarioTrabalhouNoCanvas.value = true
   const entrada = entradaStudio.value
   studio.pushHistory()
 
@@ -421,9 +443,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     </div>
 
     <div class="relative min-h-0 flex-1">
-      <!-- EmptyState Condicional quando não há telas nem pré-load (V2) -->
+      <!-- EmptyState Condicional quando não há telas do usuário nem pré-load (V2/O-STUDIO) -->
       <div
-        v-if="studio.doc.frames.length === 0 && !entradaStudio"
+        v-if="exibirEmptyState"
         class="flex flex-1 h-full items-center justify-center p-8 bg-nexo-canvas"
       >
         <div class="max-w-md w-full rounded-card border border-nexo-border bg-white p-6 text-center space-y-4 shadow-sm">
@@ -433,12 +455,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           <div class="space-y-1">
             <h3 class="text-base font-bold text-nexo-text">Nenhuma Feature Selecionada no Studio</h3>
             <p class="text-xs text-nexo-muted leading-relaxed">
-              O Studio monta o protótipo de telas navegáveis a partir das features do Gate G2 ou permite criar telas livres no canvas.
+              O Studio monta o protótipo de telas navegáveis a partir das features aprovadas do Gate G2 ou permite criar telas livres no canvas.
             </p>
           </div>
           <div v-if="featuresDisponiveis.length > 0" class="space-y-2 pt-2 text-left">
             <label class="block text-xs font-semibold text-nexo-text">
-              Carregar telas de uma feature:
+              Carregar telas de uma feature elegível (G2 aprovada):
               <select
                 v-model="featureSelecionadaId"
                 class="mt-1 w-full rounded-btn border border-nexo-border bg-white p-2 text-xs"
@@ -451,6 +473,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               </select>
             </label>
           </div>
+          <div v-else class="rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 text-left">
+            Nenhuma feature aprovada no Gate G2 com baseline disponível no momento. Homologue features no Gate G2 para carregar telas automaticamente.
+          </div>
           <div class="pt-2 flex items-center justify-center gap-2">
             <RouterLink
               to="/gates/G2"
@@ -460,8 +485,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             </RouterLink>
             <button
               type="button"
+              class="rounded-btn border border-nexo-border px-3 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-canvas"
+              @click="usuarioTrabalhouNoCanvas = true"
+            >
+              Continuar no canvas seed
+            </button>
+            <button
+              type="button"
               class="rounded-btn bg-nexo-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-nexo-primary/90"
-              @click="dialogNovaTela = true"
+              @click="dialogNovaTela = true; usuarioTrabalhouNoCanvas = true"
             >
               Criar tela em branco
             </button>
