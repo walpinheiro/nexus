@@ -375,6 +375,15 @@ export interface ResultadoValidacao {
 /** Mapa telaId → campos (seed + carregarRegras). */
 export type MapaRegrasValidacao = Record<string, ValidacaoCampo[]>
 
+// ONDA3-MOTOR-EXPORT (Z1/Z2) — fecha GAP Lupa V3 (sem export md/download, sem wiki).
+// BlocoWiki compõe seções `## titulo\n\ncorpo`; exportWiki.ts gera o markdown puro
+// (sem DOM, sem download — o VUE faz blob/clipboard). Fallback honesto 'não informado'
+// (padrão já APROVADO no GateOutput): campo ausente nunca quebra a exportação.
+export interface BlocoWiki {
+  titulo: string
+  corpo: string
+}
+
 // Solicitação de aprovação de Gate (governança com SoD e fila)
 export type SolicitacaoGateStatus = 'pendente' | 'aprovada' | 'negada'
 
