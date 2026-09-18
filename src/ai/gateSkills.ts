@@ -982,6 +982,17 @@ const SUGESTAO_CLICAVEL_G0: Record<string, string> = {
   'ENQ-006': 'Risco: indisponibilidade do PSP com retry em fila'
 }
 
+/** Sugestão clicável F4 para um código de check (G0 do dicionário, demais do exemplo). */
+export function gerarSugestaoG0(codigo: string, objeto?: NexoObject | null): string {
+  const clicavel = SUGESTAO_CLICAVEL_G0[codigo]
+  if (clicavel) return clicavel
+  const dic = DICIONARIO_PERGUNTAS[codigo]
+  const ex = typeof dic?.exemplo === 'string' ? dic.exemplo.trim() : ''
+  if (ex !== '') return ex.slice(0, 160)
+  void objeto
+  return ''
+}
+
 /** Resposta G0 sucinta F4: max 8 linhas, 1 falta por vez + 1 sugestao clicavel, sem emoji, PT-BR. */
 export function formatarRespostaG0Sucinta(
   objetoTitulo: string,

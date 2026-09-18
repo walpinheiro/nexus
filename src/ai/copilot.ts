@@ -5,6 +5,7 @@
 
 import type { EdgeTipo, GateId, NexoObject, NexoStatus, TipoNo } from '@/types/nexo'
 import { avaliarGate } from '@/utils/gates'
+import { DICIONARIO_PERGUNTAS, gerarSugestaoG0 } from '@/ai/gateSkills'
 
 export interface CopilotResult {
   texto: string
@@ -129,20 +130,26 @@ export function interpretarCopilot(input: string, nos: NexoObject[]): CopilotRes
     }
     if (pendencias.length === 0) {
       return {
-        texto: `Fato: gate ${gate} sem pendências (${alvos.length} objeto(s) avaliados).\nInferência: pronto para aprovação (ver papel permitido).\nPendências: nenhuma.`,
+        texto: `Gate ${gate} - ${alvos.length} objeto(s): checks OK.\nSolicite a aprovacao da baseline.`,
         pendencias: [],
         acao: { kind: 'listar', gate }
       }
     }
-    const linhas = pendencias.slice(0, 12).map((p) => `• ${p.codigo} em "${p.titulo}"`)
+    // F4: max 5 itens (+N), 1 sugestao por linha, max 8 linhas, sem emoji, PT-BR.
+    const vis = pendencias.slice(0, 5)
+    const resto = pendencias.length - vis.length
+    const linhas = vis.map((p) => {
+      const dic = DICIONARIO_PERGUNTAS[p.codigo]
+      const sug = dic ? gerarSugestaoG0(p.codigo, nos.find((x) => x.id === p.noId) ?? null) : ''
+      return `${p.codigo} em "${p.titulo}"${sug !== '' ? ` - responda com: "${sug}"` : ''}`.slice(0, 200)
+    })
     return {
       texto: [
-        `Fatos: gate ${gate} com ${pendencias.length} pendência(s) em ${alvos.length} objeto(s).`,
+        `Gate ${gate} - ${pendencias.length} pendencia(s) em ${alvos.length} objeto(s).`,
         ...linhas,
-        pendencias.length > 12 ? `…e mais ${pendencias.length - 12}.` : '',
-        'Inferência: bloqueantes impedem aprovação; avisos aceitam dispensa no Backlog.',
-        'Pendências: clique num item acima para abrir o nó (ou corrija via tab Texto).'
-      ].filter(Boolean).join('\n'),
+        resto > 0 ? `Mais ${resto} pendencia(s).` : '',
+        'Responda 1 por vez em texto livre.'
+      ].filter(Boolean).slice(0, 8).join('\n'),
       pendencias,
       acao: { kind: 'listar', gate }
     }
@@ -211,19 +218,26 @@ export function interpretarCopilot(input: string, nos: NexoObject[]): CopilotRes
     }
   }
 
-  // Pergunta genérica sobre um nó: responde com fatos/inferências/pendências
+  // Pergunta genérica sobre um nó (F4: sucinto, valores reais, 1 falta + sugestao).
   const citado = buscarPorNome(nos, texto.replace(/^(o que|qual|como|por que|porque|explique|sobre)\s+/i, ''))
   if (citado) {
     const f = citado as unknown as Record<string, unknown>
     const bdd = Array.isArray(f['criterios_bdd']) ? (f['criterios_bdd'] as unknown[]).length : 0
-    return {
-      texto: [
-        `Fatos: "${citado.titulo}" [${citado.tipo}/${citado.gate}/${citado.status}] v${citado.versao}, owner ${citado.owner}.`,
-        citado.descricao,
-        `Inferência: ${bdd > 0 ? `${bdd} critério(s) BDD vinculado(s); pronto para detalhar testes.` : 'sem BDD vinculado — provavelmente bloqueia G2 (FTR-007).'}`,
-        `Pendências: ${citado.status === 'stale' ? `revisar causa "${citado.causa_stale ?? 'não informada'}". ` : ''}Confirme owner e fonte (${citado.fonte}).`
-      ].join('\n')
+    const evCitado = avaliarGate(citado)
+    const falta = evCitado.checks.find((c) => !c.ok)
+    const linhasNo = [
+      `"${citado.titulo}" [${citado.tipo}/${citado.gate}] - owner ${citado.owner || 'vazio'}, BDD ${bdd}.`,
+      String(citado.descricao ?? '').slice(0, 160)
+    ]
+    if (falta) {
+      const dic = DICIONARIO_PERGUNTAS[falta.codigo]
+      const sug = gerarSugestaoG0(falta.codigo, citado)
+      linhasNo.push(`Falta atual: [${falta.codigo}] ${dic?.pergunta ?? falta.descricao}`.slice(0, 200))
+      if (sug !== '') linhasNo.push(`Responda com: "${sug}"`.slice(0, 200))
+    } else {
+      linhasNo.push('Checks OK. Solicite a aprovacao da baseline.')
     }
+    return { texto: linhasNo.filter((l) => l.trim() !== '').slice(0, 8).join('\n') }
   }
 
   return {
