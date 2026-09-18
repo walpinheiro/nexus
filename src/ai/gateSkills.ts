@@ -704,6 +704,302 @@ export function obterGovernancaGate(
   }
 }
 
+// G0 DINAMICO (puro/deterministico: sem DOM, sem Date, sem Math.random)
+// Extracao em tempo real de respostas G0 a partir de texto livre.
+
+const STOPWORDS_G0 = new Set([
+  'para', 'com', 'uma', 'esse', 'essa', 'este', 'esta', 'isso', 'isto',
+  'eles', 'elas', 'nosso', 'nossa', 'seus', 'suas', 'meu', 'minha',
+  'como', 'mais', 'menos', 'muito', 'quando', 'onde', 'qual', 'quais',
+  'entre', 'sobre', 'depois', 'antes', 'todos', 'todas', 'desse'
+])
+
+function normalizarEspacos(s: string): string {
+  return s.replace(/\s+/g, ' ').trim()
+}
+
+function primeiraSentenca(texto: string): string {
+  const partes = texto.split(/[.?!;\n]+/).map((s) => s.trim()).filter((s) => s.length > 0)
+  return partes.length > 0 ? partes[0] : ''
+}
+
+function capturarPadroes(sentencas: string[], padroes: RegExp[]): string {
+  for (const sent of sentencas) {
+    const low = sent.toLowerCase()
+    for (const rx of padroes) {
+      const m = low.match(rx)
+      if (m && m[1]) {
+        const v = normalizarEspacos(m[1]).replace(/[.]+$/, '')
+        if (v.length >= 2) return v.slice(0, 200)
+      }
+    }
+  }
+  return ''
+}
+
+function capitalizar(s: string): string {
+  if (!s) return s
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/** Extrai valores G0 de texto livre sem codigo formal. */
+export function extrairRespostasG0DoTexto(texto: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const limpo = normalizarEspacos(texto ?? '')
+  if (!limpo) return out
+  const sentencas = limpo.split(/[.?!;\n]+/).map((s) => s.trim()).filter((s) => s.length > 0)
+  const lowers = sentencas.map((s) => s.toLowerCase())
+
+  const problema = capturarPadroes(sentencas, [
+    /quero (?:um |uma |criar |fazer |montar )?app de (.+)/,
+    /quero (.+)/,
+    /preciso (?:de )?(.+)/,
+    /problema (?:é|:)?(.+)/,
+    /(?:a )?dor (?:é|:)?(.+)/,
+    /dificuldade (?:é|de|:)?(.+)/,
+    /oportunidade (?:é|:)?(.+)/
+  ])
+  if (problema) {
+    out['problema'] = problema.slice(0, 200)
+    out['descricao'] = problema.slice(0, 200)
+  } else {
+    const fb = primeiraSentenca(limpo)
+    if (fb.length >= 20) {
+      out['problema'] = fb.slice(0, 200)
+      out['descricao'] = fb.slice(0, 200)
+    }
+  }
+
+  const personas = capturarPadroes(sentencas, [
+    /meu p[uú]blico (?:alvo )?(?:é|:)?(.+)/,
+    /p[uú]blico (?:alvo )?(?:é|:)?(.+)/,
+    /persona (?:é|:)?(.+)/,
+    /usu[aá]rios? (?:s[aã]o|é|:)?(.+)/,
+    /clientes? (?:s[aã]o|é|:)?(.+)/,
+    /para ([a-zà-ú ]{3,80})/
+  ])
+  if (personas) out['personas'] = personas.slice(0, 120)
+  else {
+    const idx = lowers.findIndex((s) => s.includes('lojista') || s.includes('varej') || s.includes('cliente') || s.includes('usuário') || s.includes('usuario'))
+    if (idx >= 0) out['personas'] = sentencas[idx].slice(0, 120)
+  }
+
+  const objetivo = capturarPadroes(sentencas, [
+    /meta (?:é|:)?(.+)/,
+    /objetivo (?:é|:)?(.+)/,
+    /quero alcan[cç]ar (.+)/,
+    /espero (.+)/,
+    /hip[oó]tese (?:é|:)?(.+)/
+  ])
+  if (objetivo) out['objetivo'] = objetivo.slice(0, 200)
+
+  const sentKpi = sentencas.find((s) => /%/.test(s) || /(meta|kpi|convers[aã]o|adoc[aã]o|aumentar|reduzir).*\d+/.test(s.toLowerCase()))
+  if (sentKpi) out['kpis'] = sentKpi.slice(0, 200)
+
+  const owner = capturarPadroes(sentencas, [
+    /(?:sou (?:o |a )?)(.+)/,
+    /respons[aá]vel (?:é|:)?(.+)/,
+    /owner (?:é|:)?(.+)/,
+    /sponsor (?:é|:)?(.+)/,
+    /quem cuida (?:é|:)?(.+)/
+  ])
+  if (owner) out['owner'] = owner.slice(0, 60)
+
+  const escIn = capturarPadroes(sentencas, [
+    /(?:o )?escopo.*inclui (.+)/,
+    /inclui(?:r)? (.+)/,
+    /precisa ter (.+)/,
+    /dentro (?:do escopo )?(.+)/
+  ])
+  if (escIn) out['escopo_in'] = escIn.slice(0, 200)
+
+  const escOut = capturarPadroes(sentencas, [
+    /n[aã]o inclui (.+)/,
+    /fora (?:do escopo )?(?:fica )?:?(.+)/,
+    /exceto (.+)/,
+    /n[aã]o quero (.+)/
+  ])
+  if (escOut) out['escopo_out'] = escOut.slice(0, 200)
+
+  const risco = capturarPadroes(sentencas, [
+    /risco (?:é|:|de)?(.+)/,
+    /medo (?:é|de|:)?(.+)/,
+    /preocupa[cç][aã]o (?:é|com|:)?(.+)/,
+    /receio (?:é|de|:)?(.+)/,
+    /pode (?:dar errado|falhar|quebrar)(.+)/
+  ])
+  if (risco) out['riscos'] = risco.slice(0, 200)
+
+  return out
+}
+
+/** Deriva problema e objetivo candidatos de texto livre (frases curtas PT-BR). */
+export function inferirProblemaObjetivo(texto: string, titulo?: string): { problema: string; objetivo: string } {
+  const limpo = normalizarEspacos(texto ?? '')
+  const tit = normalizarEspacos(titulo ?? '')
+  let nucleo = ''
+  const low = limpo.toLowerCase()
+  const mQuero = low.match(/quero (?:um |uma |criar |fazer |montar )?(.+)/)
+  const mApp = low.match(/app de (.+)/)
+  const origem = mQuero && mQuero[1] ? mQuero[1] : mApp && mApp[1] ? mApp[1] : primeiraSentenca(limpo) || tit || limpo
+  nucleo = normalizarEspacos(origem).replace(/[.]+$/, '').slice(0, 120)
+
+  let problema = primeiraSentenca(limpo).slice(0, 140)
+  if (problema.length < 20) {
+    problema = (`Clientes enfrentam dificuldade com ${nucleo || tit || 'a operação atual'}.`).slice(0, 140)
+  }
+  let objetivo = (`Permitir ${nucleo || tit || 'a operação principal'} com rapidez e segurança.`).slice(0, 140)
+  if (objetivo.length < 10) objetivo = 'Permitir a operação principal com rapidez e segurança.'
+  return { problema: capitalizar(problema), objetivo: capitalizar(objetivo) }
+}
+
+function palavrasDominio(fonte: string): string[] {
+  return (fonte.toLowerCase().match(/[a-zà-ú]{4,}/g) ?? []).filter((w) => !STOPWORDS_G0.has(w)).slice(0, 12)
+}
+
+/** Sugere nao-objetivos concretos derivados do dominio (max 5). */
+export function sugerirNaoObjetivos(tituloDescricao: string): string[] {
+  const low = (tituloDescricao ?? '').toLowerCase()
+  const out: string[] = []
+  const push = (s: string): void => {
+    if (out.length >= 5) return
+    if (!out.includes(s)) out.push(s)
+  }
+  if (/pix|pagamento|cobran|fatura/.test(low)) {
+    push('estorno automático')
+    push('suporte a cartão')
+    push('parcelamento ou Pix crédito')
+  }
+  if (/app|mobile|checkout|web/.test(low)) {
+    push('versão iOS nativa dedicada')
+    push('modo offline completo')
+  }
+  if (/relat|dashboard|bi|concilia/.test(low)) {
+    push('BI customizável por usuário')
+    push('exportação de legado histórico')
+  }
+  if (/integra|legado|api|webhook/.test(low)) {
+    push('integração com legado fora do padrão')
+    push('migração de histórico antigo')
+  }
+  if (/boleto|cart[aã]o/.test(low)) push('suporte a boleto e cartão')
+  push('customizações pontuais fora do padrão')
+  push('suporte multilíngue')
+  push('auditoria externa certificada')
+  const dom = palavrasDominio(tituloDescricao)
+  if (out.length < 3 && dom.length > 0) {
+    push(`expansão para ${dom.slice(0, 2).join(' ')} em outros canais`)
+  }
+  return out.slice(0, 5)
+}
+
+/** Sugere riscos que o usuario nao ve, derivados do dominio (max 5). */
+export function sugerirRiscos(tituloDescricao: string): string[] {
+  const low = (tituloDescricao ?? '').toLowerCase()
+  const out: string[] = []
+  const push = (s: string): void => {
+    if (out.length >= 5) return
+    if (!out.includes(s)) out.push(s)
+  }
+  if (/pix|pagamento|psp|bacen|cobran/.test(low)) {
+    push('Indisponibilidade do PSP ou Bacen em pico')
+    push('Fraude com QR copiado ou webhook falso')
+  }
+  push('Exposição de dados pessoais (LGPD)')
+  push('Baixa adoção pelos usuários no início')
+  push('Latência alta em horário de pico')
+  if (/legado|integra|api/.test(low)) push('Dependência de integração legada instável')
+  else push('Mudança de regra do arranjo Pix')
+  return out.slice(0, 5)
+}
+
+function listaCurta(itens: string[], max = 5): string {
+  const vis = itens.slice(0, max)
+  const resto = itens.length - vis.length
+  return resto > 0 ? `${vis.join('; ')} (+${resto})` : vis.join('; ')
+}
+
+/** Monta patch parcial G0: so campos inferidos, sem zerar o resto. */
+export function gerarPatchParcialG0(
+  objeto: NexoObject,
+  extraido: Record<string, string>
+): { justificativa: string; mudancas: PatchMudanca[] } | null {
+  const mudancas: PatchMudanca[] = []
+  const rec = objeto as unknown as Record<string, unknown>
+  const titulo = objeto.titulo || 'Objeto'
+
+  const probAtual = String(rec['problema'] ?? objeto.descricao ?? '')
+  if (extraido['problema'] && probAtual.trim().length < 20) {
+    const v = extraido['problema'].slice(0, 200)
+    mudancas.push({ campo: 'problema', de: String(rec['problema'] ?? ''), para: v })
+    if (objeto.descricao !== v) mudancas.push({ campo: 'descricao', de: objeto.descricao, para: v })
+  }
+  const persAtual = Array.isArray(rec['personas']) ? (rec['personas'] as unknown[]) : []
+  const atorAtual = String(rec['ator'] ?? '').trim()
+  if (extraido['personas'] && persAtual.length === 0 && !atorAtual) {
+    mudancas.push({ campo: 'personas', de: JSON.stringify(persAtual), para: JSON.stringify([extraido['personas']]) })
+  }
+  const objAtual = String(rec['objetivo'] ?? '').trim()
+  if (extraido['objetivo'] && objAtual.length < 10) {
+    mudancas.push({ campo: 'objetivo', de: objAtual, para: extraido['objetivo'].slice(0, 200) })
+  } else if (!extraido['objetivo'] && extraido['problema'] && objAtual.length < 10) {
+    const inf = inferirProblemaObjetivo(extraido['problema'], titulo)
+    mudancas.push({ campo: 'objetivo', de: objAtual, para: inf.objetivo })
+  }
+  const kpisAtual = Array.isArray(rec['kpis']) ? (rec['kpis'] as unknown[]) : []
+  if (extraido['kpis'] && kpisAtual.length === 0) {
+    const mNum = extraido['kpis'].match(/(\d+\s?%|\d+)/)
+    const alvo = mNum && mNum[1] ? mNum[1].replace('%', '').trim() : '40'
+    const novo = { nome: 'Meta relatada pelo usuário', unidade: '%', alvo, janela: '90d', responsavel: objeto.owner || 'u-pm' }
+    mudancas.push({ campo: 'kpis', de: JSON.stringify(kpisAtual), para: JSON.stringify([...kpisAtual, novo], null, 2) })
+  }
+  if (extraido['owner'] && !(objeto.owner ?? '').trim()) {
+    mudancas.push({ campo: 'owner', de: objeto.owner ?? '', para: extraido['owner'].slice(0, 60) })
+  }
+  const inAtual = Array.isArray(rec['escopo_in']) ? (rec['escopo_in'] as unknown[]) : []
+  if (extraido['escopo_in'] && inAtual.length === 0) {
+    mudancas.push({ campo: 'escopo_in', de: JSON.stringify(inAtual), para: JSON.stringify([...inAtual, extraido['escopo_in'].slice(0, 200)], null, 2) })
+  }
+  const outAtual = Array.isArray(rec['escopo_out']) ? (rec['escopo_out'] as unknown[]) : []
+  if (extraido['escopo_out'] && outAtual.length === 0) {
+    mudancas.push({ campo: 'escopo_out', de: JSON.stringify(outAtual), para: JSON.stringify([...outAtual, extraido['escopo_out'].slice(0, 200)], null, 2) })
+  }
+  const riscosAtual = Array.isArray(rec['riscos']) ? (rec['riscos'] as unknown[]) : []
+  if (extraido['riscos'] && riscosAtual.length === 0) {
+    mudancas.push({ campo: 'riscos', de: JSON.stringify(riscosAtual), para: JSON.stringify([...riscosAtual, extraido['riscos'].slice(0, 200)], null, 2) })
+  }
+
+  if (mudancas.length === 0) return null
+  return { justificativa: `[IA Gate G0] Patch parcial com ${mudancas.length} campo(s) inferido(s) de texto livre`, mudancas }
+}
+
+const SUGESTAO_CLICAVEL_G0: Record<string, string> = {
+  'ENQ-001': 'O problema é clientes demoram para pagar faturas fora do horário comercial',
+  'ENQ-002': 'Meu público é pequenos varejistas no checkout web',
+  'ENQ-003': 'A meta é aumentar a conversão em 15% em 4 semanas',
+  'ENQ-004': 'O responsável é u-pm',
+  'ENQ-005': 'Dentro: Pix cobrança imediata. Fora: Pix crédito parcelado',
+  'ENQ-006': 'Risco: indisponibilidade do PSP com retry em fila'
+}
+
+/** Resposta G0 sucinta F4: max 8 linhas, 1 falta por vez + 1 sugestao clicavel, sem emoji, PT-BR. */
+export function formatarRespostaG0Sucinta(
+  objetoTitulo: string,
+  falta: FaltaGate,
+  restantes: number,
+  dicaExtra?: string
+): string {
+  const linhas: string[] = []
+  linhas.push(`Gate G0 - falta 1 de ${restantes}: ${falta.codigo}.`)
+  linhas.push(`Pergunta: ${falta.pergunta}`)
+  linhas.push(`Por que bloqueia: ${falta.porQueBloqueia}`)
+  if (dicaExtra) linhas.push(`Sugestão: ${dicaExtra.slice(0, 160)}`)
+  const clicavel = SUGESTAO_CLICAVEL_G0[falta.codigo] ?? falta.exemplo
+  linhas.push(`Responda com: "${clicavel}"`)
+  linhas.push(`Objeto: ${objetoTitulo}`)
+  return linhas.slice(0, 8).join('\n')
+}
+
 // Gerador determinístico de propostas de patch estruturadas
 export function gerarPropostaPatch(
   objeto: NexoObject,
@@ -716,10 +1012,11 @@ export function gerarPropostaPatch(
 
   switch (codigoCheck) {
     case 'FTR-007': {
-      // Ao menos 1 critério BDD verificável
+      // Ao menos 1 critério BDD verificável (determinístico: sequencial)
       const f = objeto as unknown as Feature
       const atual = JSON.stringify(f.criterios_bdd ?? [])
-      const novoId = `AC-${String(Math.floor(Math.random() * 800) + 100).padStart(3, '0')}`
+      const seq = (f.criterios_bdd ?? []).length + 1
+      const novoId = `AC-${String(seq).padStart(3, '0')}`
 
       let given = `que o usuário acessa ${titulo}`
       let when = 'solicita a execução da operação'
@@ -814,19 +1111,102 @@ export function gerarPropostaPatch(
 
     case 'EPC-001':
     case 'ENQ-001': {
-      // Problema
+      // Problema: derivar de texto livre mesmo sem formato (inferencia G0)
       const e = objeto as unknown as Epic
       const de = e.problema ?? objeto.descricao ?? ''
-      const para =
-        entrada.length >= 30
-          ? entrada
-          : `Clientes e operadores enfrentam atrasos e inconsistências operacionais ao tentar processar ${titulo} sem automação.`
+      const ext = entrada ? extrairRespostasG0DoTexto(entrada) : {}
+      let para = ''
+      if (entrada.length >= 20) {
+        para = (ext['problema'] && ext['problema'].length >= 10 ? ext['problema'] : entrada).slice(0, 200)
+      } else if (entrada) {
+        para = inferirProblemaObjetivo(entrada, titulo).problema
+      } else {
+        para = `Clientes e operadores enfrentam atrasos e inconsistências operacionais ao tentar processar ${titulo} sem automação.`
+      }
       mudancas.push({ campo: 'problema', de, para })
       if (objeto.descricao !== para) {
         mudancas.push({ campo: 'descricao', de: objeto.descricao, para })
       }
       return {
         justificativa: `[IA Gate] Descrever problema e contexto detalhado (>= 30 chars)`,
+        mudancas
+      }
+    }
+
+    case 'ENQ-002': {
+      // Publico-alvo G0: extracao de texto livre -> personas
+      const rec = objeto as unknown as Record<string, unknown>
+      const de = JSON.stringify(Array.isArray(rec['personas']) ? rec['personas'] : [])
+      const ext = entrada ? extrairRespostasG0DoTexto(entrada) : {}
+      const valor = (ext['personas'] || entrada || 'Cliente com fatura').slice(0, 120)
+      const atuais = Array.isArray(rec['personas']) ? (rec['personas'] as unknown[]) : []
+      const para = JSON.stringify([...atuais, valor].filter((v, i, a) => a.indexOf(v) === i), null, 2)
+      mudancas.push({ campo: 'personas', de, para })
+      return {
+        justificativa: `[IA Gate G0] Definir publico-alvo/persona para ENQ-002`,
+        mudancas
+      }
+    }
+
+    case 'ENQ-003': {
+      // Hipotese G0: inferir objetivo + KPI de texto livre
+      const rec = objeto as unknown as Record<string, unknown>
+      const ext = entrada ? extrairRespostasG0DoTexto(entrada) : {}
+      const inf = inferirProblemaObjetivo(entrada || titulo, titulo)
+      const objAtual = String(rec['objetivo'] ?? '').trim()
+      const objNovo = (ext['objetivo'] || inf.objetivo).slice(0, 200)
+      if (objAtual.length < 10) {
+        mudancas.push({ campo: 'objetivo', de: objAtual, para: objNovo })
+      }
+      const kpisAtual = Array.isArray(rec['kpis']) ? (rec['kpis'] as unknown[]) : []
+      const alvoNum = entrada.match(/(\d+)\s?%?/)?.[1] ?? '15'
+      const semMatch = entrada.toLowerCase().match(/(\d+)\s*semanas?/)
+      const kpiNovo: Kpi = {
+        nome: ext['kpis'] ? 'Meta relatada pelo usuário' : `Conversão em ${titulo}`,
+        unidade: '%',
+        alvo: alvoNum,
+        janela: semMatch && semMatch[1] ? `${semMatch[1]}sem` : '4sem',
+        responsavel: objeto.owner || 'u-pm'
+      }
+      if (kpisAtual.length === 0) {
+        mudancas.push({ campo: 'kpis', de: JSON.stringify(kpisAtual), para: JSON.stringify([...kpisAtual, kpiNovo], null, 2) })
+      }
+      return {
+        justificativa: `[IA Gate G0] Definir hipotese mensuravel (objetivo + KPI) para ENQ-003`,
+        mudancas
+      }
+    }
+
+    case 'ENQ-005': {
+      // Restricoes/nao-objetivos derivados do dominio (max 5)
+      const rec = objeto as unknown as Record<string, unknown>
+      const fonte = `${titulo} ${objeto.descricao ?? ''}`
+      const inAtual = Array.isArray(rec['escopo_in']) ? (rec['escopo_in'] as string[]) : []
+      const outAtual = Array.isArray(rec['escopo_out']) ? (rec['escopo_out'] as string[]) : []
+      const paraIn =
+        inAtual.length > 0
+          ? inAtual
+          : [entrada && entrada.length >= 5 ? entrada.slice(0, 200) : `Operação principal de ${titulo}`]
+      const naoObjs = sugerirNaoObjetivos(fonte).slice(0, 5)
+      const paraOut = outAtual.length > 0 ? outAtual : naoObjs
+      mudancas.push({ campo: 'escopo_in', de: JSON.stringify(inAtual), para: JSON.stringify(paraIn, null, 2) })
+      mudancas.push({ campo: 'escopo_out', de: JSON.stringify(outAtual), para: JSON.stringify(paraOut, null, 2) })
+      return {
+        justificativa: `[IA Gate G0] Definir escopo_in e nao-objetivos derivados do dominio para ENQ-005: ${listaCurta(naoObjs)}`,
+        mudancas
+      }
+    }
+
+    case 'ENQ-006': {
+      // Riscos derivados do dominio (max 5)
+      const rec = objeto as unknown as Record<string, unknown>
+      const fonte = `${titulo} ${objeto.descricao ?? ''} ${entrada}`
+      const atual = Array.isArray(rec['riscos']) ? (rec['riscos'] as unknown[]) : []
+      const lista = sugerirRiscos(fonte).slice(0, 5)
+      const novos = entrada && entrada.length >= 5 ? [entrada.slice(0, 200), ...lista].slice(0, 5) : lista
+      mudancas.push({ campo: 'riscos', de: JSON.stringify(atual), para: JSON.stringify([...atual, ...novos], null, 2) })
+      return {
+        justificativa: `[IA Gate G0] Mapear riscos derivados do dominio para ENQ-006: ${listaCurta(lista)}`,
         mudancas
       }
     }
@@ -1010,6 +1390,80 @@ export function processarMensagemGate(
   const diag = diagnosticarFaltasGate(objeto, gateId, waivers)
   const gov = obterGovernancaGate(gateId, user, objeto, gates)
 
+  // 1b. G0 DINAMICO + F4 SUCINTO (intercepta todo gateId G0: max 8 linhas,
+  // 1 falta por vez + 1 sugestao clicavel, sem emoji, PT-BR, patch parcial).
+  if (gateId === 'G0') {
+    const extraido = extrairRespostasG0DoTexto(mensagem)
+    const ehStatus =
+      msg.includes('o que falta') ||
+      msg.includes('pendencias') ||
+      msg.includes('pendências') ||
+      msg.includes('status') ||
+      msg.includes('ajuda') ||
+      msg.includes('como aprovar')
+    const dicaPara = (codigo: string): string | undefined => {
+      if (codigo === 'ENQ-005') return `Nao-objetivos: ${listaCurta(sugerirNaoObjetivos(`${objeto.titulo} ${objeto.descricao ?? ''}`))}`
+      if (codigo === 'ENQ-006') return `Riscos: ${listaCurta(sugerirRiscos(`${objeto.titulo} ${objeto.descricao ?? ''}`))}`
+      if (codigo === 'ENQ-003') return inferirProblemaObjetivo(mensagem || objeto.titulo, objeto.titulo).objetivo
+      if (codigo === 'ENQ-001') return inferirProblemaObjetivo(mensagem || objeto.titulo, objeto.titulo).problema
+      return undefined
+    }
+    if (ehStatus) {
+      if (diag.aprovado) {
+        const linhas = [
+          `Gate G0 - "${objeto.titulo}": checks OK.`,
+          gov.sequenciaOk ? 'Sequencia liberada.' : `Sequencia bloqueada: ${gov.motivoSequencia}`.slice(0, 160),
+          gov.papelOk ? 'Papel apto a aprovar.' : `Papel atual sem permissao. Exige: ${gov.aprovadoresExigidos.join(', ')}.`,
+          'Solicite a aprovacao da baseline.'
+        ]
+        return { texto: linhas.slice(0, 8).join('\n') }
+      }
+      const primeira = diag.faltas[0]
+      return { texto: formatarRespostaG0Sucinta(objeto.titulo, primeira, diag.faltas.length, dicaPara(primeira.codigo)) }
+    }
+    let codigoAlvo: string | null = null
+    if (msg.includes('risco') || msg.includes('suposi') || msg.includes('medo') || msg.includes('receio') || msg.includes('lgpd') || msg.includes('fraude')) codigoAlvo = 'ENQ-006'
+    else if (msg.includes('nao-objetivo') || msg.includes('não-objetivo') || msg.includes('nao objetivo') || msg.includes('fora') || msg.includes('escopo') || msg.includes('restri')) codigoAlvo = 'ENQ-005'
+    else if (msg.includes('publico') || msg.includes('público') || msg.includes('persona') || msg.includes('ator') || msg.includes('cliente') || msg.includes('usuário') || msg.includes('usuario')) codigoAlvo = 'ENQ-002'
+    else if (msg.includes('hipotese') || msg.includes('hipótese') || msg.includes('meta') || msg.includes('kpi') || msg.includes('objetivo') || msg.includes('convers')) codigoAlvo = 'ENQ-003'
+    else if (msg.includes('responsavel') || msg.includes('responsável') || msg.includes('owner') || msg.includes('sponsor') || msg.includes('sou ')) codigoAlvo = 'ENQ-004'
+    else if (msg.includes('problema') || msg.includes('dor') || msg.includes('quero') || msg.includes('app de') || msg.includes('preciso') || msg.includes('ideia')) codigoAlvo = 'ENQ-001'
+    else if (diag.faltas.length > 0) codigoAlvo = diag.faltas[0].codigo
+    if (codigoAlvo) {
+      const prop = gerarPropostaPatch(objeto, codigoAlvo, mensagem)
+      const parcial = gerarPatchParcialG0(objeto, extraido)
+      const vistos = new Set((prop?.mudancas ?? []).map((mm: PatchMudanca) => mm.campo))
+      const extras = (parcial?.mudancas ?? []).filter((mm: PatchMudanca) => !vistos.has(mm.campo))
+      const mudancas = [...(prop?.mudancas ?? []), ...extras]
+      if (mudancas.length > 0) {
+        const falta = diag.faltas.find((f) => f.codigo === codigoAlvo)
+        const clicavel = (codigoAlvo && SUGESTAO_CLICAVEL_G0[codigoAlvo]) || 'O problema é clientes demoram para pagar faturas fora do horário comercial'
+        const linhas = [
+          `Gate G0 - proposta para ${codigoAlvo}.`,
+          `Campos: ${mudancas.map((mm: PatchMudanca) => mm.campo).join(', ').slice(0, 120)}.`,
+          falta ? `Falta atual: ${falta.pergunta}`.slice(0, 160) : 'Avanco no enquadramento.',
+          `Responda com: "${clicavel}"`,
+          `Objeto: ${objeto.titulo}`,
+          'Aceite o patch para aplicar.'
+        ]
+        return {
+          texto: linhas.slice(0, 8).join('\n'),
+          propostaPatch: {
+            alvoId: objeto.id,
+            justificativa: prop?.justificativa ?? parcial?.justificativa ?? `[IA Gate G0] Patch parcial para ${codigoAlvo}`,
+            mudancas
+          },
+          checksAfetados: [codigoAlvo]
+        }
+      }
+    }
+    if (diag.faltas.length > 0) {
+      const proxima = diag.faltas[0]
+      return { texto: formatarRespostaG0Sucinta(objeto.titulo, proxima, diag.faltas.length, dicaPara(proxima.codigo)) }
+    }
+    return { texto: `Gate G0 - "${objeto.titulo}": checks OK.\nSolicite a aprovacao da baseline.` }
+  }
+
   // 1. Perguntas de status / o que falta / governança
   // NOTA ANTI-MOCK (dono): este ramo só responde DIAGNÓSTICO (checks reais do
   // avaliarGate). A condução pergunta-a-pergunta é feita pelo LLM real via
@@ -1175,7 +1629,7 @@ export function processarMensagemGate(
     }
   }
 
-  // 7. Pedidos de Enquadramento (G0)
+  // 7. Pedidos de Enquadramento (G0 sucinto F4: max 8 linhas, sem emoji, 1 sugestao)
   if (
     msg.includes('hipotese') ||
     msg.includes('hipótese') ||
@@ -1186,7 +1640,7 @@ export function processarMensagemGate(
     const prop = gerarPropostaPatch(objeto, 'ENQ-001', mensagem)
     if (prop) {
       return {
-        texto: `**Proposta Gerada (G0):** Estruturei o problema e a hipótese de enquadramento para "${objeto.titulo}". Aceite o patch abaixo para aplicar.`,
+        texto: `Gate G0 - proposta para ENQ-001.\nCampos: ${prop.mudancas.map((mm: PatchMudanca) => mm.campo).join(', ').slice(0, 120)}.\nResponda com: "${SUGESTAO_CLICAVEL_G0['ENQ-001']}"\nObjeto: ${objeto.titulo}\nAceite o patch para aplicar.`,
         propostaPatch: {
           alvoId: objeto.id,
           justificativa: prop.justificativa,
@@ -1239,15 +1693,14 @@ export function processarMensagemGate(
     }
   }
 
-  // Fallback HONESTO (FIX-REAL-OLLAMA R2): NUNCA menu de comandos ("experimente pedir...")
-  // — esse era o mock que o dono viu. Faz a pergunta da próxima falta do roteiro + registra.
+  // Fallback: proxima falta (G0 tratado acima em formato sucinto F4).
   if (diag.faltas.length > 0) {
     const proxima = diag.faltas[0]
     return {
-      texto: `Opero em modo local (resposta local — servidor inalcançável) para "${objeto.titulo}".\n\n👉 **[${proxima.codigo}] ${proxima.pergunta}**\n\n*Exemplo de resposta:* "${proxima.exemplo}"\n\nResponda em texto livre que eu registro e avanço para a próxima pendência (${diag.faltas.length} no total).`
+      texto: `Falta ${proxima.codigo} em "${objeto.titulo}".\nPergunta: ${proxima.pergunta}\nPor que bloqueia: ${proxima.porQueBloqueia}\nResponda com: "${proxima.exemplo}"\nObjeto: ${objeto.titulo}\nResponda em texto livre que eu registro a pendência.`
     }
   }
   return {
-    texto: `Todos os checks bloqueantes do Gate ${gateId} para "${objeto.titulo}" estão atendidos (resposta local — servidor inalcançável). Você está apto a solicitar a aprovação formal de baseline.`
+    texto: `Gate ${gateId} - "${objeto.titulo}": checks OK.\nSolicite a aprovacao da baseline.`
   }
 }

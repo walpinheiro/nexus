@@ -322,12 +322,18 @@ export async function executarSkill(
     )
     const patch = montarPatchLocal(objeto, faltasRoteiro, respostas)
     const proxima = faltasRoteiro[0]
-    const outputParcial =
-      diag.faltas.length === 0
-        ? `Gate ${gateId}: todos os checks OK para "${objeto.titulo}" (resposta local — servidor inalcançável).`
-        : `Gate ${gateId} — "${objeto.titulo}" (resposta local — servidor inalcançável; faltas: ` +
-          faltasRoteiro.map((f) => `${f.codigo}(${f.campoAlvo})`).join(', ') +
-          `).\n\n👉 [${proxima.codigo}] ${proxima.pergunta}\nExemplo: "${proxima.exemplo}"`
+    const linhas = [`Gate ${gateId} - "${objeto.titulo}" (resposta local - servidor inalcancavel).`]
+    if (diag.faltas.length === 0) {
+      linhas.push('Checks OK. Solicite a aprovacao da baseline.')
+    } else {
+      const vis = faltasRoteiro.slice(0, 5).map((f) => `${f.codigo}(${f.campoAlvo})`).join(', ')
+      const resto = faltasRoteiro.length > 5 ? ` (+${faltasRoteiro.length - 5})` : ''
+      linhas.push(`Faltas: ${vis}${resto}.`)
+      linhas.push(`Falta atual: [${proxima.codigo}] ${proxima.pergunta}`.slice(0, 200))
+      linhas.push(`Responda com: "${proxima.exemplo}"`.slice(0, 200))
+      linhas.push('Responda em texto livre que eu registro a pendencia.')
+    }
+    const outputParcial = linhas.slice(0, 8).join('\n')
     return {
       skillId,
       respostasColetadas: respostas,

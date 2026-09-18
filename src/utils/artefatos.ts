@@ -47,13 +47,41 @@ function txt(v: unknown): string {
 
 function juntar(v: unknown): string {
   if (!Array.isArray(v)) return 'não informado'
-  const xs = (v as unknown[]).map((x) => String(x ?? '').trim()).filter((x) => x !== '')
+  const xs = (v as unknown[])
+    .map((x) => {
+      if (typeof x === 'string') return x.trim()
+      if (x && typeof x === 'object') {
+        const o = x as Rec
+        for (const k of ['mitigacao', 'titulo', 'nome', 'texto', 'descricao']) {
+          const t = typeof o[k] === 'string' ? (o[k] as string).trim() : ''
+          if (t !== '') return t
+        }
+        return ''
+      }
+      return String(x ?? '').trim()
+    })
+    .filter((x) => x !== '')
+  return xs.length > 0 ? xs.join('; ') : 'não informado'
+}
+
+function primeiroTxt(...vals: unknown[]): string {
+  for (const v of vals) {
+    if (typeof v === 'string' && v.trim() !== '') return v.trim()
+  }
+  return 'não informado'
+}
+
+function riscosTxt(v: unknown): string {
+  if (!Array.isArray(v) || v.length === 0) return 'não informado'
+  const xs = (v as (string | RiscoEstruturado)[]).map(riscoTxt).filter((x) => x !== '' && x !== 'não informado')
   return xs.length > 0 ? xs.join('; ') : 'não informado'
 }
 
 function riscoTxt(r: string | RiscoEstruturado): string {
-  if (typeof r === 'string') return r
-  return `${r.mitigacao || 'Risco'} (prob. ${r.probabilidade || 'não informado'}, impacto ${r.impacto || 'não informado'}, owner ${r.owner || 'não informado'})`
+  if (typeof r === 'string') return r.trim() !== '' ? r.trim() : 'não informado'
+  if (!r || typeof r !== 'object') return 'não informado'
+  const m = typeof r.mitigacao === 'string' ? r.mitigacao.trim() : ''
+  return `${m !== '' ? m : 'Risco'} (prob. ${txt(r.probabilidade)}, impacto ${txt(r.impacto)}, owner ${txt(r.owner)})`
 }
 
 function bddValor(c: CriterioBdd): string {
@@ -82,14 +110,15 @@ function cabecalho(objeto: NexoObject, gateId: GateId, titulo: string, ctx?: Art
   ]
 }
 
-// ── G0 (spec 05): contexto/dor, público, hipótese+métrica, owner,
-// restrições/não-objetivos, suposições/riscos, candidatas a épico ─────────────
+// ── G0 (spec 05 / ENQ-001..006): PROGRESSIVO — cada seção rende secao a
+// secao mesmo com objeto vazio/parcial; campo ausente vira 'não informado'
+// honesto e vira valor real assim que o objeto ganha o campo. Ordem fixa.
 export function montarArtefatoG0(objeto: NexoObject, ctx?: ArtefatoContexto): Artefato {
   const r = rec(objeto)
   const e = objeto as unknown as Partial<Epic>
-  const riscos = Array.isArray(e.riscos) && e.riscos.length > 0
-    ? (e.riscos as (string | RiscoEstruturado)[]).map(riscoTxt).join('; ')
-    : juntar(r['riscos'])
+  const riscos = riscosTxt(Array.isArray(e.riscos) && e.riscos.length > 0 ? e.riscos : r['riscos'])
+  const kpisRaw: unknown = Array.isArray(r['kpis']) ? r['kpis'] : (Array.isArray(e.kpis) ? e.kpis : [])
+  const kpis = Array.isArray(kpisRaw) ? (kpisRaw as Rec[]) : []
   const candidatas = (ctx?.nos ?? []).filter((n) => n.tipo === 'epico' && n.id !== objeto.id)
   return {
     gate: 'G0',
@@ -97,28 +126,33 @@ export function montarArtefatoG0(objeto: NexoObject, ctx?: ArtefatoContexto): Ar
     secoes: [
       ...cabecalho(objeto, 'G0', '', ctx),
       secao('Contexto e dor', [
-        ['Dor observável', txt((r['problema'] as string) ?? objeto.descricao)],
+        ['Dor observável', primeiroTxt(r['problema'], objeto.descricao)],
         ['Evidência', txt(r['evidencia_dor'])]
       ]),
       secao('Público', [
-        ['Personas', juntar(r['personas'])],
+        ['Personas', juntar(r['personas'] ?? (e as Rec)['personas'])],
         ['Ator', txt(r['ator'])]
       ]),
       secao('Hipótese e métrica', [
-        ['Hipótese', txt(r['objetivo'])],
-        ['Métrica (nome+alvo)', (() => {
-          const kpis = Array.isArray(r['kpis']) ? (r['kpis'] as Rec[]) : []
-          return kpis.length > 0
-            ? kpis.map((k) => `${txt(k['nome'])}: ${txt(k['alvo'])} ${txt(k['unidade'])} em ${txt(k['janela'])} (resp. ${txt(k['responsavel'])})`).join('; ')
-            : 'não informado'
-        })()]
+        ['Hipótese', txt(r['objetivo'] ?? (e as Rec)['objetivo'])],
+        ['Métrica (nome+alvo)', kpis.length > 0
+          ? kpis.map((k) => {
+            const extras = [txt(k['unidade']), txt(k['janela']), txt(k['responsavel'])]
+              .filter((x) => x !== 'não informado')
+              .join(' ')
+            return `${primeiroTxt(k['nome'])}: ${primeiroTxt(k['alvo'])}${extras !== '' ? ` ${extras}` : ''} (resp. ${txt(k['responsavel'])})`
+          }).join('; ')
+          : 'não informado']
       ]),
       secao('Owner', [['Sponsor/owner', txt(objeto.owner)]]),
       secao('Restrições e não-objetivos', [
         ['Escopo in', juntar(r['escopo_in'] ?? (e as Rec)['escopo_in'])],
         ['Escopo out', juntar(r['escopo_out'] ?? (e as Rec)['escopo_out'])]
       ]),
-      secao('Suposições e riscos', [['Riscos', riscos]]),
+      secao('Suposições e riscos', [
+        ['Suposições', juntar(r['suposicoes'])],
+        ['Riscos', riscos]
+      ]),
       secao('Candidatas a épico', [
         ['Épicos', candidatas.length > 0 ? candidatas.map((x) => `${x.titulo} (${x.status} v${x.versao})`).join('; ') : 'não informado']
       ])
