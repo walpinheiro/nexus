@@ -1771,3 +1771,132 @@ export function processarMensagemWizard(
   ]
   return { texto: linhas.slice(0, 8).join('\n') }
 }
+
+// Wizard de criacao (tela de novo projeto): 5 perguntas, uma por vez.
+// Reaproveita diagnosticarFaltasGate + inferencia G0DIN, sem alterar
+// processarMensagemWizard nem o bloco G0. Max 8 linhas, zero emoji, PT-BR.
+export interface PassoWizardCriacao {
+  id: 'usuario' | 'problema' | 'objetivo' | 'usuarios' | 'escopo'
+  pergunta: string
+  ajuda: string
+}
+
+export const PASSOS_WIZARD_CRIACAO: PassoWizardCriacao[] = [
+  {
+    id: 'usuario',
+    pergunta: 'Quem e o responsavel pelo projeto?',
+    ajuda: 'Informe nome ou papel, ex.: Sou o PM do checkout.'
+  },
+  {
+    id: 'problema',
+    pergunta: 'Qual problema o projeto resolve?',
+    ajuda: 'Descreva a dor com ao menos 10 caracteres.'
+  },
+  {
+    id: 'objetivo',
+    pergunta: 'Qual objetivo mensuravel esperado?',
+    ajuda: 'Ex.: aumentar a conversao em 15% em 4 semanas.'
+  },
+  {
+    id: 'usuarios',
+    pergunta: 'Quem sao os usuarios do projeto?',
+    ajuda: 'Ex.: pequenos varejistas no checkout web.'
+  },
+  {
+    id: 'escopo',
+    pergunta: 'O que entra e o que fica fora do escopo?',
+    ajuda: 'Opcional. Ex.: Dentro: Pix imediato. Fora: Pix credito.'
+  }
+]
+
+function proximoPassoCriacao(passoId: PassoWizardCriacao['id']): PassoWizardCriacao | null {
+  const idx = PASSOS_WIZARD_CRIACAO.findIndex((p) => p.id === passoId)
+  if (idx < 0 || idx + 1 >= PASSOS_WIZARD_CRIACAO.length) return null
+  return PASSOS_WIZARD_CRIACAO[idx + 1]
+}
+
+function resumirWizard(s: string, max = 120): string {
+  return normalizarEspacos(s).slice(0, max)
+}
+
+/** Valida um passo do wizard de criacao e responde em ate 8 linhas PT-BR sem emoji. */
+export function wizardCriacao(
+  mensagem: string,
+  passoId: PassoWizardCriacao['id'],
+  objeto: NexoObject | null,
+  gateId: GateId
+): GateChatResult {
+  const texto = normalizarEspacos(mensagem ?? '')
+  const passo = PASSOS_WIZARD_CRIACAO.find((p) => p.id === passoId) ?? null
+  const proximo = proximoPassoCriacao(passoId)
+
+  // Reaproveita o diagnostico do gate quando ha objeto (nao bloqueia o wizard).
+  let pendencias = 0
+  if (objeto) {
+    const diag = diagnosticarFaltasGate(objeto, gateId)
+    pendencias = diag.faltas.length
+  }
+
+  // Validacao do passo: usuario nao-vazio; problema/objetivo/usuarios min 10; escopo opcional.
+  if (passoId === 'usuario') {
+    if (!texto) {
+      const linhas = [
+        'Nao anotei ainda: falta o responsavel.',
+        `Pergunta: ${passo?.pergunta ?? 'Quem e o responsavel pelo projeto?'}`,
+        `Ajuda: ${passo?.ajuda ?? 'Informe nome ou papel.'}`,
+        'Responda em texto livre para avancar.'
+      ]
+      return { texto: linhas.slice(0, 8).join('\n') }
+    }
+  } else if (passoId === 'escopo') {
+    if (!texto) {
+      const linhas = [
+        'Anotei: escopo ficara para revisao.',
+        proximo ? `Proxima: ${proximo.pergunta}` : 'Wizard concluido, revise e crie o projeto.',
+        proximo ? `Ajuda: ${proximo.ajuda}` : 'Confira os 5 pontos na tela antes de criar.'
+      ]
+      return { texto: linhas.slice(0, 8).join('\n') }
+    }
+  } else {
+    if (texto.length < 10) {
+      const linhas = [
+        'Resposta curta demais: use ao menos 10 caracteres.',
+        `Pergunta: ${passo?.pergunta ?? 'Detalhe um pouco mais.'}`,
+        `Ajuda: ${passo?.ajuda ?? 'Descreva com ao menos 10 caracteres.'}`,
+        'Responda em texto livre para avancar.'
+      ]
+      return { texto: linhas.slice(0, 8).join('\n') }
+    }
+  }
+
+  // Enriquece a confirmacao com a inferencia G0DIN quando houver texto.
+  const extraido = extrairRespostasG0DoTexto(texto)
+  const inferido = inferirProblemaObjetivo(texto, objeto?.titulo ?? '')
+  let detalhe = resumirWizard(texto)
+  if (passoId === 'usuario') {
+    detalhe = resumirWizard(extraido['owner'] || texto, 60)
+  } else if (passoId === 'problema') {
+    detalhe = resumirWizard(extraido['problema'] || inferido.problema || texto)
+  } else if (passoId === 'objetivo') {
+    detalhe = resumirWizard(extraido['objetivo'] || inferido.objetivo || texto)
+  } else if (passoId === 'usuarios') {
+    detalhe = resumirWizard(extraido['personas'] || texto, 120)
+  } else if (passoId === 'escopo') {
+    const dentro = extraido['escopo_in'] ? `Dentro: ${extraido['escopo_in']}. ` : ''
+    const fora = extraido['escopo_out'] ? `Fora: ${extraido['escopo_out']}.` : ''
+    const combinado = resumirWizard(`${dentro}${fora}`.trim() || texto)
+    if (combinado) detalhe = combinado
+  }
+  void pendencias
+
+  const linhas: string[] = []
+  linhas.push(`Anotei ${passoId}: "${detalhe}".`)
+  if (proximo) {
+    linhas.push(`Proxima: ${proximo.pergunta}`)
+    linhas.push(`Ajuda: ${proximo.ajuda}`)
+  } else {
+    linhas.push('Wizard concluido, revise e crie o projeto.')
+    linhas.push('Confira os 5 pontos na tela antes de criar.')
+  }
+  return { texto: linhas.slice(0, 8).join('\n') }
+}

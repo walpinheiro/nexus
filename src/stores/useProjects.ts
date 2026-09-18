@@ -54,6 +54,14 @@ export interface CriarProjetoExistenteInput {
   contextoParcial?: Partial<Epic>
 }
 
+export interface RespostasWizardCriacao {
+  usuario: string
+  problema: string
+  objetivo: string
+  usuarios: string
+  escopo: string
+}
+
 export interface CriarProjetoResult {
   ok: boolean
   erros: { campo: string; codigo: string; mensagem: string }[]
@@ -518,5 +526,34 @@ export const useProjects = defineStore('projects', () => {
     persist()
   }
 
-  return { state, atual, persist, selecionar, criarProjeto, criarProjetoExistente, concluirIngestaoExistente, removerProjeto, resetCobrancas, graphKey, gatesKey, patchesKey, auditKey, tentKey }
+  function criarProjetoComIA(respostas: RespostasWizardCriacao, atorId: string): CriarProjetoResult {
+    const problema = respostas.problema?.trim() ?? ''
+    const objetivo = respostas.objetivo?.trim() ?? ''
+    const usuarios = respostas.usuarios?.trim() ?? ''
+    const usuario = respostas.usuario?.trim() ?? ''
+    const escopo = respostas.escopo ?? ''
+    const titulo = (objetivo || problema).slice(0, 60)
+    let contexto = problema
+    if (contexto.trim().length < 30) {
+      contexto = `${problema} ${objetivo}`.trim()
+    }
+    const restricoes = escopo
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+    const input: CriarProjetoInput = {
+      titulo,
+      contexto,
+      publico: usuarios,
+      objetivo,
+      metricaNome: 'Adoção inicial',
+      restricoes,
+      naoObjetivos: [],
+      owner: usuario,
+      classificacao: 'internal'
+    }
+    return criarProjeto(input, atorId)
+  }
+
+  return { state, atual, persist, selecionar, criarProjeto, criarProjetoComIA, criarProjetoExistente, concluirIngestaoExistente, removerProjeto, resetCobrancas, graphKey, gatesKey, patchesKey, auditKey, tentKey }
 })

@@ -675,7 +675,75 @@ export const seedParcialExistente: {
   ingestao: seedIngestaoParcial
 }
 
-// Pacote multi-projeto (DELTA Passo 1): projeto Cobranças completo.
+// seedCoerentePix — coerência Pix (puros, sem Date/Math.random, PT-BR, sem emoji).
+// Percorre seedEpico + seedFeatures: se título/descrição/problema menciona Pix
+// (case-insensitive 'pix'), garante preenchimento padrão quando vazio.
+// NÃO renomeia ids, não remove campos, não quebra vínculos.
+const PROBLEMA_PADRAO_PIX =
+  'Clientes sem cartão precisam pagar faturas via Pix com rapidez e segurança comprovadas.'
+const OBJETIVO_PADRAO_PIX = 'Permitir pagamento de faturas via Pix com confirmação idempotente'
+const PERSONA_PADRAO_PIX = 'Cliente com fatura aberta'
+
+function mencionaPix(...textos: Array<string | null | undefined>): boolean {
+  return textos.some((t) => (t ?? '').toLowerCase().includes('pix'))
+}
+
+function textoVazio(valor: string | null | undefined): boolean {
+  return (valor ?? '').trim().length === 0
+}
+
+export function seedCoerentePix(): { epicoId: string; aplicados: string[] } {
+  const aplicados: string[] = []
+  const epicoId = seedEpico.id
+  if (mencionaPix(seedEpico.titulo, seedEpico.descricao, seedEpico.problema)) {
+    let aplicouEpico = false
+    if (textoVazio(seedEpico.problema)) {
+      seedEpico.problema = PROBLEMA_PADRAO_PIX
+      aplicouEpico = true
+    }
+    if (textoVazio(seedEpico.objetivo)) {
+      seedEpico.objetivo = OBJETIVO_PADRAO_PIX
+      aplicouEpico = true
+    }
+    if (seedEpico.personas.length === 0) {
+      seedEpico.personas = [PERSONA_PADRAO_PIX]
+      aplicouEpico = true
+    }
+    if (aplicouEpico) aplicados.push(seedEpico.id)
+  }
+  for (const f of seedFeatures) {
+    const rec = f as unknown as Record<string, unknown>
+    const problemaAtual = typeof rec['problema'] === 'string' ? (rec['problema'] as string) : undefined
+    if (!mencionaPix(f.titulo, f.descricao, problemaAtual)) continue
+    let aplicou = false
+    if (typeof rec['problema'] !== 'string' || textoVazio(rec['problema'] as string)) {
+      rec['problema'] = PROBLEMA_PADRAO_PIX
+      aplicou = true
+    }
+    if (typeof rec['objetivo'] !== 'string' || textoVazio(rec['objetivo'] as string)) {
+      rec['objetivo'] = OBJETIVO_PADRAO_PIX
+      aplicou = true
+    }
+    if (!Array.isArray(rec['personas']) || (rec['personas'] as unknown[]).length === 0) {
+      rec['personas'] = [PERSONA_PADRAO_PIX]
+      aplicou = true
+    }
+    if (f.criterios_bdd.length === 0) {
+      f.criterios_bdd = [
+        {
+          id: 'AC-SEED-001',
+          given: 'fatura aberta com cobrança Pix pertence ao cliente autenticado',
+          when: 'cliente paga a fatura via Pix',
+          then: 'sistema confirma o pagamento Pix com comprovante e expiração resolvida',
+          prioridade: 'must'
+        }
+      ]
+      aplicou = true
+    }
+    if (aplicou) aplicados.push(f.id)
+  }
+  return { epicoId, aplicados }
+}
 export function seedMultiProjeto(): {
   projetoId: string
   projetoTitulo: string
