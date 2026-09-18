@@ -286,3 +286,19 @@ export interface Waiver {
   prazo: string
   em: string
 }
+
+// Solicitação de aprovação de Gate (governança com SoD e fila)
+export type SolicitacaoGateStatus = 'pendente' | 'aprovada' | 'negada'
+
+export interface SolicitacaoGate {
+  id: string
+  gate: GateId
+  alvoId: string
+  solicitanteId: string
+  em: string
+  status: SolicitacaoGateStatus
+  decididaPor?: string
+  decididaEm?: string
+  motivo?: string
+}
+

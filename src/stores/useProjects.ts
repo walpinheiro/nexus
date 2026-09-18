@@ -323,7 +323,7 @@ export const useProjects = defineStore('projects', () => {
     if (!p) return { ok: false, motivo: 'Projeto não encontrado.' }
     if (confirmacao !== p.titulo) return { ok: false, motivo: 'Digite o nome exato do projeto para confirmar.' }
     if (state.value.projetos.length <= 1) return { ok: false, motivo: 'Não é possível remover o último projeto.' }
-    for (const k of [graphKey(id), gatesKey(id), patchesKey(id), auditKey(id), tentKey(id)]) {
+    for (const k of [graphKey(id), gatesKey(id), patchesKey(id), auditKey(id), tentKey(id), `nexo.v1.gateRequests.${id}`]) {
       try {
         localStorage.removeItem(k)
       } catch {
