@@ -19,6 +19,8 @@ import { gerarPromptStudio } from '@/utils/studioPrompt'
 import { useGraph } from '@/stores/useGraph'
 import { usePresence } from '@/stores/studioPresence'
 import { useUsers } from '@/stores/useUsers'
+import { montarEntradaStudio } from '@/ai/gateParaStudio'
+import type { StudioFrame, StudioGroup } from '@/types/studio'
 
 const studio = useStudio()
 const projects = useProjects()
@@ -44,6 +46,143 @@ const menuBtn = ref<HTMLButtonElement | null>(null)
 const itemMenuAberto = ref<number>(0)
 const itensMenu = ['voltar', 'backlog', 'gates', 'canvas', 'fechar'] as const
 const stageRef = ref<{ $el: HTMLElement } | null>(null)
+
+// Integração Condicional com Features do Gate G2 (V2)
+const featureId = computed(() => (typeof route.query.feature === 'string' ? route.query.feature : ''))
+const featureSelecionadaId = ref(featureId.value)
+const featuresDisponiveis = computed(() => graph.state.nos.filter((n) => n.tipo === 'feature'))
+const entradaStudio = computed(() => (featureId.value ? montarEntradaStudio(featureId.value, graph.state.nos) : null))
+const mensagemGeracao = ref('')
+
+watch(featureId, (novo) => {
+  if (novo) featureSelecionadaId.value = novo
+})
+
+function selecionarFeature(fId: string) {
+  featureSelecionadaId.value = fId
+  router.replace({ path: route.path, query: { ...route.query, feature: fId || undefined } })
+}
+
+function gerarNoCanvas() {
+  if (!entradaStudio.value) return
+  const entrada = entradaStudio.value
+  studio.pushHistory()
+
+  let curX = studio.doc.frames.reduce((m, f) => Math.max(m, f.x + f.w), 0)
+  if (curX > 0) curX += 120
+
+  entrada.telas.forEach((t, i) => {
+    const frameId = t.id
+    const frameExistente = studio.doc.frames.find((f) => f.id === frameId)
+    const x = frameExistente ? frameExistente.x : curX + i * (412 + 80)
+    const y = frameExistente ? frameExistente.y : 0
+
+    const frame: StudioFrame = {
+      id: frameId,
+      name: t.nome,
+      x,
+      y,
+      w: 412,
+      h: 892,
+      preset: 'phone',
+      note: `${t.descricao} (origem: ${t.origem})`
+    }
+
+    const idxF = studio.doc.frames.findIndex((f) => f.id === frameId)
+    if (idxF >= 0) studio.doc.frames[idxF] = frame
+    else studio.doc.frames.push(frame)
+
+    // Barra de topo
+    const gBarId = `g-bar-${frameId}`
+    const gBar: StudioGroup = {
+      id: gBarId,
+      x,
+      y,
+      axis: 'x',
+      order: 1,
+      items: [
+        {
+          id: `bar-${frameId}`,
+          kind: 'topAppBar',
+          label: t.nome.split('—')[1]?.trim() || t.nome,
+          icon: i > 0 ? 'arrow_back' : 'menu',
+          variant: 'filled',
+          x,
+          y,
+          w: 412
+        }
+      ]
+    }
+    const idxB = studio.doc.groups.findIndex((g) => g.id === gBarId)
+    if (idxB >= 0) studio.doc.groups[idxB] = gBar
+    else studio.doc.groups.push(gBar)
+
+    // Card de contexto
+    const gCardId = `g-card-${frameId}`
+    const gCard: StudioGroup = {
+      id: gCardId,
+      x: x + 16,
+      y: y + 96,
+      axis: 'y',
+      order: 2,
+      items: [
+        {
+          id: `c-${frameId}`,
+          kind: 'card',
+          label: t.origem === 'fluxo_feliz' ? `Passo ${i + 1}` : 'Exceção',
+          supporting: t.descricao,
+          variant: 'filled',
+          x: x + 16,
+          y: y + 96,
+          w: 380
+        }
+      ]
+    }
+    const idxC = studio.doc.groups.findIndex((g) => g.id === gCardId)
+    if (idxC >= 0) studio.doc.groups[idxC] = gCard
+    else studio.doc.groups.push(gCard)
+
+    // Transição de tela
+    const transicao = entrada.navegacao.find((nav) => nav.de === frameId && nav.para !== frameId)
+    if (transicao) {
+      const gBtnId = `g-btn-${frameId}`
+      const gBtn: StudioGroup = {
+        id: gBtnId,
+        x: x + 16,
+        y: y + 720,
+        axis: 'x',
+        order: 3,
+        items: [
+          {
+            id: `btn-${frameId}`,
+            kind: 'button',
+            label: transicao.gatilho.slice(0, 32) || 'Avançar',
+            variant: 'filled',
+            size: 380,
+            w: 380,
+            action: { to: transicao.para, transition: 'slide' },
+            note: transicao.gatilho,
+            x: x + 16,
+            y: y + 720
+          }
+        ]
+      }
+      const idxBtn = studio.doc.groups.findIndex((g) => g.id === gBtnId)
+      if (idxBtn >= 0) studio.doc.groups[idxBtn] = gBtn
+      else studio.doc.groups.push(gBtn)
+    }
+  })
+
+  if (entrada.telas.length > 0) {
+    studio.screenId = entrada.telas[0].id
+  }
+  studio.persist()
+  gerarPrompt()
+  mensagemGeracao.value = `${entrada.telas.length} telas geradas no canvas!`
+  setTimeout(() => {
+    mensagemGeracao.value = ''
+  }, 4000)
+}
 
 const fromRaw = computed(() => (typeof route.query.from === 'string' ? route.query.from : ''))
 const origemLabel = computed(() => {
@@ -251,8 +390,86 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </button>
       </span>
     </header>
+
+    <!-- Banner Condicional de Feature & Pré-Load Gate G2 (V2) -->
+    <div
+      v-if="entradaStudio"
+      class="flex flex-wrap items-center justify-between gap-3 border-b border-nexo-primary/30 bg-nexo-primary/5 px-4 py-2 text-xs"
+    >
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="rounded bg-nexo-primary text-white px-2 py-0.5 text-[10px] font-bold">Gate G2 Pré-load</span>
+        <span class="font-bold text-nexo-text">{{ entradaStudio.titulo }}</span>
+        <span class="text-nexo-muted">({{ entradaStudio.ator }})</span>
+        <span class="rounded bg-nexo-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-nexo-primary">
+          {{ entradaStudio.telas.length }} telas · {{ entradaStudio.navegacao.length }} transições BDD
+        </span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span v-if="mensagemGeracao" class="text-nexo-approved font-semibold text-[11px] animate-pulse">
+          {{ mensagemGeracao }}
+        </span>
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-btn bg-nexo-primary px-3 py-1 font-semibold text-white shadow-xs hover:bg-nexo-primary/90 transition-colors"
+          @click="gerarNoCanvas()"
+        >
+          <M3Icon name="auto_awesome" :size="15" label="Gerar no canvas" />
+          Gerar no canvas
+        </button>
+      </div>
+    </div>
+
     <div class="relative min-h-0 flex-1">
-      <div class="flex h-full min-h-0">
+      <!-- EmptyState Condicional quando não há telas nem pré-load (V2) -->
+      <div
+        v-if="studio.doc.frames.length === 0 && !entradaStudio"
+        class="flex flex-1 h-full items-center justify-center p-8 bg-nexo-canvas"
+      >
+        <div class="max-w-md w-full rounded-card border border-nexo-border bg-white p-6 text-center space-y-4 shadow-sm">
+          <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-nexo-primary/10 text-nexo-primary">
+            <M3Icon name="layers" :size="24" label="Nenhuma tela" />
+          </div>
+          <div class="space-y-1">
+            <h3 class="text-base font-bold text-nexo-text">Nenhuma Feature Selecionada no Studio</h3>
+            <p class="text-xs text-nexo-muted leading-relaxed">
+              O Studio monta o protótipo de telas navegáveis a partir das features do Gate G2 ou permite criar telas livres no canvas.
+            </p>
+          </div>
+          <div v-if="featuresDisponiveis.length > 0" class="space-y-2 pt-2 text-left">
+            <label class="block text-xs font-semibold text-nexo-text">
+              Carregar telas de uma feature:
+              <select
+                v-model="featureSelecionadaId"
+                class="mt-1 w-full rounded-btn border border-nexo-border bg-white p-2 text-xs"
+                @change="selecionarFeature(featureSelecionadaId)"
+              >
+                <option value="">(Selecione uma feature)</option>
+                <option v-for="f in featuresDisponiveis" :key="f.id" :value="f.id">
+                  {{ f.titulo }} ({{ f.id }})
+                </option>
+              </select>
+            </label>
+          </div>
+          <div class="pt-2 flex items-center justify-center gap-2">
+            <RouterLink
+              to="/gates/G2"
+              class="inline-flex items-center gap-1.5 rounded-btn border border-nexo-border px-3 py-1.5 text-xs font-semibold text-nexo-text hover:bg-nexo-canvas"
+            >
+              Ir para Gate G2
+            </RouterLink>
+            <button
+              type="button"
+              class="rounded-btn bg-nexo-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-nexo-primary/90"
+              @click="dialogNovaTela = true"
+            >
+              Criar tela em branco
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="flex h-full min-h-0">
       <StudioIconRail :ativo="railTab" @selecionar="(t) => { railTab = t; if (t === 'parts' || t === 'layers') abaEsq = t }" />
       <aside class="flex w-60 shrink-0 flex-col border-r border-nexo-border bg-white" aria-label="Paleta, layers e telas">
         <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas laterais">
