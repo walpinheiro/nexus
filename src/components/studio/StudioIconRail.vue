@@ -12,14 +12,14 @@ const emit = defineEmits<{ (e: 'selecionar', tab: RailTab): void }>()
 const studio = useStudio()
 const presence = usePresence()
 
-const BOTOES: { id: RailTab; rotulo: string; icone: string }[] = [
-  { id: 'parts', rotulo: 'Parts', icone: 'add_box' },
-  { id: 'layers', rotulo: 'Layers', icone: 'layers' },
-  { id: 'colors', rotulo: 'Cores', icone: 'palette' },
-  { id: 'shape', rotulo: 'Forma', icone: 'rounded_corner' },
-  { id: 'type', rotulo: 'Tipo', icone: 'text_fields' },
-  { id: 'motion', rotulo: 'Movimento', icone: 'animation' },
-  { id: 'ai', rotulo: 'IA', icone: 'auto_awesome' }
+const BOTOES: { id: RailTab; rotulo: string; dica: string; icone: string }[] = [
+  { id: 'parts', rotulo: 'Parts', dica: 'Partes', icone: 'add_box' },
+  { id: 'layers', rotulo: 'Layers', dica: 'Camadas', icone: 'layers' },
+  { id: 'colors', rotulo: 'Colors', dica: 'Cores', icone: 'palette' },
+  { id: 'shape', rotulo: 'Shape', dica: 'Forma', icone: 'rounded_corner' },
+  { id: 'type', rotulo: 'Type', dica: 'Tipo', icone: 'text_fields' },
+  { id: 'motion', rotulo: 'Motion', dica: 'Movimento', icone: 'animation' },
+  { id: 'ai', rotulo: 'AI', dica: 'IA', icone: 'auto_awesome' }
 ]
 
 const AI_CONFIG_KEY = 'nexo.v1.studio.aiConfig'
@@ -64,8 +64,8 @@ function salvarAi() {
         type="button"
         role="tab"
         :aria-selected="ativo === b.id"
-        :title="b.rotulo"
-        :aria-label="b.rotulo"
+        :title="b.dica"
+        :aria-label="`${b.rotulo} — ${b.dica}`"
         class="flex h-11 w-11 items-center justify-center rounded-full"
         :style="ativo === b.id ? { background: '#DCE4FF', color: '#1E3A5F' } : {}"
         :class="ativo === b.id ? '' : 'text-nexo-muted hover:bg-nexo-canvas'"
