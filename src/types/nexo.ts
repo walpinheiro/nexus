@@ -384,6 +384,28 @@ export interface BlocoWiki {
   corpo: string
 }
 
+// ARTEFATOS-FORMAIS-MOTOR (A1/A2) — cada gate tem ARTEFATO normativo
+// (specs 05-10 + fichas 13-16), não wiki.md genérica. Builders puros em
+// src/utils/artefatos.ts (dados reais do objeto, 'não informado' onde faltar,
+// sem DOM/md). Export .md (exportWiki.ts) vira secundário e é preservado.
+// Artefato = {gate, titulo, secoes: {titulo, itens: {rotulo, valor}[]}[]}
+// serializável (persiste em localStorage, determinístico).
+export interface ArtefatoItem {
+  rotulo: string
+  valor: string
+}
+
+export interface ArtefatoSecao {
+  titulo: string
+  itens: ArtefatoItem[]
+}
+
+export interface Artefato {
+  gate: GateId
+  titulo: string
+  secoes: ArtefatoSecao[]
+}
+
 // Solicitação de aprovação de Gate (governança com SoD e fila)
 export type SolicitacaoGateStatus = 'pendente' | 'aprovada' | 'negada'
 
