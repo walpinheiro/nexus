@@ -17,10 +17,13 @@ import type {
   Feature,
   GateId,
   IntegracaoSpec,
+  MapaRegrasValidacao,
   NexoObject,
   NfrSpec,
   PBI,
-  RiscoEstruturado
+  RiscoEstruturado,
+  TelaVinculo,
+  ValidacaoCampo
 } from '@/types/nexo'
 
 export interface GateWikiContexto {
@@ -208,6 +211,96 @@ const TITULOS_GATE: Record<GateId, string> = {
   G3: 'Artefato arquitetural e contratos',
   G4: 'Backlog de PBIs (Definition of Ready)',
   G5: 'Pipeline de entrega e evidências DoD'
+}
+
+export interface FeatureWikiContexto extends GateWikiContexto {
+  vinculos?: TelaVinculo[]
+  regras?: MapaRegrasValidacao
+}
+
+/**
+ * Z2 — wiki consolidada da feature: story + fluxo + BDD + telas vinculadas
+ * (via vinculos/telasDaFeature) + regras de validação por tela.
+ * Dados REAIS do grafo/seed; fallback 'não informado'. Null se feature ausente.
+ */
+export function exportarFeatureWiki(
+  featureId: string,
+  ctx: FeatureWikiContexto
+): string | null {
+  const nos = ctx.nos ?? []
+  const alvo = nos.find((n) => n.id === featureId)
+  if (!alvo || alvo.tipo !== 'feature') return null
+  const f = alvo as unknown as Feature
+  const vinculos = (ctx.vinculos ?? []).filter((v) => v.featureId === featureId)
+  const blocos: BlocoWiki[] = [
+    {
+      titulo: 'Objeto',
+      corpo: `${f.titulo} (feature ${f.id} · status ${f.status} · v${f.versao} · owner ${str(f.owner)})`
+    }
+  ]
+
+  // Story (ator/benefício/gatilho/precondições — espelha G2 Narrativa)
+  const pre = lista(f.precondicoes)
+  blocos.push({
+    titulo: 'Story',
+    corpo:
+      `Como ${str(f.ator)}, quero pagar com Pix para ${str(f.beneficio)}.\n` +
+      `Gatilho: ${str(f.gatilho)}.\n` +
+      `Pré-condições: ${pre.length > 0 ? pre.join('; ') : 'não informado'}.`
+  })
+
+  // Fluxo + alternativos
+  blocos.push({ titulo: 'Fluxo feliz', corpo: str(f.fluxo_feliz) })
+  const alts = lista(f.alternativos)
+  blocos.push({
+    titulo: 'Fluxos alternativos / exceções',
+    corpo: alts.length > 0 ? alts.map((x) => `- ${x}`).join('\n') : 'não informado'
+  })
+
+  // BDD
+  const bdds = Array.isArray(f.criterios_bdd) ? (f.criterios_bdd as CriterioBdd[]) : []
+  blocos.push({
+    titulo: 'Critérios BDD',
+    corpo: bdds.length > 0 ? bdds.map(bddTxt).join('\n\n') : 'não informado'
+  })
+
+  // Telas vinculadas + regras de validação por tela
+  if (vinculos.length === 0) {
+    blocos.push({ titulo: 'Telas vinculadas', corpo: 'não informado' })
+  } else {
+    const regras = ctx.regras ?? {}
+    blocos.push({
+      titulo: `Telas vinculadas (${vinculos.length})`,
+      corpo: vinculos
+        .map((v) => {
+          const campos: ValidacaoCampo[] = regras[v.telaId] ?? []
+          const regrasTxt = campos.length > 0
+            ? campos
+              .map((c) =>
+                `  - campo \`${c.campoId}\`: ` +
+                c.regras.map((r) => `${r.tipo}${r.parametro != null ? `(${r.parametro})` : ''} → erro: "${r.mensagemErro}"`).join('; ')
+              )
+              .join('\n')
+            : '  - sem regras de validação'
+          return `- \`${v.telaId}\` (origem ${v.origem}${v.passoRef ? `, passo ${v.passoRef}` : ''})\n${regrasTxt}`
+        })
+        .join('\n')
+    })
+  }
+
+  // PBIs vinculados (DoR resumida)
+  const pbis = nos.filter((n): n is PBI & NexoObject => {
+    if (n.tipo !== 'pbi') return false
+    return (n as unknown as PBI).feature_id === featureId
+  })
+  blocos.push({
+    titulo: 'PBIs vinculados',
+    corpo: pbis.length > 0
+      ? pbis.map((p) => `- ${p.titulo} (${p.status}; teste: ${str(p.estrategia_teste)})`).join('\n')
+      : 'não informado'
+  })
+
+  return comporMarkdown(`Wiki da feature — ${f.titulo}`, blocos)
 }
 
 /**
