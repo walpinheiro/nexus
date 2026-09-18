@@ -6,6 +6,7 @@ import { useGraph } from '@/stores/useGraph'
 import { useGate } from '@/stores/useGate'
 import { useUsers } from '@/stores/useUsers'
 import type { Classificacao } from '@/types/nexo'
+import IngestaoDialog from '@/components/projects/IngestaoDialog.vue'
 
 const projects = useProjects()
 const graph = useGraph()
@@ -25,6 +26,8 @@ const owner = ref('u-pm')
 const classificacao = ref<Classificacao>('internal')
 const erros = ref<{ campo: string; codigo: string; mensagem: string }[]>([])
 const avisoG0002 = ref('')
+// W1 TIPOS-TELA
+const tipoProjeto = ref<'novo' | 'existente'>('novo')
 
 function contagem(pid: string): { nos: number; arestas: number } {
   try {
@@ -66,9 +69,19 @@ function abrirCanvasProjeto(id: string) {
 }
 
 function abrirDialog() {
+  tipoProjeto.value = 'novo'
   dialogAberto.value = true
   erros.value = []
   avisoG0002.value = ''
+}
+
+function aoIngestaoConcluido() {
+  dialogAberto.value = false
+  tipoProjeto.value = 'novo'
+}
+
+function aoIngestaoCancelar() {
+  dialogAberto.value = false
 }
 
 function criar() {
@@ -136,8 +149,27 @@ const temProjetos = computed(() => projects.state.projetos.length > 0)
     </div>
 
     <div v-if="dialogAberto" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6" role="dialog" aria-modal="true" aria-label="Novo projeto (G0)" @click.self="dialogAberto = false">
-      <form class="max-h-full w-full max-w-xl overflow-auto rounded-card bg-white p-4 shadow-card" @submit.prevent="criar">
+      <div class="max-h-full w-full max-w-xl overflow-auto rounded-card bg-white p-4 shadow-card">
         <h2 class="font-bold">Novo projeto — Enquadramento G0</h2>
+        <div role="radiogroup" aria-label="Tipo de projeto" class="mt-3 flex gap-2">
+          <button
+            type="button"
+            role="radio"
+            :aria-checked="tipoProjeto === 'novo'"
+            class="min-h-[32px] flex-1 rounded-btn border px-3 py-1.5 text-sm"
+            :class="tipoProjeto === 'novo' ? 'border-nexo-primary bg-nexo-primary-soft font-semibold' : 'border-nexo-border'"
+            @click="tipoProjeto = 'novo'"
+          >Novo</button>
+          <button
+            type="button"
+            role="radio"
+            :aria-checked="tipoProjeto === 'existente'"
+            class="min-h-[32px] flex-1 rounded-btn border px-3 py-1.5 text-sm"
+            :class="tipoProjeto === 'existente' ? 'border-nexo-primary bg-nexo-primary-soft font-semibold' : 'border-nexo-border'"
+            @click="tipoProjeto = 'existente'"
+          >Existente</button>
+        </div>
+        <form v-if="tipoProjeto === 'novo'" @submit.prevent="criar">
         <div class="mt-3 space-y-2 text-sm">
           <label class="block">Título<input v-model="titulo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
           <label class="block">Contexto / dor observável (mín. 30 caracteres)<textarea v-model="contexto" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
@@ -169,7 +201,11 @@ const temProjetos = computed(() => projects.state.projetos.length > 0)
           <button type="submit" class="flex-1 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white">Criar projeto</button>
           <button type="button" class="rounded-btn border border-nexo-border px-3 py-2" @click="dialogAberto = false">Cancelar</button>
         </div>
-      </form>
+        </form>
+        <div v-else class="mt-3">
+          <IngestaoDialog @concluido="aoIngestaoConcluido" @cancelar="aoIngestaoCancelar" />
+        </div>
+      </div>
     </div>
   </div>
 </template>
