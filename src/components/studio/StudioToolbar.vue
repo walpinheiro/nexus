@@ -1,15 +1,16 @@
 <script setup lang="ts">
+import NovaAction from '@/components/common/NovaAction.vue'
 import { ref } from 'vue'
+import { FileJson, Hand, Image as ImageIcon, Maximize, MousePointer2, Play, Redo2, Share2, Sparkles, Undo2, ZoomIn, ZoomOut, LayoutGrid } from 'lucide-vue-next'
+import { VToolbar, VToolbarDivider, VToolbarGroup } from 'vueui-nova-kit'
 import { useStudio } from '@/stores/useStudio'
 import { encodeDoc } from '@/utils/studioShare'
-import M3Icon from './m3/M3Icon.vue'
-
-const props = defineProps<{ stageEl?: HTMLElement | null }>()
 
 const emit = defineEmits<{
   (e: 'preview'): void
   (e: 'abrir-prompt'): void
   (e: 'abrir-ask'): void
+  (e: 'fit'): void
 }>()
 
 const studio = useStudio()
@@ -46,7 +47,7 @@ async function copiarTexto(texto: string): Promise<boolean> {
 async function copiarShare() {
   try {
     const hash = await encodeDoc(studio.doc)
-    const ok = await copiarTexto(`${location.origin}${location.pathname}#/studio-full${hash}`)
+    const ok = await copiarTexto(`${location.origin}/studio-full${hash}`)
     flash(ok ? 'Share-link copiado.' : 'Não foi possível copiar — verifique a permissão do navegador.')
   } catch {
     flash('Não foi possível gerar o share-link.')
@@ -71,7 +72,7 @@ function exportarPNG() {
     .join('')
   const doc = `<svg xmlns="http://www.w3.org/2000/svg" width="${f.w}" height="${f.h}" viewBox="0 0 ${f.w} ${f.h}"><rect width="${f.w}" height="${f.h}" fill="#F7F8FB"/><text x="20" y="36" font-family="Inter,sans-serif" font-size="18" font-weight="bold" fill="#0F172A">${esc(f.name)}</text>${inner}</svg>`
   const url = URL.createObjectURL(new Blob([doc], { type: 'image/svg+xml;charset=utf-8' }))
-  const img = new Image()
+  const img = new window.Image()
   img.onload = () => {
     const c = document.createElement('canvas')
     c.width = f.w
@@ -101,30 +102,93 @@ function abrirPrompt() {
 </script>
 
 <template>
-  <div
-    class="flex w-full flex-wrap items-center gap-1 border border-nexo-border bg-nexo-surface p-1.5 text-xs shadow-card"
-    style="border-radius: 12px"
-    role="toolbar"
-    aria-label="Toolbar do Studio"
-  >
-    <span class="flex items-center gap-1" role="group" aria-label="Modo">
-      <button type="button" title="Selecionar (V)" aria-label="Selecionar" :aria-pressed="ferramenta === 'select'" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" :class="ferramenta === 'select' ? 'font-semibold text-nexo-primary' : ''" @click="ferramenta = 'select'"><M3Icon name="arrow_selector_tool" :size="18" label="Selecionar" />Selecionar</button>
-      <button type="button" title="Mover (H)" aria-label="Mover" :aria-pressed="ferramenta === 'hand'" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" :class="ferramenta === 'hand' ? 'font-semibold text-nexo-primary' : ''" @click="ferramenta = 'hand'"><M3Icon name="pan_tool" :size="18" label="Mover" />Mover</button>
-    </span>
-    <span class="flex items-center gap-1" role="group" aria-label="Zoom">
-      <button type="button" title="Reduzir" aria-label="Reduzir zoom" class="inline-flex items-center justify-center rounded-btn px-1.5 py-1" @click="studio.zoom = Math.max(0.3, studio.zoom - 0.1)">−</button>
-      <span class="min-w-12 text-center" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
-      <button type="button" title="Aproximar" aria-label="Aproximar zoom" class="inline-flex items-center justify-center rounded-btn px-1.5 py-1" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)">+</button>
-      <button type="button" title="Ajustar (0)" aria-label="Ajustar zoom" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.ajustarZoom(props.stageEl ?? null)"><M3Icon name="fit_screen" :size="18" label="Ajustar" />Ajustar</button>
-    </span>
-    <button type="button" title="Organizar (tidy)" aria-label="Organizar" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.tidy()"><M3Icon name="auto_fix" :size="18" label="Organizar" />Organizar</button>
-    <button type="button" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.undo()"><M3Icon name="undo" :size="18" label="Desfazer" />Desfazer</button>
-    <button type="button" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" class="inline-flex items-center justify-center gap-1 rounded-btn px-2 py-1" @click="studio.redo()"><M3Icon name="redo" :size="18" label="Refazer" />Refazer</button>
-    <button type="button" title="Preview modal (P)" aria-label="Abrir preview" class="inline-flex items-center justify-center gap-1 rounded-btn bg-nexo-primary px-3 py-1 font-semibold text-white" @click="emit('preview')"><M3Icon name="play_arrow" :size="18" label="Preview" />Preview</button>
-    <button type="button" title="Prompt (abre painel)" aria-label="Abrir prompt" class="inline-flex items-center justify-center gap-1 rounded-btn border border-nexo-border px-2 py-1" @click="abrirPrompt()"><M3Icon name="auto_awesome" :size="18" label="Prompt" />Prompt</button>
-    <button type="button" title="Compartilhar (copia share-link)" aria-label="Compartilhar" class="inline-flex items-center justify-center gap-1 rounded-btn border border-nexo-border px-2 py-1" @click="copiarShare()"><M3Icon name="share" :size="18" label="Compartilhar" />Share</button>
-    <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="exportarPNG()">PNG</button>
-    <button type="button" class="rounded-btn border border-nexo-border px-2 py-1" @click="exportarJSON()">JSON</button>
-    <span v-if="aviso" class="text-nexo-approved" role="status">{{ aviso }}</span>
-  </div>
+  <VToolbar class="studio-toolbar" variant="floating" size="sm" role="toolbar" aria-label="Ferramentas do Studio">
+    <VToolbarGroup aria-label="Seleção e navegação">
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Selecionar (V)" aria-label="Selecionar (V)" :aria-pressed="ferramenta === 'select'" :class="{ 'is-active': ferramenta === 'select' }" @click="ferramenta = 'select'"><MousePointer2 :size="17" /></NovaAction>
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Mover stage (H)" aria-label="Mover stage (H)" :aria-pressed="ferramenta === 'hand'" :class="{ 'is-active': ferramenta === 'hand' }" @click="ferramenta = 'hand'"><Hand :size="17" /></NovaAction>
+    </VToolbarGroup>
+    <VToolbarDivider />
+    <VToolbarGroup aria-label="Zoom e organização">
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Reduzir zoom" aria-label="Reduzir zoom" @click="studio.zoom = Math.max(0.05, studio.zoom - 0.1)"><ZoomOut :size="17" /></NovaAction>
+      <span class="studio-zoom" aria-live="polite">{{ Math.round(studio.zoom * 100) }}%</span>
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Aproximar zoom" aria-label="Aproximar zoom" @click="studio.zoom = Math.min(2, studio.zoom + 0.1)"><ZoomIn :size="17" /></NovaAction>
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Ajustar ao stage (0)" aria-label="Ajustar ao stage" @click="emit('fit')"><Maximize :size="17" /></NovaAction>
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Organizar componentes" aria-label="Organizar componentes" @click="studio.tidy()"><LayoutGrid :size="17" /></NovaAction>
+    </VToolbarGroup>
+    <VToolbarDivider />
+    <VToolbarGroup aria-label="Edição e preview">
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" @click="studio.undo()"><Undo2 :size="17" /></NovaAction>
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" @click="studio.redo()"><Redo2 :size="17" /></NovaAction>
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Abrir preview (P)" aria-label="Abrir preview" @click="emit('preview')"><Play :size="17" /></NovaAction>
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Abrir prompt" aria-label="Abrir prompt" @click="abrirPrompt()"><Sparkles :size="17" /></NovaAction>
+    </VToolbarGroup>
+    <VToolbarDivider />
+    <VToolbarGroup aria-label="Compartilhamento e exportação">
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Copiar link" aria-label="Copiar link de compartilhamento" @click="copiarShare()"><Share2 :size="17" /></NovaAction>
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Exportar PNG" aria-label="Exportar PNG" @click="exportarPNG()"><ImageIcon :size="17" /></NovaAction>
+      <NovaAction type="button" variant="outline" size="sm" class="studio-tool" title="Exportar JSON" aria-label="Exportar JSON" @click="exportarJSON()"><FileJson :size="17" /></NovaAction>
+    </VToolbarGroup>
+    <span v-if="aviso" class="studio-toolbar-status" role="status">{{ aviso }}</span>
+  </VToolbar>
 </template>
+
+<style scoped>
+.studio-toolbar {
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  @apply rounded-card border border-nexo-border bg-white shadow-card;
+}
+
+.studio-toolbar :deep(.v-toolbar__group) {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.studio-toolbar :deep(.v-toolbar__divider) {
+  height: 1.25rem;
+  margin-inline: 0.125rem;
+}
+
+.studio-tool {
+  display: inline-flex;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.studio-tool.is-active {
+  @apply border-nexo-primary bg-nexo-primary-soft text-nexo-primary;
+}
+
+.studio-zoom {
+  min-width: 2.5rem;
+  text-align: center;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  @apply text-nexo-text;
+}
+
+.studio-toolbar-status {
+  flex-basis: 100%;
+  padding: 0.125rem 0.375rem;
+  @apply text-nexo-text;
+  font-size: 0.6875rem;
+}
+
+@media (max-width: 640px) {
+  .studio-toolbar {
+    gap: 0.125rem;
+  }
+}
+</style>

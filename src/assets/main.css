@@ -17,13 +17,13 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid #1d4ed8;
+  outline: 2px solid var(--v-color-focus);
   outline-offset: 2px;
 }
 
 .canvas-dots {
-  background-color: #f7f8fb;
-  background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+  background-color: var(--v-color-bg);
+  background-image: radial-gradient(var(--v-color-neutral-200) 1px, transparent 1px);
   background-size: 20px 20px;
 }
 

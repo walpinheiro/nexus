@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import NovaField from '@/components/common/NovaField.vue'
+
+import NovaAction from '@/components/common/NovaAction.vue'
 import { ref, computed } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { CATEGORIES, specOf } from './m3/tokens'
@@ -135,80 +138,68 @@ function onDragStart(ev: DragEvent, kind: string) {
 </script>
 
 <template>
-  <div class="flex w-60 shrink-0 flex-col border-r border-nexo-border bg-white">
+  <div class="flex min-w-0 flex-1 flex-col bg-white">
     <div class="p-2">
-      <input v-model="busca" placeholder="Buscar part…" aria-label="Buscar part" class="w-full rounded-btn border border-nexo-border px-2 py-1 text-xs" />
+      <NovaField v-model="busca" placeholder="Buscar part…" aria-label="Buscar part" class="w-full rounded-btn border border-nexo-border px-2 py-1 text-xs" />
     </div>
     <div class="min-h-0 flex-1 overflow-auto p-2 pt-0">
       <section v-if="favoritosVisiveis.length > 0" aria-label="Favoritos">
         <h3 class="flex items-center gap-1.5 px-1 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-nexo-muted">
           <M3Icon name="star" :size="14" fill />Favoritos
         </h3>
-        <div class="grid gap-1.5" style="grid-template-columns: repeat(auto-fill, minmax(78px, 1fr))">
+        <div class="grid gap-1.5" style="grid-template-columns: repeat(auto-fill, minmax(68px, 1fr))">
           <div
             v-for="t in favoritosVisiveis"
             :key="'fav-' + t.kind"
-            draggable="true"
-            tabindex="0"
-            role="button"
-            :aria-label="`Adicionar ${t.rotulo}`"
-            :title="`${t.rotulo} — arraste para o stage ou duplo-clique`"
-            class="relative cursor-grab overflow-hidden rounded-badge border border-nexo-primary bg-white"
-            @dragstart="onDragStart($event, t.kind)"
-            @dblclick="criarNoCentro(t.kind)"
-            @keydown.enter="criarNoCentro(t.kind)"
+            class="relative min-w-0 overflow-hidden rounded-badge bg-white"
           >
-            <div class="flex h-[64px] items-center justify-center text-nexo-primary" aria-hidden="true">
-              <M3Icon :name="iconeDe(t.kind)" :size="28" />
-            </div>
-            <p class="truncate px-1 pb-1 text-center text-[11px] text-nexo-muted">{{ t.rotulo }}</p>
-            <button
+            <NovaAction type="button" variant="secondary" size="sm" draggable="true" :aria-label="`Adicionar ${t.rotulo}`" :title="`${t.rotulo} — clique para adicionar ou arraste para o stage`" class="flex h-[68px] w-full min-w-0 flex-col items-center justify-center gap-1 px-1 py-1 text-nexo-primary" @click="criarNoCentro(t.kind)" @dragstart="onDragStart($event, t.kind)">
+              <M3Icon :name="iconeDe(t.kind)" :size="22" />
+              <span class="w-full truncate text-center text-[11px] text-nexo-muted">{{ t.rotulo }}</span>
+            </NovaAction>
+            <NovaAction
               type="button"
+              variant="ghost"
+              size="sm"
               :aria-label="`Remover ${t.rotulo} dos favoritos`"
               :aria-pressed="true"
               title="Remover dos favoritos"
-              class="absolute right-0.5 top-0.5 text-nexo-primary"
+              class="absolute right-1 top-1 flex h-8 w-8 min-w-0 items-center justify-center p-0 text-nexo-primary"
               @click.stop="alternarFav(t.kind)"
             >
               <M3Icon name="star" :size="14" fill />
-            </button>
+            </NovaAction>
           </div>
         </div>
       </section>
       <section v-for="cat in porCategoria" :key="cat.id" :aria-label="cat.rotulo">
-        <button type="button" class="flex w-full items-center gap-1.5 px-1 pb-1 pt-2 text-left text-[11px] font-semibold uppercase tracking-wider text-nexo-muted" :aria-expanded="!recolhidas.has(cat.id)" :aria-label="recolhidas.has(cat.id) ? `Expandir ${cat.rotulo}` : `Recolher ${cat.rotulo}`" @click="alternarCat(cat.id)">
+        <NovaAction type="button" class="flex w-full items-center gap-1.5 px-1 pb-1 pt-2 text-left text-[11px] font-semibold uppercase tracking-wider text-nexo-muted" :aria-expanded="!recolhidas.has(cat.id)" :aria-label="recolhidas.has(cat.id) ? `Expandir ${cat.rotulo}` : `Recolher ${cat.rotulo}`" @click="alternarCat(cat.id)">
           <M3Icon :name="cat.icon" :size="14" />{{ cat.rotulo }}
           <M3Icon :name="recolhidas.has(cat.id) ? 'chevron_right' : 'expand_more'" :size="14" />
-        </button>
-        <div v-if="!recolhidas.has(cat.id)" class="grid gap-1.5" style="grid-template-columns: repeat(auto-fill, minmax(78px, 1fr))">
+        </NovaAction>
+        <div v-if="!recolhidas.has(cat.id)" class="grid gap-1.5" style="grid-template-columns: repeat(auto-fill, minmax(68px, 1fr))">
           <div
             v-for="t in cat.items"
             :key="t.kind"
-            draggable="true"
-            tabindex="0"
-            role="button"
-            :aria-label="`Adicionar ${t.rotulo}`"
-            :title="`${t.rotulo} — arraste para o stage ou duplo-clique`"
-            class="relative cursor-grab overflow-hidden rounded-badge border border-nexo-border bg-white hover:border-nexo-primary"
-            @dragstart="onDragStart($event, t.kind)"
-            @dblclick="criarNoCentro(t.kind)"
-            @keydown.enter="criarNoCentro(t.kind)"
+            class="relative min-w-0 overflow-hidden rounded-badge bg-white"
           >
-            <div class="flex h-[64px] items-center justify-center text-nexo-text" aria-hidden="true">
-              <M3Icon :name="iconeDe(t.kind)" :size="28" />
-            </div>
-            <p class="truncate px-1 pb-1 text-center text-[11px] text-nexo-muted">{{ t.rotulo }}</p>
-            <button
+            <NovaAction type="button" variant="outline" size="sm" draggable="true" :aria-label="`Adicionar ${t.rotulo}`" :title="`${t.rotulo} — clique para adicionar ou arraste para o stage`" class="flex h-[68px] w-full min-w-0 flex-col items-center justify-center gap-1 px-1 py-1 text-nexo-text" @click="criarNoCentro(t.kind)" @dragstart="onDragStart($event, t.kind)">
+              <M3Icon :name="iconeDe(t.kind)" :size="22" />
+              <span class="w-full truncate text-center text-[11px] text-nexo-muted">{{ t.rotulo }}</span>
+            </NovaAction>
+            <NovaAction
               type="button"
+              variant="ghost"
+              size="sm"
               :aria-label="favoritos.includes(t.kind) ? `Remover ${t.rotulo} dos favoritos` : `Adicionar ${t.rotulo} aos favoritos`"
               :aria-pressed="favoritos.includes(t.kind)"
               :title="favoritos.includes(t.kind) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'"
-              class="absolute right-0.5 top-0.5"
+              class="absolute right-1 top-1 flex h-8 w-8 min-w-0 items-center justify-center p-0"
               :class="favoritos.includes(t.kind) ? 'text-nexo-primary' : 'text-nexo-muted'"
               @click.stop="alternarFav(t.kind)"
             >
               <M3Icon :name="favoritos.includes(t.kind) ? 'star' : 'star_outline'" :size="14" :fill="favoritos.includes(t.kind)" />
-            </button>
+            </NovaAction>
           </div>
         </div>
       </section>

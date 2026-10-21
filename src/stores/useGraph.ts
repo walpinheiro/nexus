@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AuditEvent, Edge, ImpactPlan, MapaRegrasValidacao, NexoObject, NexoStatus, OrigemVinculoTela, ProposePatch, ResultadoValidacao, TelaVinculo, ValidacaoCampo, Waiver } from '@/types/nexo'
-import { seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedPbis, seedRegrasValidacao, seedVinculosTela } from '@/data/seed'
+import { seedEdges, seedEnquadramento, seedEpico, seedFeatures, seedPbis, seedProjeto, seedRegrasValidacao, seedVinculosTela } from '@/data/seed'
 import { validarFormulario } from '@/utils/validacao'
+import { dispensaVigenteNaData, prazoDispensaFuturo } from '@/utils/gates'
 import { useProjects } from '@/stores/useProjects'
+import { versaoDaPropostaEstaAtual } from '@/utils/gateReview'
 
 const KEY = 'nexo.v1.graph'
 const KEY_PATCH = 'nexo.v1.patches'
@@ -17,9 +19,10 @@ interface GraphState {
   selecionadoId: string | null
 }
 
-function loadGraph(): GraphState {
+function loadGraph(projectId?: string): GraphState {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = (projectId ? localStorage.getItem(`${KEY}.${projectId}`) : null) ??
+      ((!projectId || projectId === seedProjeto.id) ? localStorage.getItem(KEY) : null)
     if (raw) {
       const s = JSON.parse(raw) as GraphState
       // migração: garante x/y/z em nós antigos
@@ -56,14 +59,12 @@ function loadGraph(): GraphState {
         }
         i++
       }
-      if (!s.nos.some((n) => n.gate === 'G0' || n.id === 'enq-pix')) {
-        s.nos.unshift(seedEnquadramento as NexoObject)
-      }
       return s
     }
   } catch {
     // ignora e usa seed
   }
+  if (projectId && projectId !== seedProjeto.id) return { nos: [], arestas: [], selecionadoId: null }
   return {
     nos: [seedEnquadramento as NexoObject, seedEpico as NexoObject, ...(seedFeatures as NexoObject[]), ...(seedPbis as NexoObject[])],
     arestas: seedEdges,
@@ -91,12 +92,14 @@ export interface HistoryEntry {
 }
 
 export const useGraph = defineStore('graph', () => {
-  const state = ref<GraphState>(loadGraph())
-  const patches = ref<ProposePatch[]>(loadJson<ProposePatch[]>(KEY_PATCH, []))
-  const audit = ref<AuditEvent[]>(loadJson<AuditEvent[]>(KEY_AUDIT, []))
-  const waivers = ref<Waiver[]>(loadJson<Waiver[]>('nexo.v1.waivers', []))
+  const initialProjectId = useProjects().state.atualId
+  const state = ref<GraphState>(loadGraph(initialProjectId))
+  const patches = ref<ProposePatch[]>(loadJson<ProposePatch[]>(`${KEY_PATCH}.${initialProjectId}`, initialProjectId === seedProjeto.id ? loadJson<ProposePatch[]>(KEY_PATCH, []) : []))
+  const audit = ref<AuditEvent[]>(loadJson<AuditEvent[]>(`${KEY_AUDIT}.${initialProjectId}`, initialProjectId === seedProjeto.id ? loadJson<AuditEvent[]>(KEY_AUDIT, []) : []))
+  const waivers = ref<Waiver[]>(loadJson<Waiver[]>(`nexo.v1.waivers.${initialProjectId}`, initialProjectId === seedProjeto.id ? loadJson<Waiver[]>('nexo.v1.waivers', []) : []))
   // ONDA1 W1 — tabela de vínculos feature↔tela (declarativa; telas físicas vivem no Studio).
-  const vinculosTela = ref<TelaVinculo[]>(loadJson<TelaVinculo[]>(KEY_VINCULOS, [...seedVinculosTela]))
+  const vinculosTela = ref<TelaVinculo[]>(loadJson<TelaVinculo[]>(`${KEY_VINCULOS}.${initialProjectId}`, initialProjectId === seedProjeto.id ? loadJson<TelaVinculo[]>(KEY_VINCULOS, [...seedVinculosTela]) : []))
+  const regrasValidacao = ref<MapaRegrasValidacao>(loadJson<MapaRegrasValidacao>(`${KEY_REGRAS}.${initialProjectId}`, initialProjectId === seedProjeto.id ? loadJson<MapaRegrasValidacao>(KEY_REGRAS, { ...seedRegrasValidacao }) : {}))
   const plano = ref<ImpactPlan | null>(null)
 
   // undo/redo — pilha >= 50
@@ -119,6 +122,9 @@ export const useGraph = defineStore('graph', () => {
         localStorage.setItem(`nexo.v1.graph.${pid}`, JSON.stringify(state.value))
         localStorage.setItem(`nexo.v1.patches.${pid}`, JSON.stringify(patches.value))
         localStorage.setItem(`nexo.v1.audit.${pid}`, JSON.stringify(audit.value))
+        localStorage.setItem(`nexo.v1.waivers.${pid}`, JSON.stringify(waivers.value))
+        localStorage.setItem(`${KEY_VINCULOS}.${pid}`, JSON.stringify(vinculosTela.value))
+        localStorage.setItem(`${KEY_REGRAS}.${pid}`, JSON.stringify(regrasValidacao.value))
       }
     } catch {
       // segue com chaves legadas
@@ -126,7 +132,11 @@ export const useGraph = defineStore('graph', () => {
     localStorage.setItem(KEY, JSON.stringify(state.value))
     localStorage.setItem(KEY_PATCH, JSON.stringify(patches.value))
     localStorage.setItem(KEY_AUDIT, JSON.stringify(audit.value))
-    localStorage.setItem('nexo.v1.waivers', JSON.stringify(waivers.value))
+    if (useProjects().state.atualId === seedProjeto.id) {
+      localStorage.setItem('nexo.v1.waivers', JSON.stringify(waivers.value))
+      localStorage.setItem(KEY_VINCULOS, JSON.stringify(vinculosTela.value))
+      localStorage.setItem(KEY_REGRAS, JSON.stringify(regrasValidacao.value))
+    }
   }
 
   if (localStorage.getItem(KEY) == null) persist()
@@ -212,15 +222,29 @@ export const useGraph = defineStore('graph', () => {
     pushHistory()
     const agora = new Date().toISOString()
     const novoId = `${slug(dados.titulo)}-${Math.random().toString(36).slice(2, 6)}`
-    const { id: _ignId, project_id: _ignPid, ...resto } = dados
+    const atualId = useProjects().state.atualId
+    const projectId = atualId || dados.project_id || seedProjeto.id
+    const parentSolicitado = dados.parent_id ?? null
+    const parentExiste = parentSolicitado ? state.value.nos.some((n) => n.id === parentSolicitado && n.project_id === projectId) : false
+    const parentTipo = dados.tipo === 'pbi' ? 'feature' : 'epico'
+    const parentPadrao = (dados.tipo === 'feature'
+      ? state.value.nos.find((n) => n.project_id === projectId && n.tipo === parentTipo && n.gate !== 'G0')
+      : undefined)?.id ?? state.value.nos.find((n) => n.project_id === projectId && n.tipo === parentTipo)?.id ?? null
+    const gatePadrao: NexoObject['gate'] = dados.tipo === 'epico'
+      ? 'G0'
+      : dados.tipo === 'pbi'
+        ? 'G4'
+        : ['api', 'adr', 'decisao', 'risco', 'teste', 'regra'].includes(dados.tipo) ? 'G3' : 'G2'
+    const { id: _ignId, project_id: _ignPid, parent_id: _ignParentId, ...resto } = dados
     void _ignId
     void _ignPid
+    void _ignParentId
     const no: NexoObject = {
       id: novoId,
-      project_id: dados.project_id ?? 'proj-cobrancas',
+      project_id: projectId,
       descricao: '',
       status: 'draft',
-      gate: 'G2',
+      gate: gatePadrao,
       owner: atorId,
       contribuidores: [atorId],
       classificacao: 'internal',
@@ -228,7 +252,7 @@ export const useGraph = defineStore('graph', () => {
       fonte_refs: [],
       versao: 1,
       baseline: null,
-      parent_id: 'ep-pix',
+      parent_id: parentExiste ? parentSolicitado : parentPadrao,
       causa_stale: null,
       x: 200 + Math.random() * 400,
       y: 200 + Math.random() * 200,
@@ -247,6 +271,7 @@ export const useGraph = defineStore('graph', () => {
   function atualizarNo(id: string, patch: Partial<NexoObject>, atorId = 'u-pm', detalhe = 'editou'): boolean {
     const no = porId.value.get(id)
     if (!no) return false
+    if (patch.status && ['approved', 'baseline', 'validated', 'published'].includes(patch.status) && patch.status !== no.status) return false
     pushHistory()
     Object.assign(no, patch, { updated_at: new Date().toISOString() })
     registrar('UpdateObject', `${detalhe} "${no.titulo}"`, id, atorId)
@@ -329,13 +354,20 @@ export const useGraph = defineStore('graph', () => {
     destinoId: string,
     tipo: Edge['tipo'] = 'realiza',
     atorId = 'u-pm',
-    justificativa = ''
+    justificativa = '',
+    ports?: Pick<Edge, 'origemHandle' | 'destinoHandle'>
   ): Edge | null {
     if (!porId.value.get(origemId) || !porId.value.get(destinoId)) return null
     if (origemId === destinoId) return null
-    pushHistory()
     const o = porId.value.get(origemId)!
     const d = porId.value.get(destinoId)!
+    if (o.project_id !== d.project_id) return null
+    const duplicada = state.value.arestas.find((edge) =>
+      edge.origem_id === origemId && edge.destino_id === destinoId && edge.tipo === tipo &&
+      edge.origemHandle === ports?.origemHandle && edge.destinoHandle === ports?.destinoHandle
+    )
+    if (duplicada) return duplicada
+    pushHistory()
     const e: Edge = {
       edge_id: rid('e'),
       origem_id: origemId,
@@ -345,7 +377,8 @@ export const useGraph = defineStore('graph', () => {
       tipo,
       forca: 'required',
       autor_id: atorId,
-      justificativa: justificativa || `${o.titulo} ${tipo} ${d.titulo}`
+      justificativa: justificativa || `${o.titulo} ${tipo} ${d.titulo}`,
+      ...ports
     }
     state.value.arestas.push(e)
     registrar('CreateEdge', `ligou "${o.titulo}" → "${d.titulo}" como ${tipo}`, origemId, atorId)
@@ -367,10 +400,11 @@ export const useGraph = defineStore('graph', () => {
     alvoId: string,
     mudancas: { campo: string; de: string; para: string }[],
     justificativa: string,
-    atorId = 'u-pm'
+    atorId = 'u-pm',
+    versaoBase?: number
   ): ProposePatch | null {
     const no = porId.value.get(alvoId)
-    if (!no || mudancas.length === 0) return null
+    if (!no || mudancas.length === 0 || mudancas.some((m) => ['status', 'gate', 'project_id', 'versao', 'baseline'].includes(m.campo))) return null
     const p: ProposePatch = {
       patch_id: rid('p'),
       alvo_id: alvoId,
@@ -378,6 +412,7 @@ export const useGraph = defineStore('graph', () => {
       criado_em: new Date().toISOString(),
       mudancas,
       justificativa,
+      versaoBase: versaoBase ?? no.versao,
       status: 'pendente'
     }
     patches.value.unshift(p)
@@ -390,6 +425,12 @@ export const useGraph = defineStore('graph', () => {
     const p = patches.value.find((x) => x.patch_id === patchId)
     const no = p ? porId.value.get(p.alvo_id) : undefined
     if (!p || !no || p.status !== 'pendente') return false
+    if (p.versaoBase != null && !versaoDaPropostaEstaAtual(p.versaoBase, no.versao)) {
+      p.status = 'rejeitado'
+      registrar('PatchStaleRejected', `patch descartado: alvo mudou de v${p.versaoBase} para v${no.versao}`, no.id, atorId)
+      persist()
+      return false
+    }
     pushHistory()
     for (const m of p.mudancas) {
       const trimmed = m.para.trim()
@@ -436,11 +477,25 @@ export const useGraph = defineStore('graph', () => {
   function aplicarStatus(id: string, status: NexoStatus, atorId = 'u-pm'): boolean {
     const no = porId.value.get(id)
     if (!no) return false
+    if (['approved', 'baseline', 'validated', 'published'].includes(status)) return false
     pushHistory()
     no.status = status
     no.versao += 1
     no.updated_at = new Date().toISOString()
     registrar('StatusChanged', `"${no.titulo}" → ${status} (v${no.versao})`, id, atorId)
+    persist()
+    return true
+  }
+
+  /** Aplicado somente pelo fluxo de decisão de quorum do store de gates. */
+  function aplicarStatusGate(id: string, atorId: string): boolean {
+    const no = porId.value.get(id)
+    if (!no) return false
+    pushHistory()
+    no.status = 'approved'
+    no.versao += 1
+    no.updated_at = new Date().toISOString()
+    registrar('StatusChanged', `"${no.titulo}" → approved por quorum (v${no.versao})`, id, atorId)
     persist()
     return true
   }
@@ -509,15 +564,21 @@ export const useGraph = defineStore('graph', () => {
     const g = loadJson<GraphState>(`nexo.v1.graph.${pid}`, null as unknown as GraphState)
     if (g && Array.isArray(g.nos)) {
       state.value = g
+    } else if (pid === seedProjeto.id) {
+      state.value = loadGraph(pid)
     } else {
       state.value = { nos: [], arestas: [], selecionadoId: null }
     }
-    patches.value = loadJson<ProposePatch[]>(`nexo.v1.patches.${pid}`, [])
-    audit.value = loadJson<AuditEvent[]>(`nexo.v1.audit.${pid}`, [])
+    patches.value = loadJson<ProposePatch[]>(`nexo.v1.patches.${pid}`, pid === seedProjeto.id ? loadJson<ProposePatch[]>(KEY_PATCH, []) : [])
+    audit.value = loadJson<AuditEvent[]>(`nexo.v1.audit.${pid}`, pid === seedProjeto.id ? loadJson<AuditEvent[]>(KEY_AUDIT, []) : [])
+    waivers.value = loadJson<Waiver[]>(`nexo.v1.waivers.${pid}`, pid === seedProjeto.id ? loadJson<Waiver[]>('nexo.v1.waivers', []) : [])
+    vinculosTela.value = loadJson<TelaVinculo[]>(`${KEY_VINCULOS}.${pid}`, pid === seedProjeto.id ? loadJson<TelaVinculo[]>(KEY_VINCULOS, [...seedVinculosTela]) : [])
+    regrasValidacao.value = loadJson<MapaRegrasValidacao>(`${KEY_REGRAS}.${pid}`, pid === seedProjeto.id ? loadJson<MapaRegrasValidacao>(KEY_REGRAS, { ...seedRegrasValidacao }) : {})
     persist()
   }
 
   function resetSeed() {
+    if (useProjects().state.atualId !== seedProjeto.id) return
     undoStack.value = []
     redoStack.value = []
     state.value = {
@@ -534,7 +595,7 @@ export const useGraph = defineStore('graph', () => {
   function concederDispensa(alvoId: string, codigo: string, justificativa: string, owner: string, prazo: string, atorId = 'u-pm'): { ok: boolean; motivo: string } {
     if (justificativa.trim().length < 20) return { ok: false, motivo: 'Justificativa mínima de 20 caracteres.' }
     if (!owner.trim()) return { ok: false, motivo: 'Owner é obrigatório.' }
-    if (!(new Date(prazo).getTime() > Date.now())) return { ok: false, motivo: 'Prazo deve ser data futura.' }
+    if (!prazoDispensaFuturo(prazo)) return { ok: false, motivo: 'Prazo deve ser uma data futura.' }
     waivers.value.unshift({ id: rid('w'), alvoId, codigo, justificativa: justificativa.trim(), owner, prazo, em: new Date().toISOString() })
     registrar('WaiverGranted', `${codigo} dispensado em ${alvoId} por ${owner} até ${prazo}: ${justificativa.trim()}`, alvoId, atorId)
     persist()
@@ -544,7 +605,7 @@ export const useGraph = defineStore('graph', () => {
   function dispensaVigente(alvoId: string, codigo: string): Waiver | null {
     const w = waivers.value.find((x) => x.alvoId === alvoId && x.codigo === codigo)
     if (!w) return null
-    if (new Date(w.prazo).getTime() <= Date.now()) return null
+    if (!dispensaVigenteNaData(w.prazo)) return null
     return w
   }
 
@@ -582,7 +643,8 @@ export const useGraph = defineStore('graph', () => {
     }
     adicionarTelaIdNaFeature(featureId, tid)
     try {
-      localStorage.setItem(KEY_VINCULOS, JSON.stringify(vinculosTela.value))
+      localStorage.setItem(`${KEY_VINCULOS}.${useProjects().state.atualId}`, JSON.stringify(vinculosTela.value))
+      if (useProjects().state.atualId === seedProjeto.id) localStorage.setItem(KEY_VINCULOS, JSON.stringify(vinculosTela.value))
     } catch {
       // segue em memória
     }
@@ -654,10 +716,6 @@ export const useGraph = defineStore('graph', () => {
   // Contrato p/ VUE (M3TextField + M3Snackbar via Preview): carregarRegras retorna o
   // schema da feature (telas vinculadas + fallback montarEntradaStudio) e validarPreview
   // roda a engine pura. SEM DOM, SEM rede — determinístico.
-  const regrasValidacao = ref<MapaRegrasValidacao>(
-    loadJson<MapaRegrasValidacao>(KEY_REGRAS, { ...seedRegrasValidacao })
-  )
-
   /**
    * Schema de validação da feature: para cada tela vinculada (telasDaFeature),
    * retorna {telaId, campos}. Telas sem regra entram com campos [] (VUE = sem regras).
@@ -711,6 +769,7 @@ export const useGraph = defineStore('graph', () => {
     rejeitarPatch,
     marcarStale,
     aplicarStatus,
+    aplicarStatusGate,
     reorderZ,
     agrupar,
     desagrupar,

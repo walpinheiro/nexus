@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { AuditEvent, GateId, SolicitacaoGate } from '@/types/nexo'
-import { ORDEM_GATES, aprovadoresDoGate, avaliarGate, gateDesbloqueado } from '@/utils/gates'
+import { ORDEM_GATES, alvosDoGate, aprovadoresDoGate, avaliarGate, gateDesbloqueado, quorumGate, segregacaoFuncoesOk } from '@/utils/gates'
 import { useGraph } from '@/stores/useGraph'
 import { useProjects } from '@/stores/useProjects'
 import { useUsers } from '@/stores/useUsers'
@@ -13,11 +13,12 @@ export interface GateInfo {
   titulo: string
   status: 'rascunho' | 'revisao' | 'aprovado'
   baselineVersao?: number | null
+  baselineAlvoId?: string | null
   aprovadoPor?: string | null
   aprovadoEm?: string | null
 }
 
-import { seedGates } from '@/data/seed'
+import { seedEnquadramento, seedGates, seedProjeto } from '@/data/seed'
 
 const seed: GateInfo[] = seedGates
 
@@ -26,8 +27,16 @@ const seed: GateInfo[] = seedGates
 function backfillBaseline(gates: GateInfo[]): GateInfo[] {
   for (const g of gates) {
     const ref = seedGates.find((s) => s.id === g.id)
-    if (g.status === 'aprovado' && g.baselineVersao == null && ref?.baselineVersao != null) {
-      g.baselineVersao = ref.baselineVersao
+    if (g.status === 'aprovado' && ref) {
+      if (g.baselineVersao == null && ref.baselineVersao != null) g.baselineVersao = ref.baselineVersao
+      g.baselineAlvoId = g.baselineAlvoId ?? ref.baselineAlvoId ?? null
+      // Dados legados do projeto de demonstração apontavam G1 para o alvo G0
+      // (enq-pix), embora as features filhas pertençam ao épico refinado ep-pix.
+      // Corrige somente essa associação conhecida do seed; projetos reais nunca
+      // inferem ou fabricam uma baseline ausente.
+      if (g.id === 'G1' && g.baselineAlvoId === seedEnquadramento.id && ref.baselineAlvoId) {
+        g.baselineAlvoId = ref.baselineAlvoId
+      }
       g.aprovadoPor = g.aprovadoPor ?? ref.aprovadoPor ?? null
       g.aprovadoEm = g.aprovadoEm ?? ref.aprovadoEm ?? null
     }
@@ -35,14 +44,22 @@ function backfillBaseline(gates: GateInfo[]): GateInfo[] {
   return gates
 }
 
-function load(): GateInfo[] {
+function gatesVazios(): GateInfo[] {
+  return seed.map((g) => ({ ...g, status: 'rascunho', baselineVersao: null, baselineAlvoId: null, aprovadoPor: null, aprovadoEm: null }))
+}
+
+function load(projectId: string): GateInfo[] {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (raw) return backfillBaseline(JSON.parse(raw) as GateInfo[])
+    const scoped = localStorage.getItem(`${KEY}.${projectId}`)
+    if (scoped) return projectId === seedProjeto.id ? backfillBaseline(JSON.parse(scoped) as GateInfo[]) : JSON.parse(scoped) as GateInfo[]
+    if (projectId === seedProjeto.id) {
+      const raw = localStorage.getItem(KEY)
+      if (raw) return backfillBaseline(JSON.parse(raw) as GateInfo[])
+    }
   } catch {
     // ignora e usa seed
   }
-  return seed.map((s) => ({ ...s }))
+  return projectId === seedProjeto.id ? seed.map((s) => ({ ...s })) : gatesVazios()
 }
 
 export interface TentativaGate {
@@ -57,9 +74,9 @@ export interface TentativaGate {
 const KEY_TENT = 'nexo.v1.gateAttempts'
 const KEY_SOL = 'nexo.v1.gateRequests'
 
-function loadTent(): TentativaGate[] {
+function loadTent(projectId: string): TentativaGate[] {
   try {
-    const raw = localStorage.getItem(KEY_TENT)
+    const raw = localStorage.getItem(`${KEY_TENT}.${projectId}`) ?? (projectId === seedProjeto.id ? localStorage.getItem(KEY_TENT) : null)
     if (raw) return JSON.parse(raw) as TentativaGate[]
   } catch {
     // ignora
@@ -67,9 +84,9 @@ function loadTent(): TentativaGate[] {
   return []
 }
 
-function loadSol(): SolicitacaoGate[] {
+function loadSol(projectId: string): SolicitacaoGate[] {
   try {
-    const raw = localStorage.getItem(KEY_SOL)
+    const raw = localStorage.getItem(`${KEY_SOL}.${projectId}`) ?? (projectId === seedProjeto.id ? localStorage.getItem(KEY_SOL) : null)
     if (raw) return JSON.parse(raw) as SolicitacaoGate[]
   } catch {
     // ignora
@@ -78,9 +95,18 @@ function loadSol(): SolicitacaoGate[] {
 }
 
 export const useGate = defineStore('gate', () => {
-  const gates = ref<GateInfo[]>(load())
-  const tentativas = ref<TentativaGate[]>(loadTent())
-  const solicitacoes = ref<SolicitacaoGate[]>(loadSol())
+  const initialProjectId = useProjects().state.atualId
+  const gates = ref<GateInfo[]>(load(initialProjectId))
+  const tentativas = ref<TentativaGate[]>(loadTent(initialProjectId))
+  const solicitacoes = ref<SolicitacaoGate[]>(loadSol(initialProjectId))
+
+  function currentUserInProject(): boolean {
+    const user = useUsers().currentUser
+    const pid = useProjects().state.atualId
+    if (!user || !pid) return false
+    const projectIds = Array.isArray(user.projeto_ids) ? user.projeto_ids : []
+    return projectIds.includes(pid) || (pid === seedProjeto.id && projectIds.length === 0)
+  }
 
   function persist() {
     try {
@@ -93,9 +119,11 @@ export const useGate = defineStore('gate', () => {
     } catch {
       // segue com chaves legadas
     }
-    localStorage.setItem(KEY, JSON.stringify(gates.value))
-    localStorage.setItem(KEY_TENT, JSON.stringify(tentativas.value))
-    localStorage.setItem(KEY_SOL, JSON.stringify(solicitacoes.value))
+    if (useProjects().state.atualId === seedProjeto.id) {
+      localStorage.setItem(KEY, JSON.stringify(gates.value))
+      localStorage.setItem(KEY_TENT, JSON.stringify(tentativas.value))
+      localStorage.setItem(KEY_SOL, JSON.stringify(solicitacoes.value))
+    }
   }
 
   if (localStorage.getItem(KEY) == null) persist()
@@ -110,15 +138,15 @@ export const useGate = defineStore('gate', () => {
       }
       return null
     })()
-    gates.value = g ? backfillBaseline(g) : seed.map((s) => ({ ...s }))
+    gates.value = g ? (pid === seedProjeto.id ? backfillBaseline(g) : g) : pid === seedProjeto.id ? seed.map((s) => ({ ...s })) : gatesVazios()
     try {
-      const raw = localStorage.getItem(`nexo.v1.gateAttempts.${pid}`)
+      const raw = localStorage.getItem(`nexo.v1.gateAttempts.${pid}`) ?? (pid === seedProjeto.id ? localStorage.getItem(KEY_TENT) : null)
       tentativas.value = raw ? (JSON.parse(raw) as TentativaGate[]) : []
     } catch {
       tentativas.value = []
     }
     try {
-      const raw = localStorage.getItem(`nexo.v1.gateRequests.${pid}`)
+      const raw = localStorage.getItem(`nexo.v1.gateRequests.${pid}`) ?? (pid === seedProjeto.id ? localStorage.getItem(KEY_SOL) : null)
       solicitacoes.value = raw ? (JSON.parse(raw) as SolicitacaoGate[]) : []
     } catch {
       solicitacoes.value = []
@@ -135,10 +163,16 @@ export const useGate = defineStore('gate', () => {
   function aprovarGate(gateId: GateId, alvoId: string, proponenteId?: string): { ok: boolean; motivo: string } {
     const graph = useGraph()
     const users = useUsers()
+    const projects = useProjects()
     const ator = users.currentUser
+    if (proponenteId !== '__quorum__') return { ok: false, motivo: 'A aprovação requer quorum registrado na solicitação.' }
     const alvo = graph.noPorId(alvoId)
     if (!ator) return { ok: false, motivo: 'Nenhum usuário atual selecionado.' }
     if (!alvo) return { ok: false, motivo: 'Objeto alvo não encontrado.' }
+    if (alvo.project_id !== projects.state.atualId) return { ok: false, motivo: 'Objeto pertence a outro projeto.' }
+    if (!alvosDoGate(gateId, graph.state.nos, gates.value).some((n) => n.id === alvoId)) {
+      return { ok: false, motivo: `Objeto não é elegível para aprovação no ${gateId}.` }
+    }
     // (1) sequencial primeiro — DELTA Passo 2
     if (!gateDesbloqueado(gateId, gates.value)) {
       const idx = ORDEM_GATES.indexOf(gateId)
@@ -162,13 +196,15 @@ export const useGate = defineStore('gate', () => {
       graph.persist()
       return { ok: false, motivo }
     }
-    if (proponenteId && proponenteId === ator.id) {
-      const motivo = 'Proponente não pode ser o único aprovador; chame um segundo aprovador do gate.'
+    const solic = solicitacoes.value.find((s) => s.gate === gateId && s.alvoId === alvoId && s.status === 'pendente')
+    if (!solic || solic.versaoAlvo !== alvo.versao) return { ok: false, motivo: 'Solicitação ausente ou desatualizada para a versão do alvo.' }
+    if (!segregacaoFuncoesOk(alvo.owner, solic.solicitanteId, ator.id)) {
+      const motivo = 'Owner ou solicitante não pode aprovar a própria proposta; chame um segundo aprovador habilitado.'
       tentativas.value.unshift({ em: new Date().toISOString(), gate: gateId, alvoId, atorId: ator.id, ok: false, motivo })
       persist()
       return { ok: false, motivo }
     }
-    const ev = avaliarGate(alvo, graph.waivers.filter((w) => w.alvoId === alvoId).map((w) => ({ codigo: w.codigo, prazo: w.prazo })), gateId)
+    const ev = avaliarGate(alvo, graph.waivers.filter((w) => w.alvoId === alvoId).map((w) => ({ codigo: w.codigo, prazo: w.prazo })), gateId, graph.state.nos)
     if (!ev.bloqueantesOk) {
       const motivo = `Gate ${gateId} bloqueado: checklist bloqueante incompleto (${ev.bloqueantesFaltando.join(', ')}).`
       tentativas.value.unshift({ em: new Date().toISOString(), gate: gateId, alvoId, atorId: ator.id, ok: false, motivo })
@@ -179,11 +215,12 @@ export const useGate = defineStore('gate', () => {
       return { ok: false, motivo }
     }
     // aprova: baseline = versão atual, status approved
-    graph.aplicarStatus(alvoId, 'approved', ator.id)
+    if (!graph.aplicarStatusGate(alvoId, ator.id)) return { ok: false, motivo: 'Falha ao registrar status aprovado para este alvo.' }
     const g = gates.value.find((x) => x.id === gateId)
     if (g) {
       g.status = 'aprovado'
       g.baselineVersao = graph.noPorId(alvoId)?.versao ?? null
+      g.baselineAlvoId = alvoId
       g.aprovadoPor = ator.id
       g.aprovadoEm = new Date().toISOString()
     }
@@ -199,9 +236,17 @@ export const useGate = defineStore('gate', () => {
     solicitanteId: string
   ): { ok: boolean; motivo: string; solicitacao?: SolicitacaoGate } {
     const graph = useGraph()
+    const users = useUsers()
+    const projects = useProjects()
     const alvo = graph.noPorId(alvoId)
     if (!alvo) {
       return { ok: false, motivo: 'Objeto alvo não encontrado.' }
+    }
+    if (alvo.project_id !== projects.state.atualId) return { ok: false, motivo: 'Objeto pertence a outro projeto.' }
+    if (!currentUserInProject()) return { ok: false, motivo: 'Usuário não está associado ao projeto atual.' }
+    if (!users.currentUser || users.currentUser.id !== solicitanteId) return { ok: false, motivo: 'Solicitante não corresponde ao usuário atual.' }
+    if (!alvosDoGate(gateId, graph.state.nos, gates.value).some((n) => n.id === alvoId)) {
+      return { ok: false, motivo: `Objeto não é elegível para solicitar aprovação no ${gateId}.` }
     }
 
     if (!gateDesbloqueado(gateId, gates.value)) {
@@ -213,10 +258,17 @@ export const useGate = defineStore('gate', () => {
       return { ok: false, motivo }
     }
 
+    // Solicitação antiga deixa de bloquear uma nova quando o artefato evolui.
+    for (const antiga of solicitacoes.value.filter((s) => s.gate === gateId && s.alvoId === alvoId && s.status === 'pendente' && s.versaoAlvo !== alvo.versao)) {
+      antiga.status = 'negada'
+      antiga.motivo = 'Solicitação expirada: a versão do alvo mudou.'
+      graph.registrar('GateRequestExpired', antiga.motivo, alvoId, solicitanteId)
+    }
     const duplicada = solicitacoes.value.find(
-      (s) => s.gate === gateId && s.alvoId === alvoId && s.status === 'pendente'
+      (s) => s.gate === gateId && s.alvoId === alvoId && s.status === 'pendente' && s.versaoAlvo === alvo.versao
     )
     if (duplicada) {
+      persist()
       return { ok: false, motivo: 'Já existe uma solicitação pendente para este objeto e gate.' }
     }
 
@@ -226,7 +278,9 @@ export const useGate = defineStore('gate', () => {
       alvoId,
       solicitanteId,
       em: new Date().toISOString(),
-      status: 'pendente'
+      status: 'pendente',
+      versaoAlvo: alvo.versao,
+      aprovacoes: []
     }
 
     solicitacoes.value.unshift(nova)
@@ -263,12 +317,18 @@ export const useGate = defineStore('gate', () => {
 
     const graph = useGraph()
     const users = useUsers()
-    const decisor = users.state.usuarios.find((u) => u.id === decisorId) ?? users.currentUser
-    if (!decisor) {
+    const decisor = users.currentUser
+    if (!decisor || decisor.id !== decisorId) {
       return { ok: false, motivo: 'Decisor não encontrado.' }
     }
+    if (!currentUserInProject()) return { ok: false, motivo: 'Usuário não está associado ao projeto atual.' }
 
     const agora = new Date().toISOString()
+    const alvo = graph.noPorId(solicitacao.alvoId)
+    if (!alvo || alvo.project_id !== useProjects().state.atualId || alvo.versao !== solicitacao.versaoAlvo) {
+      return { ok: false, motivo: 'Alvo ausente, fora do projeto atual ou alterado; solicite revisão novamente.' }
+    }
+    if (!segregacaoFuncoesOk(alvo.owner, solicitacao.solicitanteId, decisor.id)) return { ok: false, motivo: 'Owner ou solicitante não pode aprovar a própria proposta.' }
 
     if (!aprovada) {
       const motivoFinal = motivo || 'Solicitação rejeitada pelo decisor.'
@@ -283,17 +343,26 @@ export const useGate = defineStore('gate', () => {
       return { ok: true, motivo: motivoFinal }
     }
 
-    // Segregação de Funções (SoD): passa o solicitanteId como proponenteId.
-    const r = aprovarGate(solicitacao.gate, solicitacao.alvoId, solicitacao.solicitanteId)
-    if (!r.ok) {
-      return { ok: false, motivo: r.motivo }
+    if (!aprovadoresDoGate(solicitacao.gate).includes(decisor.papel)) {
+      return { ok: false, motivo: `Papel ${decisor.papel} não pode aprovar ${solicitacao.gate}.` }
     }
 
-    solicitacao.status = 'aprovada'
-    solicitacao.decididaPor = decisorId
-    solicitacao.decididaEm = agora
-    solicitacao.motivo = motivo || r.motivo
+    const validacao = avaliarGate(alvo, graph.waivers.filter((w) => w.alvoId === alvo.id).map((w) => ({ codigo: w.codigo, prazo: w.prazo })), solicitacao.gate, graph.state.nos)
+    if (!validacao.bloqueantesOk) return { ok: false, motivo: `Checklist incompleto; não foi registrado voto. Faltam: ${validacao.bloqueantesFaltando.join(', ')}.` }
 
+    const votes = solicitacao.aprovacoes ?? (solicitacao.aprovacoes = [])
+    if (votes.some((v) => v.usuarioId === decisorId || v.papel === decisor.papel)) return { ok: false, motivo: 'Este usuário ou papel já votou nesta solicitação.' }
+    votes.push({ usuarioId: decisorId, papel: decisor.papel, em: agora, versao: alvo.versao, motivo })
+    const faltam = quorumGate(solicitacao.gate).filter((roles) => !roles.some((role) => votes.some((v) => v.papel === role && v.versao === alvo.versao)))
+    if (faltam.length) {
+      solicitacao.motivo = `Quorum parcial; faltam ${faltam.map((x) => x.join('/')).join(', ')}.`
+      graph.registrar('GateVoteRecorded', `${decisor.papel} aprovou; faltam ${faltam.length} grupos obrigatórios.`, solicitacao.alvoId, decisorId)
+      persist()
+      return { ok: true, motivo: solicitacao.motivo }
+    }
+    const r = aprovarGate(solicitacao.gate, solicitacao.alvoId, '__quorum__')
+    if (!r.ok) return r
+    solicitacao.status = 'aprovada'; solicitacao.decididaPor = decisorId; solicitacao.decididaEm = agora; solicitacao.motivo = motivo || r.motivo
     persist()
     return { ok: true, motivo: r.motivo }
   }
@@ -321,9 +390,12 @@ export const useGate = defineStore('gate', () => {
     return solicitacoes.value.filter((s) => {
       if (s.status !== 'pendente') return false
       const permitidos = aprovadoresDoGate(s.gate)
-      const papelAutorizado = permitidos.includes(atual.papel)
-      const naoEhProponente = s.solicitanteId !== atual.id
-      return papelAutorizado && naoEhProponente
+      const alvo = useGraph().noPorId(s.alvoId)
+      if (!alvo || !currentUserInProject() || !segregacaoFuncoesOk(alvo.owner, s.solicitanteId, atual.id)) return false
+      const votos = s.aprovacoes ?? []
+      const grupoPendente = quorumGate(s.gate).some((grupo) => grupo.includes(atual.papel) && !grupo.some((papel) => votos.some((v) => v.papel === papel && v.versao === s.versaoAlvo)))
+      const aindaNaoVotou = !votos.some((v) => v.usuarioId === atual.id || v.papel === atual.papel)
+      return permitidos.includes(atual.papel) && grupoPendente && aindaNaoVotou
     })
   })
 
@@ -338,7 +410,6 @@ export const useGate = defineStore('gate', () => {
     temSolicitacaoPendente,
     persist,
     trocarProjeto,
-    aprovarGate,
     solicitarApprove,
     decidirSolicitacao
   }

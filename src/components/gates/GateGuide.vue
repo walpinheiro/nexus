@@ -3,13 +3,16 @@ import { computed } from 'vue'
 import type { GateId, NexoObject } from '@/types/nexo'
 import { avaliarGate } from '@/utils/gates'
 import LucideIcon from '@/components/common/LucideIcon.vue'
+import { VButton } from 'vueui-nova-kit'
 
 interface Props {
   gateId: GateId
   alvo: NexoObject | null
   alvoId: string
+  nos?: NexoObject[]
   waivers?: { codigo: string; prazo: string }[]
   podeAprovarDireto?: boolean
+  alvoElegivel?: boolean
 }
 
 const props = defineProps<Props>()
@@ -32,7 +35,7 @@ interface PassoGuia {
 // Avaliação em tempo real dos checks do alvo
 const avaliacao = computed(() => {
   if (!props.alvo) return null
-  return avaliarGate(props.alvo, props.waivers, props.gateId)
+  return avaliarGate(props.alvo, props.waivers, props.gateId, props.nos)
 })
 
 function checkEstaOk(codigo?: string): boolean {
@@ -115,8 +118,8 @@ const passos = computed<PassoGuia[]>(() => {
           id: 'g0-p7',
           titulo: '7. Solicitar aprovação ao PM',
           descricao: 'PM avalia o one-pager gerado e registra a baseline de enquadramento.',
-          concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
-          acaoLabel: 'Solicitar approve',
+          concluido: props.alvoElegivel !== false && todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
+          acaoLabel: 'Solicitar aprovação',
           tipoAcao: 'solicitar'
         }
       ]
@@ -190,8 +193,8 @@ const passos = computed<PassoGuia[]>(() => {
           id: 'g1-p7',
           titulo: '7. Solicitar aprovação a Negócio e PM',
           descricao: 'Validação de valor, escopo e criação da baseline do PRD.',
-          concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
-          acaoLabel: 'Solicitar approve',
+          concluido: props.alvoElegivel !== false && todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
+          acaoLabel: 'Solicitar aprovação',
           tipoAcao: 'solicitar'
         }
       ]
@@ -201,12 +204,13 @@ const passos = computed<PassoGuia[]>(() => {
       const temNarrativa = checkEstaOk('FTR-001')
       const temFluxo = checkEstaOk('FTR-002')
       const temRegras = checkEstaOk('FTR-003')
-      const temOwner = checkEstaOk('FTR-004')
+      const temPermissoes = checkEstaOk('FTR-004')
+      const temPolicy = checkEstaOk('FTR-004')
       const temEstadosTela = checkEstaOk('FTR-005')
       const temResiliencia = checkEstaOk('FTR-006')
       const temBdd = checkEstaOk('FTR-007')
       const todosProntos =
-        temNarrativa && temFluxo && temRegras && temOwner && temEstadosTela && temResiliencia && temBdd
+        temNarrativa && temFluxo && temRegras && temPolicy && temEstadosTela && temResiliencia && temBdd
 
       return [
         {
@@ -238,11 +242,11 @@ const passos = computed<PassoGuia[]>(() => {
         },
         {
           id: 'g2-p4',
-          titulo: '4. Atribuir owner da feature',
-          descricao: 'Responsável formal pela especificação funcional.',
+          titulo: '4. Definir autorização para alterações de dados',
+          descricao: 'Declarar recurso, ação e policy que restringe quem pode alterar dados.',
           checkCodigo: 'FTR-004',
-          concluido: temOwner,
-          acaoLabel: 'Definir owner',
+          concluido: temPermissoes,
+          acaoLabel: 'Definir policy',
           tipoAcao: 'corrigir'
         },
         {
@@ -276,8 +280,8 @@ const passos = computed<PassoGuia[]>(() => {
           id: 'g2-p8',
           titulo: '8. Solicitar aprovação a PM, UX e Tech Lead',
           descricao: 'Revisão conjunta de comportamento funcional e story map.',
-          concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
-          acaoLabel: 'Solicitar approve',
+          concluido: props.alvoElegivel !== false && todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
+          acaoLabel: 'Solicitar aprovação',
           tipoAcao: 'solicitar'
         }
       ]
@@ -379,8 +383,8 @@ const passos = computed<PassoGuia[]>(() => {
           id: 'g3-p9',
           titulo: '9. Solicitar aprovação a Arquiteto, Tech Lead, Segurança e Dev',
           descricao: 'Aprovação conjunta da arquitetura de solução e contratos.',
-          concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
-          acaoLabel: 'Solicitar approve',
+          concluido: props.alvoElegivel !== false && todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
+          acaoLabel: 'Solicitar aprovação',
           tipoAcao: 'solicitar'
         }
       ]
@@ -491,8 +495,8 @@ const passos = computed<PassoGuia[]>(() => {
           id: 'g4-p9',
           titulo: '9. Solicitar aprovação a PO, Dev e QA',
           descricao: 'Validação de ausência de bloqueios para entrada em sprint (DoR).',
-          concluido: todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
-          acaoLabel: 'Solicitar approve',
+          concluido: props.alvoElegivel !== false && todosProntos && (obj?.status === 'approved' || obj?.status === 'validated'),
+          acaoLabel: 'Solicitar aprovação',
           tipoAcao: 'solicitar'
         }
       ]
@@ -566,8 +570,8 @@ const passos = computed<PassoGuia[]>(() => {
           id: 'g5-p7',
           titulo: '7. Solicitar aprovação final e entrega (DoD)',
           descricao: 'Registro formal da baseline de publicação e release aprovada por PO, Tech Lead e QA.',
-          concluido: todosProntos,
-          acaoLabel: 'Solicitar approve',
+          concluido: props.alvoElegivel !== false && todosProntos,
+          acaoLabel: 'Solicitar aprovação',
           tipoAcao: 'solicitar'
         }
       ]
@@ -586,6 +590,7 @@ const progressoPct = computed(() => {
 
 function executarAcao(passo: PassoGuia) {
   if (passo.tipoAcao === 'solicitar') {
+    if (!props.alvo || props.alvoElegivel === false) return
     emit('solicitar')
   } else if (passo.tipoAcao === 'studio') {
     emit('abrir-studio')
@@ -611,7 +616,7 @@ function executarAcao(passo: PassoGuia) {
     </div>
 
     <!-- Barra de Progresso -->
-    <div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+    <div class="h-1.5 w-full overflow-hidden rounded-full bg-nexo-draft-bg">
       <div
         class="h-full bg-nexo-primary transition-all duration-300"
         :style="{ width: `${progressoPct}%` }"
@@ -621,6 +626,9 @@ function executarAcao(passo: PassoGuia) {
     <p class="text-xs text-nexo-muted">
       Siga o passo a passo normativo abaixo para qualificar o objeto e solicitar o registro de baseline:
     </p>
+    <p v-if="!alvo || alvoElegivel === false" class="rounded border border-nexo-stale-border bg-nexo-stale-bg p-2 text-xs text-nexo-text" role="status">
+      {{ !alvo ? 'Nenhum alvo selecionado; não há progresso para avaliar.' : 'Alvo legado para inspeção. A etapa final permanece bloqueada até a baseline ser associada ao objeto.' }}
+    </p>
 
     <!-- Lista de Passos -->
     <div class="space-y-2 pt-1">
@@ -628,18 +636,18 @@ function executarAcao(passo: PassoGuia) {
         v-for="passo in passos"
         :key="passo.id"
         class="flex items-start justify-between gap-3 rounded-card border p-2.5 transition-colors"
-        :class="passo.concluido ? 'border-green-200 bg-green-50/40' : 'border-nexo-border/80 bg-nexo-canvas/30'"
+        :class="passo.concluido ? 'border-nexo-approved-border bg-nexo-approved-bg/40' : 'border-nexo-border/80 bg-nexo-canvas/30'"
       >
         <div class="flex items-start gap-2.5 min-w-0 flex-1">
           <span class="mt-0.5 shrink-0">
             <LucideIcon
               :name="passo.concluido ? 'check-circle-2' : 'circle'"
               :size="16"
-              :class="passo.concluido ? 'text-green-600' : 'text-gray-400'"
+              :class="passo.concluido ? 'text-nexo-approved' : 'text-nexo-muted'"
             />
           </span>
           <div class="min-w-0 flex-1 text-xs">
-            <p class="font-semibold" :class="passo.concluido ? 'text-green-950' : 'text-nexo-text'">
+            <p class="font-semibold" :class="passo.concluido ? 'text-nexo-approved' : 'text-nexo-text'">
               {{ passo.titulo }}
             </p>
             <p class="text-[11px] text-nexo-muted mt-0.5">
@@ -651,21 +659,22 @@ function executarAcao(passo: PassoGuia) {
         <div class="shrink-0 flex items-center">
           <span
             v-if="passo.concluido && passo.tipoAcao !== 'solicitar'"
-            class="text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded"
+            class="text-xs font-bold text-nexo-approved bg-nexo-approved-bg px-2 py-0.5 rounded"
           >
             Concluído
           </span>
-          <button
+          <VButton
             v-else
             type="button"
             class="rounded-btn px-3 py-1.5 text-sm font-semibold transition-colors min-h-[32px]"
             :class="passo.tipoAcao === 'solicitar'
               ? 'bg-nexo-primary text-white hover:bg-nexo-primary/90'
               : 'border border-nexo-border bg-white text-nexo-text hover:bg-nexo-canvas'"
+            :disabled="passo.tipoAcao === 'solicitar' && (!alvo || alvoElegivel === false)"
             @click="executarAcao(passo)"
           >
             {{ passo.acaoLabel }}
-          </button>
+          </VButton>
         </div>
       </div>
     </div>

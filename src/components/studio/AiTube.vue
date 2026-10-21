@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import NovaField from '@/components/common/NovaField.vue'
+
+import NovaAction from '@/components/common/NovaAction.vue'
+import { VDialog } from 'vueui-nova-kit'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { gerarDraft, type DraftSpec } from '@/ai/studioDraft'
@@ -45,6 +49,8 @@ const selectedAuthorId = ref<string>('u-pm')
 const currentAuthor = computed(() => {
   return authors.value.find((a) => a.userId === selectedAuthorId.value) || authors.value[0]
 })
+const generationProvider = 'local'
+const generationModel = 'template-ptbr'
 
 const selectedProvider = computed<StudioProvider>({
   get: () => (currentAuthor.value?.provider as StudioProvider) || 'OpenAI',
@@ -114,8 +120,8 @@ function confirmar() {
   const snapshotDoc = JSON.parse(JSON.stringify(studio.doc)) as typeof studio.doc
   const autorNome = currentAuthor.value?.name || 'Autor'
   const autorId = currentAuthor.value?.userId || 'u-pm'
-  const prov = currentAuthor.value?.provider || 'OpenAI'
-  const mod = currentAuthor.value?.model || 'gpt-5.6-luna'
+  const prov = generationProvider
+  const mod = generationModel
   const agora = Date.now()
 
   pilhaUndo.value.push({
@@ -204,7 +210,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
 
 <template>
   <!-- Dialog Ask an AI (M3E §5 fiel, aberto via toolbar) -->
-  <div v-if="aberto" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Ask an AI" @click.self="aberto = false">
+  <VDialog :model-value="aberto" variant="form" size="lg" :show-close="false" aria-label="Ask an AI" @update:model-value="aberto = $event" @close="aberto = false">
     <div class="flex max-h-full w-full max-w-xl flex-col rounded-card bg-white p-5 shadow-card">
         <!-- Header: Ask an AI + BETA + Copy link + Close -->
         <div class="flex items-center justify-between border-b border-nexo-border pb-3">
@@ -213,7 +219,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
             <span class="rounded-full bg-nexo-primary-soft px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider text-nexo-primary">BETA</span>
           </div>
           <div class="flex items-center gap-2">
-            <button
+            <NovaAction
               type="button"
               class="flex items-center gap-1 rounded-full border border-nexo-border px-2.5 py-1 text-xs text-nexo-muted hover:bg-slate-50 hover:text-nexo-text"
               :title="copiadoLink ? 'Copiado!' : 'Copiar link do projeto'"
@@ -221,23 +227,23 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
             >
               <M3Icon name="link" :size="15" label="Copiar link" />
               <span>{{ copiadoLink ? 'Copiado!' : 'Copy link' }}</span>
-            </button>
-            <button type="button" class="rounded-btn p-1 text-nexo-muted hover:bg-slate-100 hover:text-nexo-text" aria-label="Fechar" @click="aberto = false">
+            </NovaAction>
+            <NovaAction type="button" class="rounded-btn p-1 text-nexo-muted hover:bg-slate-100 hover:text-nexo-text" aria-label="Fechar" @click="aberto = false">
               <M3Icon name="close" :size="18" label="Fechar" />
-            </button>
+            </NovaAction>
           </div>
         </div>
 
         <!-- Parágrafo explicativo normativo M3E -->
         <p class="mt-3 text-xs leading-relaxed text-nexo-muted">
-          Describe what you want and press Draft with AI: the model from the AI tab draws the design on the canvas. Or copy the instruction for an AI agent such as Claude Code; open the link it replies with, or save its JSON and load it with Open project.
+          Este rascunho é montado localmente por regras e modelos em português; não chama os provedores listados. Para geração externa, copie a instrução e use seu agente de IA, depois importe o JSON ou link retornado.
         </p>
 
         <!-- Seletor de Autor (7 papéis seed) -->
         <div class="mt-3.5">
           <span class="mb-1 block text-xs font-semibold uppercase tracking-wider text-nexo-muted">Desenhando como</span>
           <div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Selecione o autor da geração">
-            <button
+            <NovaAction
               v-for="a in authors"
               :key="a.userId"
               type="button"
@@ -251,18 +257,18 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
                 {{ a.initials }}
               </span>
               <span class="max-w-[120px] truncate">{{ a.name }}</span>
-            </button>
+            </NovaAction>
           </div>
         </div>
 
         <!-- Provider radio (OpenAI/Claude/Gemini/DeepSeek) -->
         <div class="mt-2.5">
           <div class="mb-1 flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-nexo-muted">Provedor de IA</span>
-            <span class="font-mono text-xs text-nexo-muted">{{ currentAuthor?.model }}</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-nexo-muted">Perfil demonstrativo</span>
+            <span class="font-mono text-xs text-nexo-muted">local · template-ptbr</span>
           </div>
           <div class="grid grid-cols-4 gap-1 rounded-btn border border-nexo-border bg-slate-50 p-0.5" role="radiogroup" aria-label="Provedor de IA">
-            <button
+            <NovaAction
               v-for="prov in (['OpenAI', 'Claude', 'Gemini', 'DeepSeek'] as const)"
               :key="prov"
               type="button"
@@ -273,7 +279,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
               @click="selectedProvider = prov"
             >
               {{ prov }}
-            </button>
+            </NovaAction>
           </div>
         </div>
 
@@ -282,7 +288,7 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
           <label for="ai-tube-input" class="mb-1 block text-xs font-semibold text-nexo-text">
             What to build (e.g. an app to save and search recipes)
           </label>
-          <input
+          <NovaField
             id="ai-tube-input"
             ref="inputDescricaoRef"
             v-model="texto"
@@ -295,54 +301,54 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
 
         <!-- Linha de sub-ações (Add a key / Copy the instruction / AI settings) -->
         <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-nexo-border/60 pt-2 text-xs">
-          <span class="text-nexo-muted">Add a key to draft it right here</span>
+          <span class="text-nexo-muted">Chaves externas não são usadas por esta geração local.</span>
           <div class="flex items-center gap-1.5">
-            <button
+            <NovaAction
               type="button"
               class="flex items-center gap-1 rounded-btn border border-nexo-border px-2.5 py-1 text-xs text-nexo-muted hover:bg-slate-50 hover:text-nexo-text"
               @click="copiarInstrucao()"
             >
               <M3Icon name="content_copy" :size="14" label="Copiar instrução" />
               <span>{{ copiadoInstrucao ? 'Instrução copiada!' : 'Copy the instruction' }}</span>
-            </button>
-            <button
+            </NovaAction>
+            <NovaAction
               type="button"
               class="flex items-center gap-1 rounded-btn border border-nexo-border px-2.5 py-1 text-xs text-nexo-muted hover:bg-slate-50 hover:text-nexo-text"
               @click="emit('abrir-ai-settings')"
             >
               <M3Icon name="key" :size="14" label="Configurações de IA" />
               <span>AI settings</span>
-            </button>
+            </NovaAction>
           </div>
         </div>
 
         <!-- Botões de ação principais -->
         <div class="mt-4 flex items-center justify-between gap-2">
           <div class="flex items-center gap-2">
-            <button
+            <NovaAction
               type="button"
               class="rounded-btn bg-nexo-primary px-4 py-1.5 min-h-[32px] text-sm font-semibold text-white shadow-xs hover:opacity-95"
               @click="gerar()"
             >
-              Draft with AI
-            </button>
-            <button
+              Gerar rascunho local
+            </NovaAction>
+            <NovaAction
               v-if="preview.length > 0"
               type="button"
               class="rounded-btn border border-nexo-primary bg-nexo-primary-soft px-3.5 py-1.5 min-h-[32px] text-sm font-semibold text-nexo-primary hover:bg-nexo-primary/10"
               @click="confirmar()"
             >
               Confirmar
-            </button>
-            <button
+            </NovaAction>
+            <NovaAction
               v-if="preview.length > 0"
               type="button"
               class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm hover:bg-slate-50"
               @click="descartar()"
             >
               Descartar
-            </button>
-            <button
+            </NovaAction>
+            <NovaAction
               v-if="pilhaUndo.length > 0"
               type="button"
               class="flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 text-sm font-medium text-nexo-text hover:bg-slate-50"
@@ -352,15 +358,15 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
               <M3Icon name="undo" :size="14" />
               <span>Desfazer</span>
               <template v-if="ultimoUndo"> ({{ ultimoUndo.authorName }})</template>
-            </button>
+            </NovaAction>
           </div>
-          <button
+          <NovaAction
             type="button"
             class="rounded-btn border border-nexo-border px-3.5 py-1.5 min-h-[32px] text-sm font-medium text-nexo-text hover:bg-slate-50"
             @click="descartar(); aberto = false"
           >
             Close
-          </button>
+          </NovaAction>
         </div>
 
         <p v-if="aviso" class="mt-2 text-xs text-nexo-blocked" role="status">{{ aviso }}</p>
@@ -375,5 +381,5 @@ function itemPrev(p: DraftSpec, i: number): StudioItem {
           </li>
         </ul>
       </div>
-    </div>
+  </VDialog>
 </template>

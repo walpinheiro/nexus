@@ -153,6 +153,9 @@ export function resetAiConfig(storageKey: string = DEFAULT_AI_STORAGE_KEY): Stud
 </script>
 
 <script setup lang="ts">
+import NovaField from '@/components/common/NovaField.vue'
+
+import NovaAction from '@/components/common/NovaAction.vue'
 import { ref, computed, watch, onMounted } from 'vue'
 import M3Icon from './m3/M3Icon.vue'
 
@@ -268,7 +271,7 @@ function redefinirTudo() {
           AI settings
         </h2>
       </div>
-      <button
+      <NovaAction
         type="button"
         class="rounded-btn p-1 text-nexo-muted hover:bg-nexo-canvas hover:text-nexo-text"
         title="Fechar painel"
@@ -276,7 +279,7 @@ function redefinirTudo() {
         @click="emit('close')"
       >
         <M3Icon name="close" :size="dense ? 16 : 18" label="Fechar" />
-      </button>
+      </NovaAction>
     </header>
 
     <!-- Provider Radio Group -->
@@ -290,7 +293,7 @@ function redefinirTudo() {
         role="radiogroup"
         aria-label="Provedor de IA"
       >
-        <button
+        <NovaAction
           v-for="prov in providerList"
           :key="prov"
           type="button"
@@ -306,7 +309,7 @@ function redefinirTudo() {
           @click="selecionarProvedor(prov)"
         >
           {{ prov }}
-        </button>
+        </NovaAction>
       </div>
     </section>
 
@@ -319,7 +322,7 @@ function redefinirTudo() {
         >
           Model ID
         </label>
-        <button
+        <NovaAction
           v-if="currentProviderConfig.modelId !== currentMeta.defaultModel"
           type="button"
           class="text-[11px] text-nexo-primary hover:underline"
@@ -327,10 +330,10 @@ function redefinirTudo() {
           @click="redefinirModeloPadrao()"
         >
           Reset default
-        </button>
+        </NovaAction>
       </div>
       <div class="relative flex items-center">
-        <input
+        <NovaField
           :id="`model-id-${localConfig.activeProvider}`"
           v-model="currentProviderConfig.modelId"
           type="text"
@@ -353,7 +356,7 @@ function redefinirTudo() {
         >
           Base URL <span class="font-normal text-nexo-muted">(optional/custom)</span>
         </label>
-        <button
+        <NovaAction
           v-if="currentProviderConfig.baseUrl !== currentMeta.defaultBaseUrl"
           type="button"
           class="text-[11px] text-nexo-primary hover:underline"
@@ -361,9 +364,9 @@ function redefinirTudo() {
           @click="redefinirBaseUrlPadrao()"
         >
           Reset default
-        </button>
+        </NovaAction>
       </div>
-      <input
+      <NovaField
         :id="`base-url-${localConfig.activeProvider}`"
         v-model="currentProviderConfig.baseUrl"
         type="text"
@@ -393,7 +396,7 @@ function redefinirTudo() {
         </a>
       </div>
       <div class="relative flex items-center">
-        <input
+        <NovaField
           :id="`api-key-${localConfig.activeProvider}`"
           v-model="currentProviderConfig.apiKey"
           :type="showPassword ? 'text' : 'password'"
@@ -403,7 +406,7 @@ function redefinirTudo() {
           spellcheck="false"
           @input="notificarMudanca()"
         />
-        <button
+        <NovaAction
           type="button"
           class="absolute right-1.5 p-1 text-nexo-muted hover:text-nexo-text"
           :title="showPassword ? 'Ocultar chave' : 'Exibir chave'"
@@ -415,7 +418,7 @@ function redefinirTudo() {
             :size="15"
             :label="showPassword ? 'Ocultar' : 'Exibir'"
           />
-        </button>
+        </NovaAction>
       </div>
     </section>
 
@@ -438,7 +441,7 @@ function redefinirTudo() {
 
     <!-- Botões de Ação Auxiliares -->
     <footer class="mt-auto flex items-center justify-between border-t border-nexo-border pt-3">
-      <button
+      <NovaAction
         type="button"
         class="inline-flex items-center gap-1 rounded-btn px-2 py-1 text-xs text-nexo-muted hover:bg-nexo-canvas hover:text-nexo-text"
         title="Redefinir todas as configurações de IA"
@@ -446,7 +449,7 @@ function redefinirTudo() {
       >
         <M3Icon name="restart_alt" :size="14" label="Reset" />
         Redefinir tudo
-      </button>
+      </NovaAction>
 
       <div class="flex items-center gap-2">
         <span
@@ -456,13 +459,13 @@ function redefinirTudo() {
           <M3Icon name="check_circle" :size="13" label="Salvo" />
           Salvo!
         </span>
-        <button
+        <NovaAction
           type="button"
           class="rounded-btn bg-nexo-primary px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-95"
           @click="salvarExplicitamente()"
         >
           Salvar
-        </button>
+        </NovaAction>
       </div>
     </footer>
   </div>

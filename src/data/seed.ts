@@ -566,8 +566,8 @@ export const seedUsers: User[] = [
 ]
 
 export const seedGates: GateInfo[] = [
-  { id: 'G0', titulo: 'Enquadramento', status: 'aprovado', baselineVersao: 1, aprovadoPor: 'u-pm', aprovadoEm: '2026-01-01T00:00:00.000Z' },
-  { id: 'G1', titulo: 'Épicos', status: 'aprovado', baselineVersao: 1, aprovadoPor: 'u-pm', aprovadoEm: '2026-01-01T00:00:00.000Z' },
+  { id: 'G0', titulo: 'Enquadramento', status: 'aprovado', baselineVersao: 1, baselineAlvoId: seedEnquadramento.id, aprovadoPor: 'u-pm', aprovadoEm: '2026-01-01T00:00:00.000Z' },
+  { id: 'G1', titulo: 'Épicos', status: 'aprovado', baselineVersao: 1, baselineAlvoId: seedEpico.id, aprovadoPor: 'u-pm', aprovadoEm: '2026-01-01T00:00:00.000Z' },
   { id: 'G2', titulo: 'Features', status: 'revisao' },
   { id: 'G3', titulo: 'Arquitetura', status: 'rascunho' },
   { id: 'G4', titulo: 'PBIs', status: 'rascunho' },

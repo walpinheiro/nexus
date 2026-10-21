@@ -123,6 +123,8 @@ export interface PBI extends NexoObject {
   escopo_in: string[]
   escopo_out: string[]
   dependencias: string[]
+  dependencias_decisao?: 'nenhuma' | 'resolvidas' | 'pendentes'
+  dependencias_justificativa?: string
   estrategia_teste: string
   criterios_bdd: CriterioBdd[]
   estimativa?: string
@@ -199,6 +201,8 @@ export interface Edge {
   forca: EdgeForca
   autor_id: string
   justificativa: string
+  origemHandle?: 'l' | 'r' | 't' | 'b'
+  destinoHandle?: 'l' | 'r' | 't' | 'b'
 }
 
 export type NivelZoom =
@@ -229,6 +233,7 @@ export interface ProposePatch {
   criado_em: string
   mudancas: PatchMudanca[]
   justificativa: string
+  versaoBase?: number
   status: 'pendente' | 'aceito' | 'rejeitado'
 }
 
@@ -268,6 +273,8 @@ export interface GateCheck {
   descricao: string
   severidade: 'bloqueante' | 'aviso'
   ok: boolean
+  dispensaExpirada?: boolean
+  prazoDispensaExpirada?: string
 }
 
 // Multi-projeto (DELTA Passo 1): escopo isolado por projeto.
@@ -430,5 +437,7 @@ export interface SolicitacaoGate {
   decididaPor?: string
   decididaEm?: string
   motivo?: string
+  versaoAlvo?: number
+  aprovacoes?: { usuarioId: string; papel: Role; em: string; versao: number; motivo?: string }[]
 }
 

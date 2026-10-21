@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import NovaAction from '@/components/common/NovaAction.vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { useStudio } from '@/stores/useStudio'
 import { useGraph } from '@/stores/useGraph'
 import { paletteOf } from './m3/theme'
@@ -27,10 +28,10 @@ function formatarOrigem(o?: string): string {
 }
 
 function badgeOrigemClass(o?: string): string {
-  if (o === 'fluxo_feliz') return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-  if (o === 'alternativo') return 'bg-amber-50 text-amber-700 border border-amber-200'
-  if (o === 'bdd') return 'bg-blue-50 text-blue-700 border border-blue-200'
-  return 'bg-slate-100 text-slate-700 border border-slate-200'
+  if (o === 'fluxo_feliz') return 'bg-nexo-approved-bg text-nexo-approved border border-nexo-approved-border'
+  if (o === 'alternativo') return 'bg-nexo-stale-bg text-nexo-stale border border-nexo-stale-border'
+  if (o === 'bdd') return 'bg-nexo-primary-soft text-nexo-primary border border-nexo-primary-border'
+  return 'bg-nexo-canvas text-nexo-text border border-nexo-border'
 }
 const emit = defineEmits<{
   (e: 'preview'): void
@@ -40,6 +41,11 @@ const emit = defineEmits<{
 }>()
 const props = defineProps<{ ferramenta?: 'select' | 'hand' }>()
 const stageEl = ref<HTMLDivElement | null>(null)
+const toolbarWrap = ref<HTMLDivElement | null>(null)
+const ajusteAutomatico = ref(true)
+let observerDeViewport: ResizeObserver | undefined
+let aplicandoAjuste = false
+let zoomAlvoAjuste = 0.7
 const caixa = ref<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 let panAtivo = false
 let panStart = { x: 0, y: 0, px: 0, py: 0 }
@@ -47,6 +53,7 @@ let panStart = { x: 0, y: 0, px: 0, py: 0 }
 const middlePan = ref(false)
 
 function iniciarPan(ev: PointerEvent) {
+  ajusteAutomatico.value = false
   panAtivo = true
   panStart = { x: ev.clientX, y: ev.clientY, px: studio.pan[0], py: studio.pan[1] }
   ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
@@ -89,10 +96,58 @@ function paraMundo(ev: { clientX: number; clientY: number }, base: DOMRect): { x
   }
 }
 
+function ajustarFrameNoViewport() {
+  const el = stageEl.value
+  const frame = f.value
+  if (!el || !frame) return
+  const rect = el.getBoundingClientRect()
+  if (rect.width < 1 || rect.height < 1) return
+  const toolbarHeight = toolbarWrap.value?.getBoundingClientRect().height ?? 40
+  const safeTop = Math.ceil(toolbarHeight + 36)
+  const availableWidth = Math.max(1, rect.width - 24)
+  const availableHeight = Math.max(1, rect.height - safeTop - 16)
+  const zoom = Math.min(zoomAlvoAjuste, availableWidth / frame.w, availableHeight / frame.h, 2)
+  const left = Math.max(12, (rect.width - frame.w * zoom) / 2)
+  const top = safeTop + Math.max(0, (availableHeight - frame.h * zoom) / 2)
+  aplicandoAjuste = true
+  studio.zoom = zoom
+  studio.pan = [left - frame.x * zoom, top - frame.y * zoom]
+  queueMicrotask(() => { aplicandoAjuste = false })
+}
+
+function ajustarFrameManualmente() {
+  ajusteAutomatico.value = true
+  zoomAlvoAjuste = 2
+  ajustarFrameNoViewport()
+}
+
+watch(() => studio.zoom, () => {
+  if (!aplicandoAjuste) ajusteAutomatico.value = false
+}, { flush: 'sync' })
+
+watch(() => [f.value?.id, f.value?.w, f.value?.h], () => {
+  if (ajusteAutomatico.value) void nextTick(ajustarFrameNoViewport)
+})
+
+onMounted(async () => {
+  await nextTick()
+  ajustarFrameNoViewport()
+  if (stageEl.value && typeof ResizeObserver !== 'undefined') {
+    observerDeViewport = new ResizeObserver(() => {
+      if (ajusteAutomatico.value) ajustarFrameNoViewport()
+    })
+    observerDeViewport.observe(stageEl.value)
+    if (toolbarWrap.value) observerDeViewport.observe(toolbarWrap.value)
+  }
+})
+
+onBeforeUnmount(() => observerDeViewport?.disconnect())
+
 const dragBase = new Map<string, { x: number; y: number }>()
 
 function onPointerDownFundo(ev: PointerEvent) {
   if ((ev.target as HTMLElement).closest('[data-part],button,input,select,textarea,a')) return
+  ajusteAutomatico.value = false
   // Middle-press inicia pan em qualquer ferramenta; suprime caixa e autoscroll.
   if (ev.button === 1) {
     ev.preventDefault()
@@ -300,7 +355,7 @@ function onKeydown(ev: KeyboardEvent) {
   if (ev.key === 'p' || ev.key === 'P') alternarPreview()
   else if (ev.key === '0') studio.zoom = 0.7
   else if (ev.key === '+' || ev.key === '=') studio.zoom = Math.min(2, studio.zoom + 0.1)
-  else if (ev.key === '-') studio.zoom = Math.max(0.3, studio.zoom - 0.1)
+  else if (ev.key === '-') studio.zoom = Math.max(0.05, studio.zoom - 0.1)
   else if (ev.key === 'Escape') {
     if (modo.value === 'preview') modo.value = 'edit'
     else studio.selecionados = []
@@ -334,13 +389,13 @@ defineExpose({ alternarPreview })
     @auxclick="($event.button === 1 ? $event.preventDefault() : undefined)"
     @wheel.prevent="
       $event.ctrlKey || $event.metaKey
-        ? (studio.zoom = Math.min(2, Math.max(0.3, studio.zoom * ($event.deltaY < 0 ? 1.1 : 0.9))))
+        ? (studio.zoom = Math.min(2, Math.max(0.05, studio.zoom * ($event.deltaY < 0 ? 1.1 : 0.9))))
         : (studio.pan = [studio.pan[0] - $event.deltaX, studio.pan[1] - $event.deltaY])
     "
   >
-    <div class="pointer-events-none absolute left-2 right-2 top-2 z-20 flex justify-center">
-      <div class="pointer-events-auto max-w-full overflow-x-auto" style="border-radius: 28px">
-        <StudioToolbar v-model:ferramenta="ferramenta" :stage-el="stageEl" @preview="emit('preview')" @abrir-prompt="emit('abrir-prompt')" @abrir-ask="emit('abrir-ask')" />
+    <div class="pointer-events-none absolute left-3 right-3 top-3 z-20 flex justify-start">
+      <div ref="toolbarWrap" class="pointer-events-auto min-w-0 max-w-full" @pointerdown.stop @wheel.stop>
+        <StudioToolbar v-model:ferramenta="ferramenta" @fit="ajustarFrameManualmente" @preview="emit('preview')" @abrir-prompt="emit('abrir-prompt')" @abrir-ask="emit('abrir-ask')" />
       </div>
     </div>
     <div
@@ -355,10 +410,11 @@ defineExpose({ alternarPreview })
       <template v-for="fr in studio.doc.frames" :key="fr.id">
         <div
           class="absolute overflow-hidden rounded-card border-2 bg-white"
-          :style="{ left: fr.x + 'px', top: fr.y + 'px', width: fr.w + 'px', height: fr.h + 'px', borderColor: fr.id === studio.screenId ? '#1D4ED8' : '#CBD5E1' }"
+          :class="fr.id === studio.screenId ? 'border-nexo-primary' : 'border-nexo-border'"
+          :style="{ left: fr.x + 'px', top: fr.y + 'px', width: fr.w + 'px', height: fr.h + 'px' }"
           @pointerdown.stop="studio.screenId = fr.id; studio.persist()"
         >
-          <div class="flex items-center justify-between gap-2 p-2 text-xs font-semibold text-nexo-muted">
+          <div class="flex min-h-10 items-center justify-between gap-2 border-b border-nexo-border bg-nexo-surface px-3 py-2 text-xs font-semibold text-nexo-text">
             <span class="truncate">{{ fr.name }} · {{ fr.w }}×{{ fr.h }}</span>
             <div class="flex items-center gap-1.5 shrink-0">
               <span
@@ -369,14 +425,14 @@ defineExpose({ alternarPreview })
               >
                 {{ formatarOrigem(origemDaTela(fr.id)) }}
               </span>
-              <button
+              <NovaAction
                 type="button"
                 class="rounded-btn border border-nexo-border bg-white px-1.5 py-0.5 text-[10px]"
                 :title="fr.w >= 1280 ? 'Trocar para phone 412x892' : 'Trocar para desktop 1280x800'"
                 @click.stop="studio.setFramePreset(fr.id, fr.w >= 1280 ? 'phone' : 'desktop')"
               >
                 {{ fr.w >= 1280 ? 'desktop → phone' : 'phone → desktop' }}
-              </button>
+              </NovaAction>
             </div>
           </div>
         </div>

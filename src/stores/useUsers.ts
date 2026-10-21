@@ -96,19 +96,20 @@ export const useUsers = defineStore('users', () => {
     return `${u.papel} não tem permissão "${acao}".`
   }
 
-  function criarUsuario(nome: string, papel: Role): User {
+  function criarUsuario(nome: string, papel: Role, projetoId = 'proj-cobrancas'): User {
     const id = `u-${Date.now().toString(36)}`
-    const u: User = { id, nome, papel, projeto_ids: ['proj-cobrancas'] }
+    const u: User = { id, nome, papel, projeto_ids: [projetoId] }
     state.value.usuarios.push(u)
     persist()
     return u
   }
 
-  function editarUsuario(id: string, nome: string, papel: Role): boolean {
+  function editarUsuario(id: string, nome: string, papel: Role, projetoId?: string): boolean {
     const u = state.value.usuarios.find((x) => x.id === id)
     if (!u) return false
     u.nome = nome
     u.papel = papel
+    if (projetoId && !u.projeto_ids.includes(projetoId)) u.projeto_ids.push(projetoId)
     persist()
     return true
   }

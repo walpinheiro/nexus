@@ -11,6 +11,7 @@ import PreviewModal from '@/components/studio/PreviewModal.vue'
 import { montarEntradaStudio } from '@/ai/gateParaStudio'
 import { exportarFeatureWiki } from '@/utils/exportWiki'
 import type { Feature, NexoObject } from '@/types/nexo'
+import { VButton, VBadge, VTextInput, VSelect, VEmptyState, VDialog, VCard } from 'vueui-nova-kit'
 
 const graph = useGraph()
 const users = useUsers()
@@ -18,8 +19,29 @@ const gatesStore = useGate()
 const router = useRouter()
 const filtro = ref('')
 const filtroEstado = ref('')
-const checklistRef = ref<{ definirAlvo: (id: string) => void } | null>(null)
 const checklistAlvo = ref('')
+const checklistAberto = ref(false)
+const estados = [
+  { value: '', label: 'Todos os estados' }, { value: 'draft', label: 'Rascunho' }, { value: 'review', label: 'Em revisão' },
+  { value: 'approved', label: 'Aprovado' }, { value: 'baseline', label: 'Baseline' }, { value: 'stale', label: 'Desatualizado' },
+  { value: 'regenerated', label: 'Regenerado' }, { value: 'validated', label: 'Validado' }, { value: 'published', label: 'Publicado' }
+]
+const estadoLabel = (status: string) => estados.find((e) => e.value === status)?.label ?? status
+function estadoVariant(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'outlined' {
+  if (status === 'approved' || status === 'baseline' || status === 'validated' || status === 'published') return 'success'
+  if (status === 'stale' || status === 'regenerated') return 'warning'
+  if (status === 'review') return 'neutral'
+  if (status === 'blocked') return 'danger'
+  return 'outlined'
+}
+
+function nomeResponsavel(ownerId: string): string {
+  return users.state.usuarios.find((user) => user.id === ownerId)?.nome ?? 'Responsável não identificado'
+}
+
+function rotuloTipo(no: NexoObject): string {
+  return no.tipo === 'epico' && no.gate === 'G0' ? 'Enquadramento G0' : no.tipo === 'epico' ? 'Épico' : no.tipo.toUpperCase()
+}
 
 // Ações W4 por feature
 const previewAberto = ref(false)
@@ -187,17 +209,31 @@ function confirmarEdicao() {
   cancelarEdicao()
 }
 
-function onBlurConfirmar() {
-  const no = graph.noPorId(editId.value)
-  if (!no || !editCampo.value) return
-  const atual = String((no as unknown as Record<string, unknown>)[editCampo.value] ?? '')
-  if (editValor.value.trim() !== atual) confirmarEdicao()
-  else cancelarEdicao()
-}
-
 function verChecklist(id: string) {
   checklistAlvo.value = id
-  checklistRef.value?.definirAlvo(id)
+  checklistAberto.value = true
+}
+
+function checklistDo(no: NexoObject) {
+  return avaliarGate(no, waiversDe(no.id)).checks
+}
+
+function resumoChecklist(no: NexoObject) {
+  const checks = checklistDo(no)
+  const pendentes = checks.filter((check) => !check.ok)
+  return {
+    checks,
+    total: checks.length,
+    completos: checks.length - pendentes.length,
+    pendentes: pendentes.length,
+    bloqueantes: pendentes.filter((check) => check.severidade === 'bloqueante').length,
+    avisos: pendentes.filter((check) => check.severidade === 'aviso').length
+  }
+}
+
+function limparFiltros() {
+  filtro.value = ''
+  filtroEstado.value = ''
 }
 
 // G7: label Ver-telas/Gerar-telas por feature (via-feature; destino com feature= preservado)
@@ -207,213 +243,229 @@ function temTelas(featureId: string): boolean {
 </script>
 
 <template>
-  <div class="space-y-5">
-    <div class="border-b border-nexo-border pb-3">
-      <h1 class="text-xl font-bold text-nexo-text">Backlog — Épico → Feature → PBI</h1>
-      <p class="mt-1 text-sm text-nexo-muted">Hierarquia do discovery ao delivery. Duplo-clique no título, gate ou owner edita inline.</p>
+  <div class="backlog-page space-y-4">
+    <header class="border-b border-nexo-border pb-3">
+      <h1 class="text-xl font-bold text-nexo-text">Backlog do projeto</h1>
+      <p class="mt-1 text-sm text-nexo-text">Refine épicos, features e PBIs, avance pelos gates e abra os artefatos relacionados.</p>
+    </header>
+
+    <div class="backlog-filter-grid grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_220px]" role="search" aria-label="Filtrar backlog">
+      <VTextInput v-model="filtro" label="Buscar por título" placeholder="Digite um título…" type="search" class="min-w-0 w-full" />
+      <VSelect v-model="filtroEstado" label="Estado" :options="estados" class="min-w-0 w-full" />
+    </div>
+    <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-nexo-text">
+      <p>{{ itens.length }} {{ itens.length === 1 ? 'item' : 'itens' }} nesta visão</p>
+      <VButton v-if="filtro || filtroEstado" type="button" variant="ghost" size="sm" @click="limparFiltros">Limpar filtros</VButton>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2">
-      <input v-model="filtro" placeholder="Filtrar por título…" aria-label="Filtrar backlog" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text" />
-      <select v-model="filtroEstado" aria-label="Filtrar por estado" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
-        <option value="">Todos os estados</option>
-        <option value="draft">Rascunho</option>
-        <option value="review">Em revisão</option>
-        <option value="approved">Aprovado</option>
-        <option value="stale">Desatualizado</option>
-      </select>
+    <div v-if="itens.length === 0" class="rounded-card border border-nexo-border bg-white p-4">
+      <VEmptyState title="Nenhum item corresponde aos filtros" description="Remova o texto ou escolha outro estado para ver itens deste projeto." variant="default" :action="(filtro || filtroEstado) ? { label: 'Limpar filtros' } : undefined" @action="limparFiltros" />
     </div>
-
-    <p v-if="hierarquia.length === 0" class="rounded-card border border-nexo-border bg-white p-4 text-sm text-nexo-muted">
-      Nenhum épico/feature/PBI corresponde aos filtros.
+    <p v-else-if="hierarquia.length === 0" class="rounded-card border border-nexo-border bg-white p-3 text-sm text-nexo-text">
+      Não há épicos, features ou PBIs correspondentes. Outros itens do filtro aparecem abaixo.
     </p>
 
-    <!-- HIERARQUIA Épico → Feature → PBI -->
-    <section v-for="grupo in hierarquia" :key="grupo.no.id" class="overflow-hidden rounded-card border border-nexo-border bg-white shadow-sm" aria-label="Épico">
-      <!-- Cabeçalho do ÉPICO -->
-      <div class="border-b border-nexo-border bg-slate-50/70 px-4 py-3" tabindex="0" @keydown.enter="iniciarEdicao(grupo.no, 'titulo')">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="rounded-badge bg-slate-800 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">Épico</span>
-          <span class="rounded-badge border border-nexo-border bg-white px-2 py-0.5 font-mono text-xs text-nexo-muted">{{ grupo.no.id }}</span>
-          <span class="rounded-badge border border-nexo-border bg-white px-2 py-0.5 text-xs font-medium text-nexo-text">{{ grupo.no.gate }}</span>
-          <span class="rounded-badge border border-nexo-border bg-white px-2 py-0.5 text-xs text-nexo-text">{{ grupo.no.status }}</span>
+    <!-- Hierarquia do modelo: Épico/Enquadramento G0 → Feature → PBI. -->
+    <VCard v-for="grupo in hierarquia" :key="grupo.no.id" class="backlog-epic-card overflow-hidden" variant="outlined" :aria-label="rotuloTipo(grupo.no)">
+      <section class="backlog-object-head border-b border-nexo-border px-3 py-3 sm:px-4">
+        <div class="backlog-epic-head-row flex min-w-0 flex-wrap items-start gap-2">
+          <div class="backlog-epic-head-content min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <VBadge variant="neutral" size="sm">{{ rotuloTipo(grupo.no) }}</VBadge>
+              <VBadge variant="outlined" size="sm">{{ grupo.no.gate }}</VBadge>
+              <VBadge :variant="estadoVariant(grupo.no.status)" size="sm">{{ estadoLabel(grupo.no.status) }}</VBadge>
+            </div>
+            <div class="backlog-title-row mt-1 flex min-w-0 items-start gap-1.5">
+              <template v-if="editId === grupo.no.id && editCampo === 'titulo'">
+                <VTextInput v-model="editValor" label="Título" class="min-w-0 flex-1" @keydown.enter="confirmarEdicao" @keydown.escape="cancelarEdicao" />
+                <VButton size="sm" variant="outline" @click="confirmarEdicao">Salvar</VButton>
+                <VButton size="sm" variant="ghost" @click="cancelarEdicao">Cancelar</VButton>
+              </template>
+              <h2 v-else class="min-w-0 break-words text-sm font-semibold text-nexo-text" :title="grupo.no.id">{{ grupo.no.titulo }}</h2>
+              <VButton v-if="editId !== grupo.no.id" variant="ghost" size="sm" class="shrink-0" aria-label="Editar título" @click="iniciarEdicao(grupo.no, 'titulo')">Editar</VButton>
+            </div>
+            <span v-if="editErro && editId === grupo.no.id" class="text-xs text-nexo-blocked">{{ editErro }}</span>
+            <p v-if="grupo.no.descricao" class="backlog-description mt-1 text-sm text-nexo-text">{{ grupo.no.descricao }}</p>
+          </div>
+          <div class="backlog-epic-head-actions flex shrink-0 flex-wrap items-center gap-1.5">
+            <VButton type="button" variant="outline" size="sm" @click="abrirNoCanvas(grupo.no.id)">Canvas</VButton>
+            <RouterLink :to="{ path: `/gates/${grupo.no.gate}`, query: { alvo: grupo.no.id } }" class="backlog-action-link">Abrir {{ grupo.no.gate }}</RouterLink>
+          </div>
         </div>
-        <div class="mt-2">
-          <template v-if="editId === grupo.no.id && editCampo === 'titulo'">
-            <input v-model="editValor" aria-label="Editar título do épico" class="min-h-[32px] w-full rounded-btn border border-nexo-border bg-white px-2 py-1 text-sm" @keydown.enter="confirmarEdicao" @keydown.escape="cancelarEdicao" @blur="onBlurConfirmar" />
-            <span v-if="editErro" class="mt-1 block text-xs text-nexo-blocked">{{ editErro }}</span>
-          </template>
-          <button v-else type="button" class="text-left text-base font-bold text-nexo-text hover:underline" title="Duplo-clique edita" @dblclick="iniciarEdicao(grupo.no, 'titulo')">{{ grupo.no.titulo }}</button>
-        </div>
-        <p class="mt-1 text-sm text-nexo-muted">{{ grupo.no.descricao }}</p>
-        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <span class="text-nexo-muted">Owner: <strong class="font-semibold text-nexo-text">{{ grupo.no.owner }}</strong></span>
-          <span v-for="c in avaliarGate(grupo.no, waiversDe(grupo.no.id)).checks" :key="c.codigo" class="inline-flex items-center gap-1 rounded-badge px-2 py-0.5 text-xs font-medium" :class="c.ok ? 'bg-nexo-approved-bg text-nexo-approved' : 'bg-nexo-blocked-bg text-nexo-blocked'">
-            {{ c.codigo }}<LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" />
-          </span>
-          <button type="button" class="inline-flex min-h-[32px] items-center rounded-btn border border-nexo-border bg-white px-3 py-1 text-sm text-nexo-text hover:bg-slate-50" @click="verChecklist(grupo.no.id)">Dispensas</button>
-          <button type="button" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1 text-sm text-nexo-text hover:bg-slate-50" @click="abrirNoCanvas(grupo.no.id)">
-            <LucideIcon name="layout" :size="14" />
-            Canvas
-          </button>
+        <div class="mt-2 flex min-w-0 flex-wrap items-center gap-2 text-sm text-nexo-text">
+          <span>Responsável: <strong>{{ nomeResponsavel(grupo.no.owner) }}</strong></span>
           <template v-if="editId === grupo.no.id && (editCampo === 'owner' || editCampo === 'gate')">
-            <select v-if="editCampo === 'owner'" v-model="editValor" aria-label="Editar owner" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1 text-sm" @keydown.escape="cancelarEdicao" @blur="onBlurConfirmar">
-              <option v-for="u in users.state.usuarios" :key="u.id" :value="u.id">{{ u.id }}</option>
-            </select>
-            <select v-else v-model="editValor" aria-label="Editar gate" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1 text-sm" @keydown.escape="cancelarEdicao" @blur="onBlurConfirmar">
-              <option>G0</option><option>G1</option><option>G2</option><option>G3</option><option>G4</option><option>G5</option>
-            </select>
-            <button type="button" class="inline-flex min-h-[32px] items-center rounded-btn bg-nexo-primary px-3 py-1 text-sm font-semibold text-white" @click="confirmarEdicao">
-              <LucideIcon name="check" :size="14" />
-              Salvar
-            </button>
-            <button type="button" class="inline-flex min-h-[32px] items-center rounded-btn border border-nexo-border px-3 py-1 text-sm" @click="cancelarEdicao">
-              <LucideIcon name="x" :size="14" />
-              Cancelar
-            </button>
+            <VSelect v-if="editCampo === 'owner'" v-model="editValor" label="Responsável" :options="users.state.usuarios.map((user) => ({ value: user.id, label: user.nome }))" class="min-w-[180px]" />
+            <VSelect v-else v-model="editValor" label="Gate" :options="['G0', 'G1', 'G2', 'G3', 'G4', 'G5'].map((gate) => ({ value: gate, label: gate }))" class="min-w-[120px]" />
+            <VButton type="button" variant="outline" size="sm" @click="confirmarEdicao">Salvar</VButton>
+            <VButton type="button" variant="ghost" size="sm" @click="cancelarEdicao">Cancelar</VButton>
           </template>
           <template v-else>
-            <button type="button" class="text-xs text-nexo-muted hover:underline" title="Duplo-clique edita gate" @dblclick="iniciarEdicao(grupo.no, 'gate')">Gate: {{ grupo.no.gate }}</button>
-            <button type="button" class="text-xs text-nexo-muted hover:underline" title="Duplo-clique edita owner" @dblclick="iniciarEdicao(grupo.no, 'owner')">Owner: {{ grupo.no.owner }}</button>
+            <VButton type="button" variant="ghost" size="sm" class="h-auto min-h-0 px-1 py-0 text-xs text-nexo-text" aria-label="Alterar responsável" @click="iniciarEdicao(grupo.no, 'owner')">Alterar responsável</VButton>
+            <VButton type="button" variant="ghost" size="sm" class="h-auto min-h-0 px-1 py-0 text-xs text-nexo-text" aria-label="Editar gate" @click="iniciarEdicao(grupo.no, 'gate')">Editar gate</VButton>
           </template>
         </div>
-      </div>
+        <div v-if="editErro && editCampo !== 'titulo' && editId === grupo.no.id" class="mt-1 text-xs text-nexo-blocked">{{ editErro }}</div>
+      </section>
 
-      <!-- FEATURES do épico -->
-      <div class="space-y-3 p-4">
-        <p v-if="grupo.features.length === 0" class="text-sm text-nexo-muted">Nenhuma feature neste épico para os filtros atuais.</p>
-        <article v-for="fg in grupo.features" :key="fg.no.id" class="rounded-card border border-nexo-border bg-white" aria-label="Feature">
-          <div class="border-l-4 border-slate-800 px-4 py-3" tabindex="0" @keydown.enter="iniciarEdicao(fg.no, 'titulo')">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="rounded-badge bg-slate-700 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">Feature</span>
-              <span class="rounded-badge border border-nexo-border bg-slate-50 px-2 py-0.5 font-mono text-xs text-nexo-muted">{{ fg.no.id }}</span>
-              <span class="rounded-badge border border-nexo-border bg-slate-50 px-2 py-0.5 text-xs font-medium text-nexo-text">{{ fg.no.gate }}</span>
-              <span class="rounded-badge border border-nexo-border bg-slate-50 px-2 py-0.5 text-xs text-nexo-text">{{ fg.no.status }}</span>
+      <div class="space-y-3 p-3 sm:p-4">
+        <section class="backlog-check-summary border-y border-nexo-border py-2" :aria-label="`Resumo dos critérios de ${rotuloTipo(grupo.no)}`">
+          <div class="flex min-w-0 flex-wrap items-center gap-2 text-xs text-nexo-text">
+            <span class="font-medium">{{ resumoChecklist(grupo.no).completos }}/{{ resumoChecklist(grupo.no).total }} critérios</span>
+            <VBadge :variant="resumoChecklist(grupo.no).pendentes ? 'warning' : 'success'" size="xs">{{ resumoChecklist(grupo.no).pendentes ? `${resumoChecklist(grupo.no).pendentes} pendentes · ${resumoChecklist(grupo.no).bloqueantes} bloqueantes` : 'Completo' }}</VBadge>
+            <div class="h-1.5 min-w-[72px] flex-1 overflow-hidden rounded-full bg-nexo-canvas" role="progressbar" :aria-valuenow="resumoChecklist(grupo.no).completos" aria-valuemin="0" :aria-valuemax="resumoChecklist(grupo.no).total" :aria-label="`Critérios atendidos: ${resumoChecklist(grupo.no).completos} de ${resumoChecklist(grupo.no).total}`">
+              <div class="h-full rounded-full bg-nexo-approved" :style="{ width: `${resumoChecklist(grupo.no).total ? (resumoChecklist(grupo.no).completos / resumoChecklist(grupo.no).total) * 100 : 0}%` }" />
             </div>
-            <div class="mt-2">
-              <template v-if="editId === fg.no.id && editCampo === 'titulo'">
-                <input v-model="editValor" aria-label="Editar título da feature" class="min-h-[32px] w-full rounded-btn border border-nexo-border px-2 py-1 text-sm" @keydown.enter="confirmarEdicao" @keydown.escape="cancelarEdicao" @blur="onBlurConfirmar" />
-                <span v-if="editErro" class="mt-1 block text-xs text-nexo-blocked">{{ editErro }}</span>
-              </template>
-              <button v-else type="button" class="text-left text-sm font-bold text-nexo-text hover:underline" title="Duplo-clique edita" @dblclick="iniciarEdicao(fg.no, 'titulo')">{{ fg.no.titulo }}</button>
-            </div>
-            <p class="mt-1 text-sm text-nexo-muted">{{ fg.no.descricao }}</p>
-            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
-              <template v-if="editId === fg.no.id && (editCampo === 'owner' || editCampo === 'gate')">
-                <select v-if="editCampo === 'owner'" v-model="editValor" aria-label="Editar owner" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1 text-sm" @keydown.escape="cancelarEdicao" @blur="onBlurConfirmar">
-                  <option v-for="u in users.state.usuarios" :key="u.id" :value="u.id">{{ u.id }}</option>
-                </select>
-                <select v-else v-model="editValor" aria-label="Editar gate" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1 text-sm" @keydown.escape="cancelarEdicao" @blur="onBlurConfirmar">
-                  <option>G0</option><option>G1</option><option>G2</option><option>G3</option><option>G4</option><option>G5</option>
-                </select>
-                <button type="button" class="inline-flex min-h-[32px] items-center rounded-btn bg-nexo-primary px-3 py-1 text-sm font-semibold text-white" @click="confirmarEdicao">
-                  <LucideIcon name="check" :size="14" />
-                  Salvar
-                </button>
-                <button type="button" class="inline-flex min-h-[32px] items-center rounded-btn border border-nexo-border px-3 py-1 text-sm" @click="cancelarEdicao">
-                  <LucideIcon name="x" :size="14" />
-                  Cancelar
-                </button>
-              </template>
-              <template v-else>
-                <button type="button" class="hover:underline" title="Duplo-clique edita gate" @dblclick="iniciarEdicao(fg.no, 'gate')">Gate {{ fg.no.gate }}</button>
-                <span aria-hidden="true">·</span>
-                <button type="button" class="hover:underline" title="Duplo-clique edita owner" @dblclick="iniciarEdicao(fg.no, 'owner')">{{ fg.no.owner }}</button>
-              </template>
-            </div>
-            <div class="mt-2 flex flex-wrap items-center gap-1.5">
-              <span v-for="c in avaliarGate(fg.no, waiversDe(fg.no.id)).checks" :key="c.codigo" class="inline-flex items-center gap-1 rounded-badge px-2 py-0.5 text-xs font-medium" :class="c.ok ? 'bg-nexo-approved-bg text-nexo-approved' : 'bg-nexo-blocked-bg text-nexo-blocked'">
-                {{ c.codigo }}<LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" />
-              </span>
-              <button type="button" class="inline-flex min-h-[32px] items-center rounded-btn border border-nexo-border bg-white px-3 py-1 text-sm text-nexo-text hover:bg-slate-50" @click="verChecklist(fg.no.id)">Dispensas</button>
-            </div>
-            <!-- Ações por feature (todas preservadas) -->
-            <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-nexo-border/70 pt-3">
-              <button type="button" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text hover:bg-slate-50" @click="abrirNoCanvas(fg.no.id)">
-                <LucideIcon name="layout" :size="14" />
-                Canvas
-              </button>
-              <button type="button" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text hover:bg-slate-50" @click="abrirStoryModal(fg.no as Feature)">
-                <LucideIcon name="eye" :size="14" />
-                Ver story
-              </button>
-              <RouterLink :to="{ path: '/studio-full', query: { feature: fg.no.id, from: 'backlog' } }" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text hover:bg-slate-50">
-                <LucideIcon name="layout" :size="14" />
-                Ver tela
-              </RouterLink>
-              <RouterLink :to="{ path: '/studio-full', query: { feature: fg.no.id, from: 'backlog' } }" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white hover:opacity-95" :title="`${temTelas(fg.no.id) ? 'Ver telas da feature' : 'Gerar telas da feature'} ${fg.no.titulo}`">
-                <LucideIcon name="layout" :size="14" />
-                {{ temTelas(fg.no.id) ? 'Ver-telas' : 'Gerar-telas' }}
-              </RouterLink>
-              <button type="button" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text hover:bg-slate-50" @click="abrirPreview(fg.no.id)">
-                <LucideIcon name="eye" :size="14" />
-                Preview
-              </button>
-              <button type="button" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text hover:bg-slate-50" :title="`Exportar wiki da feature ${fg.no.titulo}`" @click="baixarFeatureWiki(fg.no.id)">
-                <LucideIcon name="download" :size="14" />
-                Exportar wiki
-              </button>
-            </div>
+            <VButton type="button" variant="outline" size="sm" class="shrink-0" @click="verChecklist(grupo.no.id)">Ver critérios e dispensas</VButton>
           </div>
+        </section>
 
-          <!-- PBIs da feature -->
-          <div class="border-t border-nexo-border/70 bg-slate-50/50 px-4 py-3">
-            <p class="mb-2 text-xs font-bold uppercase tracking-wide text-nexo-muted">PBIs ({{ fg.pbis.length }})</p>
-            <p v-if="fg.pbis.length === 0" class="text-sm text-nexo-muted">Nenhum PBI vinculado a esta feature.</p>
-            <ul v-else class="space-y-2">
-              <li v-for="pbi in fg.pbis" :key="pbi.id" class="rounded-card border border-nexo-border bg-white px-3 py-2" tabindex="0" @keydown.enter="iniciarEdicao(pbi, 'titulo')">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="rounded-badge border border-nexo-border bg-slate-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-slate-700">PBI</span>
-                  <span class="rounded-badge border border-nexo-border bg-white px-2 py-0.5 font-mono text-xs text-nexo-muted">{{ pbi.id }}</span>
-                  <span class="rounded-badge border border-nexo-border bg-white px-2 py-0.5 text-xs text-nexo-text">{{ pbi.gate }}</span>
-                  <span class="rounded-badge border border-nexo-border bg-white px-2 py-0.5 text-xs text-nexo-text">{{ pbi.status }}</span>
+        <div v-if="grupo.features.length === 0 && grupo.no.gate !== 'G0'" class="rounded-btn border border-dashed border-nexo-border px-3 py-2 text-xs text-nexo-text">
+          {{ filtro || filtroEstado ? 'Nenhuma feature corresponde aos filtros atuais.' : 'Este épico ainda não tem features.' }}
+        </div>
+
+        <VCard v-for="fg in grupo.features" :key="fg.no.id" class="backlog-feature-card min-w-0" variant="outlined" aria-label="Feature">
+          <section class="px-3 py-3 sm:px-4">
+            <div class="backlog-feature-head-row flex min-w-0 flex-wrap items-start gap-2">
+              <div class="backlog-feature-head-content min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <VBadge variant="neutral" size="sm">Feature</VBadge>
+                  <VBadge variant="outlined" size="sm">{{ fg.no.gate }}</VBadge>
+                  <VBadge :variant="estadoVariant(fg.no.status)" size="sm">{{ estadoLabel(fg.no.status) }}</VBadge>
                 </div>
-                <template v-if="editId === pbi.id && editCampo === 'titulo'">
-                  <input v-model="editValor" aria-label="Editar título do PBI" class="mt-1 min-h-[32px] w-full rounded-btn border border-nexo-border px-2 py-1 text-sm" @keydown.enter="confirmarEdicao" @keydown.escape="cancelarEdicao" @blur="onBlurConfirmar" />
-                  <span v-if="editErro" class="mt-1 block text-xs text-nexo-blocked">{{ editErro }}</span>
-                </template>
-                <button v-else type="button" class="mt-1 text-left text-sm font-semibold text-nexo-text hover:underline" title="Duplo-clique edita" @dblclick="iniciarEdicao(pbi, 'titulo')">{{ pbi.titulo }}</button>
-                <p class="mt-0.5 text-sm text-nexo-muted">{{ pbi.descricao }}</p>
-                <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <span v-for="c in avaliarGate(pbi, waiversDe(pbi.id)).checks" :key="c.codigo" class="inline-flex items-center gap-1 rounded-badge px-2 py-0.5 text-xs font-medium" :class="c.ok ? 'bg-nexo-approved-bg text-nexo-approved' : 'bg-nexo-blocked-bg text-nexo-blocked'">
-                    {{ c.codigo }}<LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" />
-                  </span>
-                  <button type="button" class="inline-flex min-h-[32px] items-center rounded-btn border border-nexo-border bg-white px-3 py-1 text-sm text-nexo-text hover:bg-slate-50" @click="verChecklist(pbi.id)">Dispensas</button>
-                  <button type="button" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1 text-sm text-nexo-text hover:bg-slate-50" @click="abrirNoCanvas(pbi.id)">
-                    <LucideIcon name="layout" :size="14" />
-                    Canvas
-                  </button>
+                <div class="backlog-title-row mt-1 flex min-w-0 items-start gap-1.5">
+                  <template v-if="editId === fg.no.id && editCampo === 'titulo'">
+                    <VTextInput v-model="editValor" label="Título da feature" class="min-w-0 flex-1" @keydown.enter="confirmarEdicao" @keydown.escape="cancelarEdicao" />
+                    <VButton size="sm" variant="outline" @click="confirmarEdicao">Salvar</VButton><VButton size="sm" variant="ghost" @click="cancelarEdicao">Cancelar</VButton>
+                  </template>
+                  <h3 v-else class="min-w-0 break-words text-sm font-semibold text-nexo-text" :title="fg.no.id">{{ fg.no.titulo }}</h3>
+                  <VButton v-if="editId !== fg.no.id" type="button" variant="ghost" size="sm" class="shrink-0 px-1" aria-label="Editar título da feature" @click="iniciarEdicao(fg.no, 'titulo')">Editar</VButton>
                 </div>
+                <span v-if="editErro && editId === fg.no.id" class="text-xs text-nexo-blocked">{{ editErro }}</span>
+                <p v-if="fg.no.descricao" class="backlog-description mt-1 text-sm text-nexo-text">{{ fg.no.descricao }}</p>
+                <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-nexo-text">
+                  <span>Responsável: <strong>{{ nomeResponsavel(fg.no.owner) }}</strong></span>
+                  <template v-if="editId === fg.no.id && (editCampo === 'owner' || editCampo === 'gate')">
+                    <VSelect v-if="editCampo === 'owner'" v-model="editValor" label="Responsável" :options="users.state.usuarios.map((user) => ({ value: user.id, label: user.nome }))" class="min-w-[180px]" />
+                    <VSelect v-else v-model="editValor" label="Gate" :options="['G0', 'G1', 'G2', 'G3', 'G4', 'G5'].map((gate) => ({ value: gate, label: gate }))" class="min-w-[120px]" />
+                    <VButton type="button" variant="outline" size="sm" @click="confirmarEdicao">Salvar</VButton><VButton type="button" variant="ghost" size="sm" @click="cancelarEdicao">Cancelar</VButton>
+                  </template>
+                  <template v-else>
+                    <VButton type="button" variant="ghost" size="sm" class="h-auto min-h-0 px-1 py-0 text-xs text-nexo-text" aria-label="Alterar responsável da feature" @click="iniciarEdicao(fg.no, 'owner')">Alterar responsável</VButton>
+                    <VButton type="button" variant="ghost" size="sm" class="h-auto min-h-0 px-1 py-0 text-xs text-nexo-text" aria-label="Editar gate da feature" @click="iniciarEdicao(fg.no, 'gate')">Editar gate</VButton>
+                  </template>
+                </div>
+                <span v-if="editErro && editCampo !== 'titulo' && editId === fg.no.id" class="text-xs text-nexo-blocked">{{ editErro }}</span>
+              </div>
+              <div class="backlog-feature-head-actions flex shrink-0 flex-wrap items-center gap-1.5">
+                <VButton type="button" variant="outline" size="sm" @click="abrirNoCanvas(fg.no.id)">Canvas</VButton>
+                <RouterLink :to="{ path: `/gates/${fg.no.gate}`, query: { alvo: fg.no.id } }" class="backlog-action-link">Abrir {{ fg.no.gate }}</RouterLink>
+              </div>
+            </div>
+
+            <section class="backlog-check-summary mt-2 border-y border-nexo-border py-2" :aria-label="`Resumo dos critérios da feature ${fg.no.titulo}`">
+              <div class="flex min-w-0 flex-wrap items-center gap-2 text-xs text-nexo-text">
+                <span class="font-medium">{{ resumoChecklist(fg.no).completos }}/{{ resumoChecklist(fg.no).total }} critérios</span>
+                <VBadge :variant="resumoChecklist(fg.no).pendentes ? 'warning' : 'success'" size="xs">{{ resumoChecklist(fg.no).pendentes ? `${resumoChecklist(fg.no).pendentes} pendentes · ${resumoChecklist(fg.no).bloqueantes} bloqueantes` : 'Completo' }}</VBadge>
+                <div class="h-1.5 min-w-[72px] flex-1 overflow-hidden rounded-full bg-nexo-canvas" role="progressbar" :aria-valuenow="resumoChecklist(fg.no).completos" aria-valuemin="0" :aria-valuemax="resumoChecklist(fg.no).total" :aria-label="`Critérios atendidos: ${resumoChecklist(fg.no).completos} de ${resumoChecklist(fg.no).total}`"><div class="h-full rounded-full bg-nexo-approved" :style="{ width: `${resumoChecklist(fg.no).total ? (resumoChecklist(fg.no).completos / resumoChecklist(fg.no).total) * 100 : 0}%` }" /></div>
+                <VButton type="button" variant="outline" size="sm" class="shrink-0" @click="verChecklist(fg.no.id)">Ver critérios e dispensas</VButton>
+              </div>
+            </section>
+
+            <div class="mt-3 flex flex-wrap items-center gap-1.5 pt-2">
+              <VButton type="button" variant="outline" size="sm" @click="abrirStoryModal(fg.no as Feature)">Ver story</VButton>
+              <RouterLink :to="{ path: '/studio-full', query: { feature: fg.no.id, from: 'backlog' } }" class="backlog-action-link">{{ temTelas(fg.no.id) ? 'Abrir telas no Studio' : 'Criar telas no Studio' }}</RouterLink>
+              <VButton type="button" variant="outline" size="sm" @click="abrirPreview(fg.no.id)">Preview</VButton>
+              <VButton type="button" variant="outline" size="sm" :title="`Exportar wiki da feature ${fg.no.titulo}`" @click="baixarFeatureWiki(fg.no.id)">Exportar wiki</VButton>
+            </div>
+          </section>
+
+          <section class="border-t border-nexo-border bg-nexo-surface/50 px-3 py-2 sm:px-4">
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="text-xs font-semibold text-nexo-text">PBIs vinculados ({{ fg.pbis.length }})</h4>
+              <span v-if="fg.pbis.length" class="text-xs text-nexo-text">{{ fg.pbis.length === 1 ? '1 item' : `${fg.pbis.length} itens` }}</span>
+            </div>
+            <p v-if="fg.pbis.length === 0" class="mt-1 text-xs text-nexo-text">
+              {{ filtro || filtroEstado ? 'Nenhum PBI corresponde aos filtros atuais.' : 'Esta feature ainda não tem PBIs.' }}
+            </p>
+            <ul v-else class="mt-2 space-y-2">
+              <li v-for="pbi in fg.pbis" :key="pbi.id" class="backlog-pbi-card rounded-btn border border-nexo-border bg-white px-3 py-2" :title="pbi.id">
+                <div class="flex min-w-0 flex-wrap items-start gap-2">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <VBadge variant="neutral" size="sm">PBI</VBadge><VBadge variant="outlined" size="sm">{{ pbi.gate }}</VBadge><VBadge :variant="estadoVariant(pbi.status)" size="sm">{{ estadoLabel(pbi.status) }}</VBadge>
+                    </div>
+                    <template v-if="editId === pbi.id && editCampo === 'titulo'">
+                      <VTextInput v-model="editValor" label="Título do PBI" class="mt-1 w-full" @keydown.enter="confirmarEdicao" @keydown.escape="cancelarEdicao" />
+                      <div class="mt-1 flex gap-2"><VButton size="sm" variant="outline" @click="confirmarEdicao">Salvar</VButton><VButton size="sm" variant="ghost" @click="cancelarEdicao">Cancelar</VButton></div>
+                    </template>
+                    <h5 v-else class="mt-1 break-words text-sm font-medium text-nexo-text">{{ pbi.titulo }}</h5>
+                    <span v-if="editErro && editId === pbi.id" class="text-xs text-nexo-blocked">{{ editErro }}</span>
+                    <p v-if="pbi.descricao" class="backlog-description mt-0.5 text-sm text-nexo-text">{{ pbi.descricao }}</p>
+                    <div class="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-nexo-text">
+                      <span>Responsável: <strong>{{ nomeResponsavel(pbi.owner) }}</strong></span>
+                      <VButton type="button" variant="ghost" size="sm" class="h-auto min-h-0 px-1 py-0 text-xs text-nexo-text" aria-label="Editar título do PBI" @click="iniciarEdicao(pbi, 'titulo')">Editar</VButton>
+                      <VButton type="button" variant="outline" size="sm" @click="abrirNoCanvas(pbi.id)">Canvas</VButton>
+                      <RouterLink :to="{ path: `/gates/${pbi.gate}`, query: { alvo: pbi.id } }" class="backlog-action-link">Abrir {{ pbi.gate }}</RouterLink>
+                    </div>
+                  </div>
+                  <div class="backlog-pbi-progress min-w-0 flex-1 sm:max-w-[200px]">
+                    <span class="text-xs text-nexo-text">{{ resumoChecklist(pbi).completos }}/{{ resumoChecklist(pbi).total }} critérios</span>
+                    <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-nexo-canvas" role="progressbar" :aria-valuenow="resumoChecklist(pbi).completos" aria-valuemin="0" :aria-valuemax="resumoChecklist(pbi).total" :aria-label="`Critérios atendidos: ${resumoChecklist(pbi).completos} de ${resumoChecklist(pbi).total}`">
+                      <div class="h-full rounded-full bg-nexo-approved" :style="{ width: `${resumoChecklist(pbi).total ? (resumoChecklist(pbi).completos / resumoChecklist(pbi).total) * 100 : 0}%` }" />
+                    </div>
+                  </div>
+                </div>
+                <VButton type="button" variant="outline" size="sm" class="mt-2" @click="verChecklist(pbi.id)">Ver critérios e dispensas · {{ resumoChecklist(pbi).pendentes }} pendentes</VButton>
               </li>
             </ul>
-          </div>
-        </article>
+          </section>
+        </VCard>
       </div>
-    </section>
+    </VCard>
 
     <!-- Outros tipos (sem hierarquia épico/feature/pbi) -->
-    <section v-if="outrosItens.length > 0" class="rounded-card border border-nexo-border bg-white p-4" aria-label="Outros itens">
-      <h2 class="text-sm font-bold text-nexo-text">Outros itens ({{ outrosItens.length }})</h2>
+    <VCard v-if="outrosItens.length > 0" class="p-3" variant="outlined" aria-label="Outros itens">
+      <h2 class="text-sm font-semibold text-nexo-text">Outros itens ({{ outrosItens.length }})</h2>
       <ul class="mt-2 space-y-2">
-        <li v-for="n in outrosItens" :key="n.id" class="flex flex-wrap items-center gap-2 rounded-card border border-nexo-border px-3 py-2" tabindex="0" @keydown.enter="iniciarEdicao(n, 'titulo')">
-          <span class="rounded-badge border border-nexo-border bg-slate-100 px-2 py-0.5 text-xs font-medium text-nexo-text">{{ n.tipo }}</span>
-          <template v-if="editId === n.id && editCampo === 'titulo'">
-            <input v-model="editValor" aria-label="Editar título" class="min-h-[32px] flex-1 rounded-btn border border-nexo-border px-2 py-1 text-sm" @keydown.enter="confirmarEdicao" @keydown.escape="cancelarEdicao" @blur="onBlurConfirmar" />
-          </template>
-          <button v-else type="button" class="text-left text-sm font-medium text-nexo-text hover:underline" title="Duplo-clique edita" @dblclick="iniciarEdicao(n, 'titulo')">{{ n.titulo }}</button>
-          <span class="rounded-badge border border-nexo-border px-2 py-0.5 text-xs text-nexo-text">{{ n.gate }}</span>
-          <span class="rounded-badge border border-nexo-border px-2 py-0.5 text-xs text-nexo-text">{{ n.status }}</span>
-          <button type="button" class="inline-flex min-h-[32px] items-center rounded-btn border border-nexo-border px-3 py-1 text-sm hover:bg-slate-50" @click="verChecklist(n.id)">Dispensas</button>
-          <button type="button" class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border px-3 py-1 text-sm hover:bg-slate-50" @click="abrirNoCanvas(n.id)">
-            <LucideIcon name="layout" :size="14" />
-            Canvas
-          </button>
+        <li v-for="n in outrosItens" :key="n.id" class="rounded-btn border border-nexo-border p-3">
+          <div class="flex min-w-0 flex-wrap items-start gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <VBadge variant="neutral" size="sm">{{ n.tipo }}</VBadge>
+                <VBadge variant="outlined" size="sm">{{ n.gate }}</VBadge>
+                <VBadge :variant="estadoVariant(n.status)" size="sm">{{ estadoLabel(n.status) }}</VBadge>
+              </div>
+              <template v-if="editId === n.id && editCampo === 'titulo'">
+                <VTextInput v-model="editValor" label="Título" class="mt-1 min-w-0 w-full" @keydown.enter="confirmarEdicao" @keydown.escape="cancelarEdicao" />
+                <div class="mt-1 flex gap-2"><VButton size="sm" variant="outline" @click="confirmarEdicao">Salvar</VButton><VButton size="sm" variant="ghost" @click="cancelarEdicao">Cancelar</VButton></div>
+              </template>
+              <h3 v-else class="mt-1 break-words text-sm font-semibold text-nexo-text" :title="n.id">{{ n.titulo }}</h3>
+              <span v-if="editErro && editId === n.id" class="text-xs text-nexo-blocked">{{ editErro }}</span>
+              <p v-if="n.descricao" class="backlog-description mt-1 text-sm text-nexo-text">{{ n.descricao }}</p>
+              <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-nexo-text">
+                <span>Responsável: <strong>{{ nomeResponsavel(n.owner) }}</strong></span>
+                <VButton type="button" variant="ghost" size="sm" class="h-auto min-h-0 px-1 py-0 text-xs text-nexo-text" aria-label="Editar título" @click="iniciarEdicao(n, 'titulo')">Editar título</VButton>
+                <RouterLink :to="{ path: `/gates/${n.gate}`, query: { alvo: n.id } }" class="backlog-action-link">Abrir {{ n.gate }}</RouterLink>
+                <VButton type="button" variant="outline" size="sm" @click="abrirNoCanvas(n.id)">Canvas</VButton>
+              </div>
+            </div>
+          </div>
+          <div class="mt-2 flex flex-wrap items-center gap-2 border-t border-nexo-border pt-2 text-xs text-nexo-text">
+            <span>{{ resumoChecklist(n).completos }}/{{ resumoChecklist(n).total }} critérios · {{ resumoChecklist(n).bloqueantes }} bloqueantes pendentes</span>
+            <VButton type="button" variant="outline" size="sm" class="ml-auto" @click="verChecklist(n.id)">Ver critérios e dispensas</VButton>
+          </div>
         </li>
       </ul>
-    </section>
+    </VCard>
 
-    <GateChecklist v-if="checklistAlvo" ref="checklistRef" :key="checklistAlvo" />
-    <div class="rounded-card border border-nexo-border bg-white p-4 text-sm text-nexo-muted">
+    <VDialog v-if="checklistAlvo && checklistAberto" v-model="checklistAberto" :title="`Critérios e dispensas — ${graph.noPorId(checklistAlvo)?.titulo ?? 'item'}`" description="Critérios do gate atual e dispensas de avisos com justificativa." size="lg" variant="form" :show-close="true" @close="checklistAberto = false">
+      <div class="max-h-[70vh] min-w-0 overflow-y-auto p-1">
+        <GateChecklist :alvo-id="checklistAlvo" />
+      </div>
+    </VDialog>
+
+    <div class="rounded-card border border-nexo-border bg-white p-3 text-sm text-nexo-text">
       <p class="text-sm font-semibold text-nexo-text">Auditoria (últimas):</p>
       <ul class="mt-1 space-y-1 text-sm">
         <li v-for="a in graph.audit.slice(0, 10)" :key="a.id">{{ a.em }} — {{ a.ator_id }} — {{ a.acao }} — {{ a.detalhe }}</li>
@@ -421,42 +473,38 @@ function temTelas(featureId: string): boolean {
     </div>
 
     <!-- Modal Ver-Story (Doc) -->
-    <div
-      v-if="storyModalAberto && storySelecionada"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      @click.self="storyModalAberto = false"
-    >
-      <div class="max-w-xl w-full rounded-card border border-nexo-border bg-white p-5 space-y-4 shadow-xl max-h-[85vh] overflow-y-auto">
+    <VDialog v-if="storySelecionada" v-model="storyModalAberto" :title="storySelecionada.titulo" description="Detalhes da story da feature selecionada." size="lg" variant="basic" :show-close="false">
+      <div class="max-w-xl w-full space-y-4 max-h-[70vh] overflow-y-auto">
         <div class="flex items-start justify-between border-b border-nexo-border pb-3">
           <div>
             <div class="flex flex-wrap items-center gap-2">
-              <span class="rounded-badge bg-nexo-primary/10 px-2 py-0.5 font-mono text-xs font-bold text-nexo-primary">{{ storySelecionada.id }}</span>
-              <span class="rounded-badge bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{{ storySelecionada.gate }}</span>
-              <span class="rounded-badge bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">{{ storySelecionada.status }}</span>
+              <VBadge variant="neutral" size="sm" :title="storySelecionada.id">Feature</VBadge>
+              <span class="rounded-badge bg-nexo-canvas px-2 py-0.5 text-xs font-medium text-nexo-text">{{ storySelecionada.gate }}</span>
+              <VBadge :variant="estadoVariant(storySelecionada.status)" size="sm">{{ estadoLabel(storySelecionada.status) }}</VBadge>
             </div>
             <h2 class="text-base font-bold text-nexo-text mt-1">{{ storySelecionada.titulo }}</h2>
           </div>
-          <button type="button" class="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-btn text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Fechar story" @click="storyModalAberto = false">
+          <VButton type="button" variant="ghost" size="sm" class="inline-flex h-8 w-8 min-h-0 min-w-0 items-center justify-center p-0" aria-label="Fechar story" @click="storyModalAberto = false">
             <LucideIcon name="x" :size="18" />
-          </button>
+          </VButton>
         </div>
 
         <!-- Conteúdo da Story -->
         <div class="space-y-3 text-sm leading-relaxed text-nexo-text">
           <div class="rounded-card bg-nexo-canvas/40 p-3 border border-nexo-border/60 space-y-1">
-            <p><strong class="text-nexo-primary">Como:</strong> {{ storySelecionada.ator || 'usuário do sistema' }}</p>
-            <p><strong class="text-nexo-primary">Quero:</strong> {{ storySelecionada.beneficio || storySelecionada.descricao }}</p>
-            <p><strong class="text-nexo-primary">Para:</strong> {{ storySelecionada.gatilho || 'alcançar o objetivo planejado' }}</p>
+            <p><strong class="text-nexo-text">Como:</strong> {{ storySelecionada.ator || 'usuário do sistema' }}</p>
+            <p><strong class="text-nexo-text">Quero:</strong> {{ storySelecionada.beneficio || storySelecionada.descricao }}</p>
+            <p><strong class="text-nexo-text">Para:</strong> {{ storySelecionada.gatilho || 'alcançar o objetivo planejado' }}</p>
           </div>
 
           <div v-if="storySelecionada.fluxo_feliz">
             <h4 class="font-bold text-nexo-text mb-1 text-sm">Fluxo Principal (Happy Path):</h4>
-            <p class="text-sm text-nexo-muted pl-2 border-l-2 border-nexo-primary">{{ storySelecionada.fluxo_feliz }}</p>
+            <p class="text-sm text-nexo-text pl-2 border-l-2 border-nexo-border">{{ storySelecionada.fluxo_feliz }}</p>
           </div>
 
           <div v-if="storySelecionada.alternativos && storySelecionada.alternativos.length > 0">
             <h4 class="font-bold text-nexo-text mb-1 text-sm">Fluxos Alternativos & Exceções:</h4>
-            <ul class="list-disc list-inside space-y-0.5 text-sm text-nexo-muted">
+            <ul class="list-disc list-inside space-y-0.5 text-sm text-nexo-text">
               <li v-for="(alt, idx) in storySelecionada.alternativos" :key="idx">{{ alt }}</li>
             </ul>
           </div>
@@ -466,9 +514,9 @@ function temTelas(featureId: string): boolean {
             <div class="space-y-2">
               <div v-for="c in storySelecionada.criterios_bdd" :key="c.id" class="rounded-card border border-nexo-border/80 p-2 bg-white space-y-0.5">
                 <span class="font-mono text-xs font-bold text-nexo-primary">{{ c.id }}</span>
-                <p class="text-sm"><strong class="text-slate-700">Dado</strong> {{ c.given }}</p>
-                <p class="text-sm"><strong class="text-slate-700">Quando</strong> {{ c.when }}</p>
-                <p class="text-sm"><strong class="text-slate-700">Então</strong> {{ c.then }}</p>
+                <p class="text-sm"><strong class="text-nexo-text">Dado</strong> {{ c.given }}</p>
+                <p class="text-sm"><strong class="text-nexo-text">Quando</strong> {{ c.when }}</p>
+                <p class="text-sm"><strong class="text-nexo-text">Então</strong> {{ c.then }}</p>
               </div>
             </div>
           </div>
@@ -479,43 +527,45 @@ function temTelas(featureId: string): boolean {
           <div class="flex flex-wrap items-center gap-2">
             <RouterLink
               :to="{ path: '/studio-full', query: { feature: storySelecionada.id, from: 'backlog' } }"
-              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white hover:opacity-95"
+              class="backlog-action-link"
               @click="storyModalAberto = false"
             >
               <LucideIcon name="layout" :size="14" />
               Ver Tela no Studio
             </RouterLink>
-            <button
+            <VButton
               type="button"
-              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-green-600 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50"
+              variant="outline"
+              size="sm"
               @click="storyModalAberto = false; abrirPreview(storySelecionada.id)"
             >
               <LucideIcon name="eye" :size="14" />
               Preview Interativo
-            </button>
-            <button
+            </VButton>
+            <VButton
               type="button"
-              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-slate-50"
+              variant="outline"
+              size="sm"
               :title="`Exportar wiki da feature ${storySelecionada.titulo}`"
               @click="baixarFeatureWiki(storySelecionada.id)"
             >
               <LucideIcon name="download" :size="14" />
               Exportar wiki
-            </button>
+            </VButton>
             <RouterLink
               :to="{ path: '/gates/G2', query: { alvo: storySelecionada.id } }"
-              class="inline-flex min-h-[32px] items-center text-sm text-nexo-muted hover:underline ml-2"
+              class="backlog-action-link"
               @click="storyModalAberto = false"
             >
               Ir para Gate G2
             </RouterLink>
           </div>
-          <button type="button" class="inline-flex min-h-[32px] items-center rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="storyModalAberto = false">
+          <VButton type="button" variant="ghost" size="sm" @click="storyModalAberto = false">
             Fechar
-          </button>
+          </VButton>
         </div>
       </div>
-    </div>
+    </VDialog>
 
     <!-- Modal de Preview Interativo -->
     <PreviewModal
@@ -525,3 +575,53 @@ function temTelas(featureId: string): boolean {
     />
   </div>
 </template>
+
+<style scoped>
+/* VCard defaults to generous body padding; these two nested hierarchy cards
+   already own their internal spacing in the template. */
+.backlog-epic-card,
+.backlog-feature-card {
+  padding: 0 !important;
+}
+
+.backlog-title-row {
+  width: 100%;
+  max-width: 100%;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.backlog-epic-head-row,
+.backlog-feature-head-row {
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .backlog-epic-head-row,
+  .backlog-feature-head-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .backlog-epic-head-content,
+  .backlog-feature-head-content {
+    width: 100%;
+    flex: none;
+  }
+
+  .backlog-epic-head-actions,
+  .backlog-feature-head-actions {
+    width: 100%;
+    flex: none;
+    justify-content: flex-start;
+  }
+}
+
+.backlog-action-link {
+  @apply inline-flex min-h-8 items-center rounded-btn border border-nexo-border px-3 py-1.5 text-sm font-medium text-nexo-text no-underline;
+}
+
+.backlog-action-link:hover {
+  @apply bg-nexo-surface;
+}
+</style>

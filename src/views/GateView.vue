@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useGate } from '@/stores/useGate'
 import { useGraph } from '@/stores/useGraph'
 import { useUsers } from '@/stores/useUsers'
-import { aprovadoresDoGate, avaliarGate, gateAnterior, gateDesbloqueado } from '@/utils/gates'
+import { alvosDoGate, alvosVisiveisDoGate, avaliarGate, gateAnterior, gateDesbloqueado, quorumGate } from '@/utils/gates'
 import BlockedReason from '@/components/gates/BlockedReason.vue'
 import GateAiSession from '@/components/gates/GateAiSession.vue'
 import GateGuide from '@/components/gates/GateGuide.vue'
@@ -13,8 +13,8 @@ import LucideIcon from '@/components/common/LucideIcon.vue'
 import PreviewModal from '@/components/studio/PreviewModal.vue'
 import { montarEntradaStudio } from '@/ai/gateParaStudio'
 import type { GateId, NexoObject, Feature } from '@/types/nexo'
-import { seedEnquadramento } from '@/data/seed'
 import { exportarFeatureWiki } from '@/utils/exportWiki'
+import { VButton, VSelect, VTextInput, VTimeline } from 'vueui-nova-kit'
 
 const props = defineProps<{ id: string }>()
 const route = useRoute()
@@ -29,35 +29,37 @@ const anterior = computed(() => gateAnterior(props.id as GateId))
 const motivoBloqueio = computed(() =>
   anterior.value ? `Gate ${props.id} bloqueado: aprove ${anterior.value} primeiro (baseline não registrada).` : `Gate ${props.id} bloqueado.`
 )
+const timelineGates = computed(() => {
+  const firstOpen = gates.gates.findIndex((g) => g.status !== 'aprovado' || !g.baselineVersao)
+  return gates.gates.map((g, i) => {
+    const state: 'complete' | 'current' | 'upcoming' | 'error' = g.status === 'aprovado' && g.baselineVersao
+      ? 'complete'
+      : g.id === props.id ? (bloqueado.value ? 'error' : 'current')
+        : i === firstOpen ? 'current' : 'upcoming'
+    const detail = g.status === 'aprovado' && g.baselineVersao
+      ? `Baseline v${g.baselineVersao}${g.aprovadoEm ? ` · ${new Date(g.aprovadoEm).toLocaleDateString()}` : ''}`
+      : g.id === props.id && bloqueado.value ? `Bloqueado: ${motivoBloqueio.value}` : `Status: ${g.status}`
+    return { id: g.id, title: `${g.id} · ${g.titulo}`, description: detail, time: g.aprovadoPor ? `Aprovador ${g.aprovadoPor}` : undefined, state }
+  })
+})
 
-// Filtro estrito de alvos por tipo conforme o Gate, garantindo seed visível no G0 e apenas features no G2
-const alvos = computed<NexoObject[]>(() => {
-  if (props.id === 'G0') {
-    const nosG0 = graph.state.nos.filter((n) => n.gate === 'G0' || n.id === 'enq-pix')
-    if (nosG0.length > 0) return nosG0
-    return [seedEnquadramento as NexoObject]
+// Filtra objetos reais do projeto. A seleção de um gate nunca injeta dados seed.
+const alvosElegiveis = computed<NexoObject[]>(() => alvosDoGate(props.id as GateId, graph.state.nos, gates.gates))
+const alvos = computed<NexoObject[]>(() => alvosVisiveisDoGate(props.id as GateId, graph.state.nos, gates.gates))
+const alvoElegivel = computed(() => !!alvoId.value && alvosElegiveis.value.some((no) => no.id === alvoId.value))
+const opcoesAlvo = computed(() => alvos.value.map((no) => ({
+  value: no.id,
+  label: `${no.titulo} (${no.status} v${no.versao})${alvosElegiveis.value.some((eligible) => eligible.id === no.id) ? '' : ' · inspeção, baseline não vinculada'}`
+})))
+const motivoElegibilidade = computed(() => {
+  if (alvoElegivel.value) return ''
+  if (!alvosElegiveis.value.length && alvos.value.length) {
+    const ant = gateAnterior(props.id as GateId)
+    return ant
+      ? `Alvo legado disponível para inspeção, mas não elegível para aprovação. Registre novamente a baseline vinculada em ${ant}; nenhum estado ou evidência foi alterado.`
+      : 'Este alvo pode ser inspecionado, mas precisa ser associado a uma baseline válida antes da aprovação.'
   }
-  if (props.id === 'G1') {
-    return graph.state.nos.filter((n) => n.tipo === 'epico' && n.id !== 'enq-pix' && n.gate !== 'G0')
-  }
-  if (props.id === 'G2') {
-    // Apenas nós do tipo feature no G2 (corrige anomalia que trazia ep-pix)
-    return graph.state.nos.filter((n) => n.tipo === 'feature')
-  }
-  if (props.id === 'G3') {
-    return graph.state.nos.filter((n) => n.tipo === 'feature')
-  }
-  if (props.id === 'G4') {
-    return graph.state.nos.filter((n) => n.tipo === 'pbi')
-  }
-  if (props.id === 'G5') {
-    const emG5 = graph.state.nos.filter((n) => n.gate === 'G5')
-    if (emG5.length > 0) return emG5
-    const validados = graph.state.nos.filter((n) => (n.tipo === 'pbi' || n.tipo === 'feature') && (n.status === 'validated' || n.status === 'published'))
-    if (validados.length > 0) return validados
-    return []
-  }
-  return graph.state.nos.filter((n) => n.gate === props.id)
+  return ''
 })
 
 const alvoId = ref(typeof route.query.alvo === 'string' ? route.query.alvo : '')
@@ -69,11 +71,14 @@ const solicitacaoNegandoId = ref<string | null>(null)
 
 // Auto-seleciona primeiro alvo se vazio
 watch(
-  alvos,
-  (novos) => {
-    if (!alvoId.value && novos.length > 0) {
-      alvoId.value = novos[0].id
+  [alvos, () => props.id, () => route.query.alvo],
+  ([novos]) => {
+    const solicitado = typeof route.query.alvo === 'string' ? route.query.alvo : ''
+    if (solicitado && novos.some((n) => n.id === solicitado)) {
+      alvoId.value = solicitado
+      return
     }
+    if (!novos.some((n) => n.id === alvoId.value)) alvoId.value = novos[0]?.id ?? ''
   },
   { immediate: true }
 )
@@ -82,20 +87,19 @@ const objetoAlvo = computed(() => {
   if (alvoId.value) {
     const no = graph.noPorId(alvoId.value)
     if (no) return no
-    if (props.id === 'G0' && alvoId.value === 'enq-pix') return seedEnquadramento as NexoObject
   }
   return null
 })
 
 const pendenciasCount = computed(() => {
   if (!objetoAlvo.value) return 0
-  const ev = avaliarGate(objetoAlvo.value, graph.waivers, props.id as GateId)
+  const ev = avaliarGate(objetoAlvo.value, graph.waivers, props.id as GateId, graph.state.nos)
   return ev.checks.filter((c) => !c.ok).length
 })
 
 const checklistAlvo = computed(() => {
   if (!objetoAlvo.value) return []
-  return avaliarGate(objetoAlvo.value, graph.waivers, props.id as GateId).checks
+  return avaliarGate(objetoAlvo.value, graph.waivers, props.id as GateId, graph.state.nos).checks
 })
 
 const codigosFaltantes = computed(() => checklistAlvo.value.filter((c) => !c.ok).map((c) => c.codigo))
@@ -109,7 +113,7 @@ const solicitacoesAguardandoJulgamento = computed(() => gates.solicitacoesAguard
 
 function selecionarAlvoSolicitacao(solAlvoId: string, solGateId?: GateId) {
   // Item C FIXTIPOS: propaga query modo=wizard (projeto existente) nos router.push
-  const modo = route.query.modo === 'wizard' ? { modo: 'wizard' } : {}
+  const modo = route.query.modo === 'wizard' ? { modo: 'wizard', alvo: solAlvoId } : { alvo: solAlvoId }
   if (solGateId && solGateId !== props.id) {
     router.push({ path: `/gates/${solGateId}`, query: modo })
     return
@@ -118,11 +122,9 @@ function selecionarAlvoSolicitacao(solAlvoId: string, solGateId?: GateId) {
 }
 
 // Permissões do usuário logado
-const permitidos = computed(() => aprovadoresDoGate(props.id as GateId))
-const podeAprovar = computed(() => {
-  if (!users.currentUser) return false
-  return permitidos.value.includes(users.currentUser.papel)
-})
+function usuarioPodeVotar(sol: { id: string }): boolean {
+  return gates.solicitacoesAguardandoMeuJulgamento.some((item) => item.id === sol.id)
+}
 
 // SoD: verifica se usuário é o proponente / owner
 const ehProponente = computed(() => {
@@ -131,18 +133,7 @@ const ehProponente = computed(() => {
 })
 
 function aprovar() {
-  if (bloqueado.value) {
-    resultado.value = motivoBloqueio.value
-    return
-  }
-  if (!alvoId.value) {
-    resultado.value = 'Selecione o objeto do gate.'
-    return
-  }
-  // Segregação de Funções (SoD) fim-a-fim: passa proponenteId = owner do objeto
-  const proponenteId = objetoAlvo.value?.owner ?? ''
-  const r = gates.aprovarGate(props.id as GateId, alvoId.value, proponenteId)
-  resultado.value = r.motivo
+  solicitarApprove()
 }
 
 function solicitarApprove() {
@@ -165,6 +156,11 @@ function aprovarSolicitacao(solId: string) {
   resultado.value = r.motivo
 }
 
+function papeisPendentes(sol: { gate: GateId; aprovacoes?: { papel: string; versao: number }[]; versaoAlvo?: number }): string[] {
+  const votes = sol.aprovacoes ?? []
+  return quorumGate(sol.gate).filter((group) => !group.some((role) => votes.some((vote) => vote.papel === role && vote.versao === sol.versaoAlvo))).map((group) => group.join('/'))
+}
+
 function iniciarNegacao(solId: string) {
   solicitacaoNegandoId.value = solId
   motivoNegacao.value = ''
@@ -183,16 +179,33 @@ function cancelarNegacao() {
   motivoNegacao.value = ''
 }
 
-function abrirNoCanvas() {
-  const id = alvoId.value || alvos.value[0]?.id
-  // Item C FIXTIPOS: preserva query atual (modo=wizard) nos router.push
-  const q = route.query.modo === 'wizard' ? '&modo=wizard' : ''
-  if (!id) {
-    router.push(`/canvas?view=canvas${q}`)
+function avancarFilho() {
+  const alvo = objetoAlvo.value
+  const ator = users.currentUser?.id
+  if (!alvo || !ator) { resultado.value = 'Selecione um alvo e um usuário atual para criar o próximo rascunho.'; return }
+  if (gate.value?.status !== 'aprovado' || !gate.value.baselineVersao || alvo.versao !== gate.value.baselineVersao) { resultado.value = `Conclua o quorum e baseline desta versão do alvo em ${props.id} antes de criar o próximo item.`; return }
+  if (!['approved', 'baseline'].includes(alvo.status)) { resultado.value = 'Este alvo ainda não tem aprovação própria. Selecione o item que concluiu o quorum.'; return }
+  if (props.id === 'G1' && alvo.tipo === 'epico') {
+    const feature = graph.criarNo({ tipo: 'feature', titulo: `Feature — ${alvo.titulo}`, descricao: '', parent_id: alvo.id }, ator)
+    resultado.value = `Feature rascunho criada e vinculada ao épico: ${feature.titulo}.`
+    router.push({ path: '/gates/G2', query: { alvo: feature.id } })
     return
   }
-  graph.selecionar(id)
-  router.push(`/canvas?view=canvas&selecionado=${id}${q}`)
+  if (props.id === 'G3' && alvo.tipo === 'feature') {
+    const pbiDados: Parameters<typeof graph.criarNo>[0] & { feature_id: string; escopo_in: string[]; escopo_out: string[]; dependencias: string[]; estrategia_teste: string; criterios_bdd: never[] } = {
+      tipo: 'pbi', titulo: `PBI — ${alvo.titulo}`, descricao: '', parent_id: alvo.id, feature_id: alvo.id,
+      escopo_in: [], escopo_out: [], dependencias: [], estrategia_teste: '', criterios_bdd: []
+    }
+    const pbi = graph.criarNo(pbiDados, ator)
+    resultado.value = `PBI rascunho criado e vinculado à feature. Complete os campos antes de solicitar G4.`
+    router.push({ path: '/gates/G4', query: { alvo: pbi.id } })
+    return
+  }
+  if (props.id === 'G4' && alvo.tipo === 'pbi') {
+    graph.atualizarNo(alvo.id, { gate: 'G5' }, ator, 'preparou pacote de evidências G5 em rascunho')
+    resultado.value = 'O mesmo PBI foi encaminhado a G5. Nenhum status de entrega ou evidência foi preenchido.'
+    router.push({ path: '/gates/G5', query: { alvo: alvo.id } })
+  }
 }
 
 function corrigirNoObjeto(id: string) {
@@ -200,6 +213,14 @@ function corrigirNoObjeto(id: string) {
   // Item C FIXTIPOS: preserva query atual (modo=wizard) nos router.push
   const q = route.query.modo === 'wizard' ? '&modo=wizard' : ''
   router.push(`/canvas?view=canvas&selecionado=${id}&tab=texto${q}`)
+}
+
+function abrirNoCanvas() {
+  const id = alvoId.value || alvos.value[0]?.id
+  const query: Record<string, string> = { view: 'canvas' }
+  if (id) { graph.selecionar(id); query.selecionado = id }
+  if (typeof route.query.modo === 'string') query.modo = route.query.modo
+  router.push({ path: '/canvas', query })
 }
 
 function abrirStudioParaFeature() {
@@ -272,14 +293,14 @@ function baixarFeatureWiki(featureId: string) {
       <h1 class="text-xl font-bold">Gate {{ props.id }}</h1>
       <div
         v-if="solicitacoesAguardandoJulgamento.length > 0"
-        class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-xs text-amber-900 font-semibold"
+        class="inline-flex items-center gap-1.5 rounded-full bg-nexo-stale-bg border border-nexo-stale-border px-2.5 py-0.5 text-xs text-nexo-stale font-semibold"
       >
-        <span class="flex h-2 w-2 rounded-full bg-amber-500 animate-ping" />
-        <LucideIcon name="inbox" :size="13" class="text-amber-700" />
+        <span class="flex h-2 w-2 rounded-full bg-nexo-stale-accent animate-ping" />
+        <LucideIcon name="inbox" :size="13" class="text-nexo-stale" />
         {{ solicitacoesAguardandoJulgamento.length }} aguardando sua decisão
       </div>
       <div class="ml-auto flex items-center gap-2">
-        <button
+        <VButton
           type="button"
           class="flex items-center gap-1.5 rounded-btn border border-nexo-primary/40 bg-nexo-primary/10 px-3 py-1.5 min-h-[32px] text-sm font-semibold text-nexo-primary hover:bg-nexo-primary/20 transition-colors"
           @click="sessaoAiAberta = !sessaoAiAberta"
@@ -292,14 +313,14 @@ function baixarFeatureWiki(featureId: string) {
           >
             {{ pendenciasCount }}
           </span>
-        </button>
-        <button
+        </VButton>
+        <VButton
           type="button"
           class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm hover:bg-nexo-surface"
           @click="abrirNoCanvas()"
         >
           Abrir no Canvas
-        </button>
+        </VButton>
       </div>
     </div>
 
@@ -307,33 +328,41 @@ function baixarFeatureWiki(featureId: string) {
       {{ gate.titulo }} · {{ gate.status }}<span v-if="gate.baselineVersao"> · baseline v{{ gate.baselineVersao }} por {{ gate.aprovadoPor }}</span>
     </p>
     <p v-else class="text-sm text-nexo-blocked">Gate desconhecido.</p>
+    <details class="rounded-card border border-nexo-border bg-white px-3 py-2">
+      <summary class="cursor-pointer text-sm font-semibold">Progresso dos gates G0–G5</summary>
+      <VTimeline :items="timelineGates" variant="steps" size="sm" aria-label="Progresso e bloqueios dos gates">
+        <template #title="{ item }">
+          <RouterLink :to="`/gates/${item.id}`" class="font-medium text-nexo-primary hover:underline">{{ item.title }}</RouterLink>
+        </template>
+      </VTimeline>
+    </details>
 
     <!-- Notificação Visível: Solicitações Aguardando Meu Julgamento -->
     <div
       v-if="solicitacoesAguardandoJulgamento.length > 0"
-      class="rounded-card border border-amber-300 bg-amber-50/90 p-3 text-xs space-y-2 shadow-sm"
+      class="rounded-card border border-nexo-stale-border bg-nexo-stale-bg/90 p-3 text-xs space-y-2 shadow-sm"
     >
       <div class="flex items-center justify-between">
-        <span class="flex items-center gap-1.5 font-bold text-amber-900">
-          <LucideIcon name="alert-circle" :size="15" class="text-amber-700" />
+        <span class="flex items-center gap-1.5 font-bold text-nexo-stale">
+          <LucideIcon name="alert-circle" :size="15" class="text-nexo-stale" />
           Atenção: Você possui {{ solicitacoesAguardandoJulgamento.length }} solicitação(ões) pendente(s) aguardando sua decisão
         </span>
-        <span class="text-xs text-amber-800 font-medium">Clique no item para selecionar o objeto</span>
+        <span class="text-xs text-nexo-stale font-medium">Clique no item para selecionar o objeto</span>
       </div>
 
       <div class="flex flex-wrap gap-2">
-        <button
+        <VButton
           v-for="s in solicitacoesAguardandoJulgamento"
           :key="s.id"
           type="button"
-          class="flex items-center gap-1.5 rounded bg-white px-3 py-1.5 min-h-[32px] border text-sm font-medium transition-colors hover:border-amber-400 hover:bg-amber-100/50"
-          :class="s.alvoId === alvoId ? 'border-amber-500 text-amber-900 font-bold ring-1 ring-amber-400' : 'border-amber-200 text-nexo-text'"
+          class="flex items-center gap-1.5 rounded bg-white px-3 py-1.5 min-h-[32px] border text-sm font-medium transition-colors hover:border-nexo-stale-border hover:bg-nexo-stale-bg/50"
+          :class="s.alvoId === alvoId ? 'border-nexo-stale-border text-nexo-stale font-bold ring-1 ring-nexo-stale-accent' : 'border-nexo-stale-border text-nexo-text'"
           @click="selecionarAlvoSolicitacao(s.alvoId, s.gate)"
         >
-          <span class="rounded bg-amber-200 text-amber-950 px-1 py-0.2 text-xs font-bold">{{ s.gate }}</span>
+          <span class="rounded bg-nexo-stale-bg text-nexo-text px-1 py-0.2 text-xs font-bold">{{ s.gate }}</span>
           <span>{{ graph.noPorId(s.alvoId)?.titulo || s.alvoId }}</span>
           <span class="text-xs text-nexo-muted">({{ s.solicitanteId }})</span>
-        </button>
+        </VButton>
       </div>
     </div>
 
@@ -348,47 +377,53 @@ function baixarFeatureWiki(featureId: string) {
           :anterior-titulo="anterior ? (gates.gates.find((g) => g.id === anterior)?.titulo ?? '') : ''"
         />
 
-        <!-- Seletor de Objeto e Ação de Solicitar Approve -->
+        <div v-if="objetoAlvo && !alvoElegivel" class="rounded-card border border-nexo-stale-border bg-nexo-stale-bg p-3 text-sm text-nexo-text" role="status">
+          <p class="font-semibold">Alvo histórico disponível para inspeção; aprovação bloqueada</p>
+          <p class="mt-1 text-xs">{{ motivoElegibilidade || 'O alvo ainda não está vinculado à baseline aprovada desta etapa.' }} Reabra o gate anterior para revalidar a relação e registrar uma baseline associada. O checklist deste objeto não equivale a elegibilidade.</p>
+          <VButton v-if="anterior" class="mt-2" variant="outline" size="sm" @click="router.push(`/gates/${anterior}`)">Revisar {{ anterior }}</VButton>
+        </div>
+
+        <!-- Seletor de objeto e ação de solicitação -->
         <div class="rounded-card border border-nexo-border bg-white p-3.5 space-y-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
-            <label class="flex items-center gap-2 text-sm font-semibold text-nexo-text">
-              Objeto do gate:
-              <select v-model="alvoId" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-normal text-nexo-text">
-                <option value="">{{ alvos.length === 0 ? '(nenhum item elegível para este gate)' : '(selecionar)' }}</option>
-                <option v-for="n in alvos" :key="n.id" :value="n.id">
-                  {{ n.titulo }} ({{ n.status }} v{{ n.versao }})
-                </option>
-              </select>
-            </label>
+            <VSelect v-model="alvoId" :options="opcoesAlvo" label="Objeto do gate" :placeholder="alvos.length === 0 ? 'Nenhum item elegível' : 'Selecione um objeto'" size="sm" />
 
             <!-- Ações por Feature no Gate G2 e Botão Solicitar Approve -->
             <div class="flex items-center gap-2 flex-wrap">
+              <VButton
+                v-if="['G1', 'G3', 'G4'].includes(props.id) && objetoAlvo && ((props.id === 'G1' && objetoAlvo.tipo === 'epico') || (props.id === 'G3' && objetoAlvo.tipo === 'feature') || (props.id === 'G4' && objetoAlvo.tipo === 'pbi'))"
+                type="button" variant="secondary" size="sm"
+                :disabled="gate?.status !== 'aprovado' || !gate.baselineVersao || objetoAlvo?.versao !== gate.baselineVersao || !['approved', 'baseline'].includes(objetoAlvo?.status ?? 'draft')"
+                @click="avancarFilho()"
+              >
+                {{ props.id === 'G1' ? 'Detalhar em feature rascunho' : props.id === 'G3' ? 'Decompor em PBI rascunho' : 'Preparar o mesmo PBI para G5' }}
+              </VButton>
               <template v-if="props.id === 'G2' && objetoAlvo && objetoAlvo.tipo === 'feature'">
-                <button
+                <VButton
                   type="button"
                   class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
                   @click="abrirVerStory()"
                 >
                   <LucideIcon name="file-text" :size="13" />
-                  ver-story
-                </button>
-                <button
+                  Ver história
+                </VButton>
+                <VButton
                   type="button"
                   class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
                   @click="abrirStudioParaFeature()"
                 >
                   <LucideIcon name="layout" :size="13" />
-                  ver-tela
-                </button>
-                <button
+                  Ver tela
+                </VButton>
+                <VButton
                   type="button"
-                  class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-green-600 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50 shadow-xs transition-colors"
+                  class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-approved-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-approved hover:bg-nexo-approved-bg shadow-xs transition-colors"
                   @click="abrirPreview()"
                 >
                   <LucideIcon name="eye" :size="13" />
                   preview
-                </button>
-                <button
+                </VButton>
+                <VButton
                   type="button"
                   class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-nexo-surface shadow-xs transition-colors"
                   :title="`Exportar wiki consolidada da feature ${objetoAlvo.titulo}`"
@@ -396,39 +431,43 @@ function baixarFeatureWiki(featureId: string) {
                 >
                   <LucideIcon name="download" :size="13" />
                   Exportar wiki
-                </button>
+                </VButton>
               </template>
 
-              <span v-if="temSolicitacaoPendenteAlvo" class="inline-flex items-center gap-1 rounded bg-amber-100 text-amber-800 px-2 py-1 text-xs font-semibold">
+              <span v-if="temSolicitacaoPendenteAlvo" class="inline-flex items-center gap-1 rounded bg-nexo-stale-bg text-nexo-stale px-2 py-1 text-xs font-semibold">
                 <LucideIcon name="clock" :size="12" /> Solicitação Pendente
               </span>
-              <button
+              <VButton
                 v-else
                 type="button"
                 class="rounded-btn border border-nexo-primary bg-nexo-primary/10 text-nexo-primary hover:bg-nexo-primary hover:text-white px-3 py-1.5 min-h-[32px] text-sm font-semibold transition-colors"
-                :disabled="bloqueado || !alvoId"
+                :disabled="bloqueado || !alvoElegivel || pendenciasCount > 0"
                 @click="solicitarApprove()"
               >
-                Solicitar approve
-              </button>
+                Solicitar aprovação
+              </VButton>
             </div>
           </div>
 
           <div v-if="props.id === 'G5' && alvos.length === 0" class="rounded border border-dashed border-nexo-border/80 bg-nexo-canvas/40 p-4 text-center space-y-2">
             <p class="text-xs font-semibold text-nexo-text">Nenhum pacote de entrega pronto para o Gate G5</p>
-            <p class="text-[11px] text-nexo-muted max-w-md mx-auto">
-              O Gate G5 valida a Definition of Done (DoD) de itens que completaram o ciclo nos gates anteriores (G0 a G4). Para qualificar um entregável sem mocks, selecione uma Feature ou PBI no Canvas e promova seu status para 'validated' ou vincule o nó ao Gate G5.
-            </p>
+            <p class="text-[11px] text-nexo-muted max-w-md mx-auto">O pacote G5 reutiliza o PBI aprovado em G4. Abra G4, selecione o PBI e use “Preparar o mesmo PBI para G5”; as evidências permanecem vazias até serem informadas e revisadas.</p>
             <div class="pt-1">
-              <button
+              <VButton
                 type="button"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-btn bg-nexo-primary text-white hover:bg-nexo-primary/90 transition-colors"
-                @click="abrirNoCanvas()"
+                @click="router.push('/gates/G4')"
               >
                 <LucideIcon name="external-link" :size="13" />
-                Criar / Promover item no Canvas
-              </button>
+                Selecionar PBI aprovado em G4
+              </VButton>
             </div>
+          </div>
+          <div v-else-if="props.id !== 'G5' && alvos.length === 0" class="rounded-card border border-dashed border-nexo-border bg-nexo-stale-bg p-4 text-center space-y-2" role="status">
+            <p class="text-sm font-semibold text-nexo-text">Nenhum objeto elegível para {{ props.id }}</p>
+            <p class="text-xs text-nexo-muted">{{ props.id === 'G0' ? 'Crie ou selecione um épico de enquadramento no projeto atual.' : `Registre primeiro uma baseline vinculada no gate ${anterior}; este gate não cria alvo nem reutiliza dados de demonstração.` }}</p>
+            <VButton v-if="anterior" variant="outline" size="sm" @click="router.push(`/gates/${anterior}`)">Revisar {{ anterior }}</VButton>
+            <VButton v-else variant="outline" size="sm" @click="abrirNoCanvas()">Abrir Canvas do projeto</VButton>
           </div>
 
           <p v-if="mensagemSolicitacao" class="text-xs text-nexo-primary font-medium">
@@ -437,13 +476,13 @@ function baixarFeatureWiki(featureId: string) {
         </div>
 
         <!-- Fila de Solicitações Pendentes (Governança e SoD) -->
-        <div v-if="solicitacoesDesteGate.length > 0" class="rounded-card border border-amber-200 bg-amber-50/40 p-3.5 space-y-2.5">
+        <div v-if="solicitacoesDesteGate.length > 0" class="rounded-card border border-nexo-stale-border bg-nexo-stale-bg/40 p-3.5 space-y-2.5">
           <div class="flex items-center justify-between">
-            <span class="flex items-center gap-1.5 text-xs font-bold text-amber-900">
-              <LucideIcon name="inbox" :size="14" class="text-amber-700" />
+            <span class="flex items-center gap-1.5 text-xs font-bold text-nexo-stale">
+              <LucideIcon name="inbox" :size="14" class="text-nexo-stale" />
               Fila de Solicitações Pendentes ({{ solicitacoesDesteGate.length }})
             </span>
-            <span class="text-xs text-amber-700 font-medium">Requer aprovação de papel habilitado (SoD)</span>
+            <span class="text-xs text-nexo-stale font-medium">Requer aprovação de papel habilitado (SoD)</span>
           </div>
 
           <div class="space-y-2">
@@ -451,80 +490,85 @@ function baixarFeatureWiki(featureId: string) {
               v-for="sol in solicitacoesDesteGate"
               :key="sol.id"
               class="rounded border bg-white p-2.5 text-xs space-y-1.5 transition-colors"
-              :class="users.currentUser?.id !== sol.solicitanteId && podeAprovar ? 'border-amber-400 ring-1 ring-amber-300 bg-amber-50/20' : 'border-amber-200'"
+              :class="usuarioPodeVotar(sol) ? 'border-nexo-stale-border ring-1 ring-nexo-stale-accent bg-nexo-stale-bg/20' : 'border-nexo-stale-border'"
             >
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                  <button
+                  <VButton
                     type="button"
                     class="font-bold text-nexo-text hover:text-nexo-primary hover:underline text-left cursor-pointer"
                     title="Clique para selecionar este objeto no Gate"
                     @click="selecionarAlvoSolicitacao(sol.alvoId)"
                   >
                     {{ graph.noPorId(sol.alvoId)?.titulo || sol.alvoId }}
-                  </button>
+                  </VButton>
                   <span class="text-xs text-nexo-muted">por {{ sol.solicitanteId }} em {{ new Date(sol.em).toLocaleDateString() }}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
                   <span
-                    v-if="users.currentUser?.id !== sol.solicitanteId && podeAprovar"
-                    class="rounded bg-amber-600 text-white px-1.5 py-0.2 text-xs font-bold uppercase"
+                    v-if="usuarioPodeVotar(sol)"
+                    class="rounded bg-nexo-stale text-white px-1.5 py-0.2 text-xs font-bold uppercase"
                   >
                     Aguardando sua decisão
                   </span>
-                  <span class="rounded bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-bold uppercase">
+                  <span class="rounded bg-nexo-stale-bg text-nexo-stale px-2 py-0.5 text-xs font-bold uppercase">
                     Pendente
                   </span>
                 </div>
               </div>
 
+              <div class="text-xs text-nexo-muted">
+                Versão solicitada: v{{ sol.versaoAlvo ?? 'legada' }} · Votos: {{ sol.aprovacoes?.length ?? 0 }} · Faltam: {{ papeisPendentes(sol).join(', ') || 'nenhum' }}
+              </div>
+
               <!-- Ações da Fila -->
-              <div class="pt-1 border-t border-gray-100 flex items-center justify-between gap-2">
-                <span v-if="users.currentUser?.id === sol.solicitanteId" class="text-xs text-amber-800 italic">
-                  Você solicitou este gate. Um segundo aprovador (SoD) deve aprovar.
+              <div class="pt-1 border-t border-nexo-border flex items-center justify-between gap-2">
+                <span v-if="users.currentUser?.id === sol.solicitanteId" class="text-xs text-nexo-stale italic">
+                  Você solicitou esta revisão; o quorum exige votos de papéis distintos e SoD.
                 </span>
-                <span v-else-if="!podeAprovar" class="text-xs text-nexo-muted">
-                  Seu papel ({{ users.currentUser?.papel }}) não pode julgar este gate. Permitidos: {{ permitidos.join(', ') }}.
+                <span v-else-if="!usuarioPodeVotar(sol)" class="text-xs text-nexo-muted">
+                  Votos registrados: {{ sol.aprovacoes?.map((v) => v.papel).join(', ') || 'nenhum' }}. Faltam: {{ papeisPendentes(sol).join(', ') || 'nenhum' }}.
                 </span>
                 <div v-else class="flex items-center gap-2 ml-auto">
                   <!-- Formulário de Negativa Inline -->
                   <div v-if="solicitacaoNegandoId === sol.id" class="flex items-center gap-1.5">
-                    <input
+                    <VTextInput
                       v-model="motivoNegacao"
                       type="text"
                       placeholder="Motivo da recusa..."
-                      class="rounded border border-red-300 px-2 py-1 text-xs w-48"
+                      label="Motivo da recusa"
+                      size="sm"
                     />
-                    <button
+                    <VButton
                       type="button"
-                      class="rounded bg-red-600 px-3 py-1.5 min-h-[32px] text-sm text-white hover:bg-red-700 font-semibold"
+                      class="rounded bg-nexo-blocked px-3 py-1.5 min-h-[32px] text-sm text-white hover:bg-nexo-blocked/90 font-semibold"
                       @click="confirmarNegacao(sol.id)"
                     >
                       Confirmar
-                    </button>
-                    <button
+                    </VButton>
+                    <VButton
                       type="button"
-                      class="text-sm text-gray-500 hover:underline px-2 py-1.5 min-h-[32px]"
+                      class="text-sm text-nexo-muted hover:underline px-2 py-1.5 min-h-[32px]"
                       @click="cancelarNegacao()"
                     >
                       Cancelar
-                    </button>
+                    </VButton>
                   </div>
                   <template v-else>
-                    <button
+                    <VButton
                       type="button"
-                      class="rounded-btn bg-green-600 px-3 py-1.5 min-h-[32px] text-sm font-semibold text-white hover:bg-green-700"
+                      class="rounded-btn bg-nexo-approved px-3 py-1.5 min-h-[32px] text-sm font-semibold text-white hover:bg-nexo-approved/90"
                       @click="aprovarSolicitacao(sol.id)"
                     >
                       Aprovar
-                    </button>
-                    <button
+                    </VButton>
+                    <VButton
                       type="button"
-                      class="rounded-btn border border-red-200 text-red-700 hover:bg-red-50 px-3 py-1.5 min-h-[32px] text-sm font-semibold"
+                      class="rounded-btn border border-nexo-blocked-border text-nexo-blocked hover:bg-nexo-blocked-bg px-3 py-1.5 min-h-[32px] text-sm font-semibold"
                       @click="iniciarNegacao(sol.id)"
                     >
                       Negar
-                    </button>
+                    </VButton>
                   </template>
                 </div>
               </div>
@@ -536,7 +580,9 @@ function baixarFeatureWiki(featureId: string) {
         <GateGuide
           :gate-id="props.id as GateId"
           :alvo="objetoAlvo"
+          :nos="graph.state.nos"
           :alvo-id="alvoId"
+          :alvo-elegivel="alvoElegivel"
           :waivers="graph.waivers"
           @solicitar="solicitarApprove"
           @corrigir="corrigirNoObjeto"
@@ -548,36 +594,36 @@ function baixarFeatureWiki(featureId: string) {
           <p class="font-semibold text-nexo-text">Checklist bloqueante (tempo real):</p>
           <ul class="space-y-1">
             <li v-for="c in checklistAlvo" :key="c.codigo" class="flex items-center gap-1.5">
-              <LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" :class="c.ok ? 'text-green-600' : 'text-red-600'" />
+              <LucideIcon :name="c.ok ? 'check' : 'x'" :size="12" :class="c.ok ? 'text-nexo-approved' : 'text-nexo-blocked'" />
               <span>{{ c.codigo }} — {{ c.descricao }} [{{ c.severidade }}]</span>
               <span v-if="!c.ok && c.severidade === 'bloqueante'">
-                ·                 <button type="button" class="text-nexo-primary underline text-sm px-1 py-1" @click="corrigirNoObjeto(alvoId)">corrigir no objeto</button>
+                ·                 <VButton type="button" class="text-nexo-primary underline text-sm px-1 py-1" @click="corrigirNoObjeto(alvoId)">corrigir no objeto</VButton>
               </span>
-              <span v-else-if="c.severidade === 'aviso' && !c.ok" class="text-amber-700"> · dispensável (ver Backlog)</span>
+              <span v-else-if="c.severidade === 'aviso' && !c.ok" class="text-nexo-stale"> · dispensável (ver Backlog)</span>
             </li>
           </ul>
           <div class="pt-1 border-t border-nexo-border/60 flex items-center justify-between text-nexo-muted text-[11px]">
             <span>Aprovador atual: <strong class="text-nexo-text">{{ users.currentUser?.nome }} ({{ users.currentUser?.papel }})</strong></span>
-            <span v-if="ehProponente" class="text-amber-700 font-medium">Aviso SoD: Você é o owner do objeto.</span>
+            <span v-if="ehProponente" class="text-nexo-stale font-medium">Você pode solicitar a revisão; seu próprio voto não contará para o quorum (SoD).</span>
           </div>
         </div>
 
         <!-- Ação Direta de Aprovação -->
         <div>
-          <button
+          <VButton
             type="button"
             class="rounded-btn bg-nexo-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 hover:bg-nexo-primary/90 transition-colors"
-            :disabled="bloqueado || ehProponente || pendenciasCount > 0"
-            :aria-disabled="bloqueado || ehProponente || pendenciasCount > 0"
-            :title="bloqueado ? motivoBloqueio : ehProponente ? 'Proponente não pode ser o único aprovador (SoD).' : pendenciasCount > 0 ? `Faltam ${pendenciasCount} critérios: ${codigosFaltantes.join(', ')}` : 'Aprovar gate'"
+            :disabled="bloqueado || !alvoElegivel || pendenciasCount > 0"
+            :aria-disabled="bloqueado || pendenciasCount > 0"
+            :title="bloqueado ? motivoBloqueio : pendenciasCount > 0 ? `Faltam ${pendenciasCount} critérios: ${codigosFaltantes.join(', ')}` : 'Enviar para aprovação por quorum'"
             @click="aprovar()"
           >
-            Aprovar gate
-          </button>
-          <span v-if="ehProponente" class="ml-3 text-xs text-amber-700 font-medium">
-            (SoD: Proponente não pode aprovar diretamente; submeta solicitação para outro aprovador)
+            Solicitar aprovação formal
+          </VButton>
+          <span v-if="ehProponente" class="ml-3 text-xs text-nexo-stale font-medium">
+            (A solicitação pede votos dos papéis obrigatórios; seus votos como owner/solicitante não contam.)
           </span>
-          <span v-if="pendenciasCount > 0" class="ml-3 text-xs text-amber-700 font-medium">
+          <span v-if="pendenciasCount > 0" class="ml-3 text-xs text-nexo-stale font-medium">
             (Pendente: {{ pendenciasCount }} critérios — {{ codigosFaltantes.join(', ') }})
           </span>
           <p v-if="resultado" class="mt-2 text-sm" :class="resultado.includes('aprovado') ? 'text-nexo-approved font-semibold' : 'text-nexo-blocked'">
@@ -599,7 +645,7 @@ function baixarFeatureWiki(featureId: string) {
           <ul class="space-y-1 text-nexo-muted">
             <li v-for="(t, i) in gates.tentativas.filter((x) => x.gate === props.id).slice(0, 10)" :key="i">
               {{ t.em }} — {{ t.atorId }} —
-              <span :class="t.ok ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'">{{ t.ok ? 'OK' : 'NEGADA' }}</span>
+              <span :class="t.ok ? 'text-nexo-approved font-semibold' : 'text-nexo-blocked font-semibold'">{{ t.ok ? 'OK' : 'NEGADA' }}</span>
               — {{ t.motivo }}
             </li>
           </ul>
@@ -613,7 +659,7 @@ function baixarFeatureWiki(featureId: string) {
             <li>Abra o gate correspondente e selecione o objeto do gate no seletor.</li>
             <li>Responda as perguntas da IA no chat da Sessão IA até concluir a coleta.</li>
             <li>Verifique o progresso no checklist bloqueante e o artefato gerado no painel de saída.</li>
-            <li>Clique em "Solicitar approve" e, com outro papel aprovador, julgue na fila (SoD: proponente não aprova o próprio item).</li>
+            <li>Clique em "Solicitar aprovação" e, com outro papel aprovador, julgue na fila (SoD: proponente não aprova o próprio item).</li>
           </ol>
         </details>
       </div>
@@ -624,6 +670,7 @@ function baixarFeatureWiki(featureId: string) {
           :gate-id="props.id as GateId"
           :alvo-id="alvoId"
           :alvo="objetoAlvo"
+          :alvo-elegivel="alvoElegivel"
           :bloqueado="bloqueado"
           :motivo-bloqueio="motivoBloqueio"
           @fechar="sessaoAiAberta = false"
@@ -643,14 +690,14 @@ function baixarFeatureWiki(featureId: string) {
           <div>
             <div class="flex items-center gap-2">
               <span class="rounded bg-nexo-primary/10 px-1.5 py-0.5 text-xs font-mono font-bold text-nexo-primary">{{ objetoAlvo.id }}</span>
-              <span class="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">{{ objetoAlvo.gate }}</span>
-              <span class="rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-800">{{ objetoAlvo.status }}</span>
+              <span class="rounded bg-nexo-draft-bg px-1.5 py-0.5 text-xs font-medium text-nexo-draft">{{ objetoAlvo.gate }}</span>
+              <span class="rounded bg-nexo-approved-bg px-1.5 py-0.5 text-xs font-medium text-nexo-approved">{{ objetoAlvo.status }}</span>
             </div>
             <h2 class="text-base font-bold text-nexo-text mt-1">{{ objetoAlvo.titulo }}</h2>
           </div>
-          <button type="button" class="text-gray-400 hover:text-gray-700" @click="storyModalAberto = false">
+          <VButton type="button" class="text-nexo-muted hover:text-nexo-text" @click="storyModalAberto = false">
             <LucideIcon name="x" :size="18" />
-          </button>
+          </VButton>
         </div>
 
         <!-- Conteúdo da Story -->
@@ -678,9 +725,9 @@ function baixarFeatureWiki(featureId: string) {
             <div class="space-y-2">
               <div v-for="c in (objetoAlvo as Feature).criterios_bdd" :key="c.id" class="rounded border border-nexo-border/80 p-2 bg-white space-y-0.5">
                 <span class="font-mono text-xs font-bold text-nexo-primary">{{ c.id }}</span>
-                <p class="text-[11px]"><strong class="text-gray-700">Dado</strong> {{ c.given }}</p>
-                <p class="text-[11px]"><strong class="text-gray-700">Quando</strong> {{ c.when }}</p>
-                <p class="text-[11px]"><strong class="text-gray-700">Então</strong> {{ c.then }}</p>
+                <p class="text-[11px]"><strong class="text-nexo-text">Dado</strong> {{ c.given }}</p>
+                <p class="text-[11px]"><strong class="text-nexo-text">Quando</strong> {{ c.when }}</p>
+                <p class="text-[11px]"><strong class="text-nexo-text">Então</strong> {{ c.then }}</p>
               </div>
             </div>
           </div>
@@ -689,36 +736,36 @@ function baixarFeatureWiki(featureId: string) {
         <!-- Rodapé do Modal -->
         <div class="flex items-center justify-between border-t pt-3">
           <div class="flex items-center gap-2">
-            <button
+            <VButton
               type="button"
               class="inline-flex min-h-[32px] items-center gap-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-nexo-primary/90"
               @click="storyModalAberto = false; abrirStudioParaFeature()"
             >
               <LucideIcon name="layout" :size="13" />
               Ver Tela no Studio
-            </button>
-            <button
+            </VButton>
+            <VButton
               type="button"
-              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-green-600 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50"
+              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-approved-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-approved hover:bg-nexo-approved-bg"
               @click="storyModalAberto = false; abrirPreview()"
             >
               <LucideIcon name="eye" :size="13" />
               Preview Interativo
-            </button>
-            <button
+            </VButton>
+            <VButton
               v-if="objetoAlvo"
               type="button"
-              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-slate-50"
+              class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-nexo-surface"
               :title="`Exportar wiki da feature ${objetoAlvo.titulo}`"
               @click="baixarFeatureWiki(objetoAlvo.id)"
             >
               <LucideIcon name="download" :size="13" />
               Exportar wiki
-            </button>
+            </VButton>
           </div>
-          <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="storyModalAberto = false">
+          <VButton type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="storyModalAberto = false">
             Fechar
-          </button>
+          </VButton>
         </div>
       </div>
     </div>

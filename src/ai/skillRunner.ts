@@ -24,8 +24,6 @@
 import type { GateId, NexoObject, PatchMudanca, Role } from '@/types/nexo'
 import {
   diagnosticarFaltasGate,
-  gerarPropostaPatch,
-  gerarSugestaoG0,
   obterSkillsDoGate,
   type FaltaGate
 } from '@/ai/gateSkills'
@@ -252,27 +250,12 @@ export function selecionarSkillInterna(gateId: GateId, codigosFaltas: string[]):
   return melhor.id
 }
 
-function montarPatchLocal(objeto: NexoObject, faltas: FaltaGate[], respostas: Record<string, string>) {
-  for (const f of faltas) {
-    const txt = respostas[f.codigo]
-    const p = gerarPropostaPatch(objeto, f.codigo, txt)
-    if (p) return p
-    // Buraco do gerador determinístico: ao menos via campoAlvo genérico
-    if (txt && f.campoAlvo) {
-      return {
-        justificativa: `[IA Gate ${objeto.gate}] Preencher ${f.campoAlvo} para resolver ${f.codigo} (extraído do texto)`,
-        mudancas: [{ campo: f.campoAlvo, de: '', para: txt }] as PatchMudanca[]
-      }
-    }
-  }
-  return null
-}
-
 export interface SkillRunnerContexto {
   /** G2: épico de origem p/ previsão de escopo (pedido do dono). */
   epico?: NexoObject | null
   /** G2: todas as features do grafo (foco = `objeto`, resto = contexto). */
   features?: NexoObject[]
+  nos?: NexoObject[]
 }
 
 export async function executarSkill(
@@ -282,7 +265,7 @@ export async function executarSkill(
   papelUsuario?: Role,
   contexto?: SkillRunnerContexto
 ): Promise<SkillRunnerResult> {
-  const diag = diagnosticarFaltasGate(objeto, gateId)
+  const diag = diagnosticarFaltasGate(objeto, gateId, undefined, contexto?.nos)
   // O5: skill invisível — seleção 100% interna por gateId; skillId = rastreio interno.
   const skillId = selecionarSkillInterna(gateId, diag.faltas.map((f) => f.codigo))
   // O5: roteiro adaptado ao papel — mantém TODAS as perguntas, só reordena.
@@ -300,11 +283,8 @@ export async function executarSkill(
       { timeoutMs: 120000 }
     )
     const resposta = llm.texto
-    const respostas = extrairRespostasDoTexto(
-      [...historico.filter((m) => m.role === 'user').map((m) => m.content), resposta].join('\n'),
-      diag.faltas
-    )
-    const patch = montarPatchLocal(objeto, faltasRoteiro, respostas)
+    const respostas: Record<string, string> = {}
+    const patch = null
     return {
       skillId,
       respostasColetadas: respostas,
@@ -318,11 +298,8 @@ export async function executarSkill(
     if (!(e instanceof OllamaOffline)) throw e
     // Fallback local HONESTO (R2): diz que está offline e faz a pergunta da próxima
     // falta do roteiro + registra — NUNCA menu de comandos ("experimente pedir...").
-    const respostas = extrairRespostasDoTexto(
-      historico.filter((m) => m.role === 'user').map((m) => m.content).join('\n'),
-      diag.faltas
-    )
-    const patch = montarPatchLocal(objeto, faltasRoteiro, respostas)
+    const respostas: Record<string, string> = {}
+    const patch = null
     const proxima = faltasRoteiro[0]
     const linhas = [`Gate ${gateId} - "${objeto.titulo}" (resposta local - servidor inalcancavel).`]
     if (diag.faltas.length === 0) {
@@ -332,8 +309,7 @@ export async function executarSkill(
       const resto = faltasRoteiro.length > 5 ? ` (+${faltasRoteiro.length - 5})` : ''
       linhas.push(`Faltas: ${vis}${resto}.`)
       linhas.push(`Falta atual: [${proxima.codigo}] ${proxima.pergunta}`.slice(0, 200))
-      linhas.push(`Responda com: "${gerarSugestaoG0(proxima.codigo, objeto)}"`.slice(0, 200))
-      linhas.push('Responda em texto livre que eu registro a pendencia.')
+      linhas.push('Registre sua resposta no editor estruturado para propor alteração; exemplos do roteiro são apenas explicativos.')
     }
     const outputParcial = linhas.slice(0, 8).join('\n')
     return {

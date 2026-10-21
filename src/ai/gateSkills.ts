@@ -1,13 +1,7 @@
 import type {
-  CriterioBdd,
-  Epic,
-  Feature,
   GateCheck,
   GateId,
-  Kpi,
   NexoObject,
-  NexoStatus,
-  PBI,
   PatchMudanca,
   Role,
   User
@@ -194,11 +188,11 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
   },
   'FTR-004': {
     codigo: 'FTR-004',
-    campoAlvo: 'owner',
-    pergunta: 'Quem é o responsável/owner formal desta feature?',
-    porQueBloqueia: 'Nenhum gate pode ser aprovado com objetos anônimos ou sem liderança.',
-    exemplo: 'u-pm (Paula)',
-    acaoLabel: 'Atribuir Owner'
+    campoAlvo: 'permissoes',
+    pergunta: 'Qual recurso é alterado e qual policy autoriza essa ação? Cite papel/condição e regra de autorização aplicada.',
+    porQueBloqueia: 'Alterações de dados sem policy explícita podem permitir acesso não autorizado.',
+    exemplo: '{"permissoes":[{"recurso":"cobrança","acao":"confirmar","policy":"somente titular autenticado"}]}',
+    acaoLabel: 'Definir permissão/policy'
   },
   'FTR-005': {
     codigo: 'FTR-005',
@@ -211,17 +205,17 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
   'FTR-006': {
     codigo: 'FTR-006',
     campoAlvo: 'integracoes',
-    pergunta: 'As integrações externas declaram timeout explícito, estratégia de falha e tratamento de indisponibilidade?',
-    porQueBloqueia: 'Chamadas síncronas sem timeout podem travar threads e degradar toda a plataforma.',
-    exemplo: 'PSP Pix com timeout de 3000ms, retry exponencial até 3x e fallback com mensagem amigável.',
+    pergunta: 'Foi declarada a existência de integrações? Para cada integração, quais são o timeout positivo, o tratamento de falha e o tratamento de indisponibilidade?',
+    porQueBloqueia: 'Integrações omitidas ou sem limites e respostas distintas para falha/indisponibilidade não permitem avaliar resiliência.',
+    exemplo: 'Use o formulário para registrar uma decisão real e os campos de resiliência. Não copie um exemplo como evidência.',
     acaoLabel: 'Configurar Resiliência'
   },
   'FTR-007': {
     codigo: 'FTR-007',
     campoAlvo: 'criterios_bdd',
-    pergunta: 'Cadê o BDD desta feature? Quais cenários Given/When/Then verificáveis validam o aceite?',
-    porQueBloqueia: 'Sem ao menos 1 critério BDD verificável, a squad de engenharia não possui baseline de testes.',
-    exemplo: 'Dado que a fatura está aberta, quando o cliente solicita Pix, então o QR Code deve expirar em 15 minutos.',
+    pergunta: 'Quais critérios Given/When/Then foram declarados, em que camada serão verificados e qual é a fonte/referência de cada critério?',
+    porQueBloqueia: 'Sem cenário verificável, camada e origem declaradas não há base rastreável para validar o aceite.',
+    exemplo: 'Informe cenário, camada e referência reais no formulário. Não copie um exemplo como evidência.',
     acaoLabel: 'Gerar Critérios BDD'
   },
   'FTR-008': {
@@ -395,9 +389,9 @@ export const DICIONARIO_PERGUNTAS: Record<string, PerguntaCheck> = {
   'PBI-BLOQ': {
     codigo: 'PBI-BLOQ',
     campoAlvo: 'flag',
-    pergunta: 'Existe alguma flag bloqueadora pendente sobre este PBI?',
-    porQueBloqueia: 'Flags bloqueadoras abertas impedem o avanço para sprint.',
-    exemplo: 'Remover flag ou resolver o impedimento apontado.',
+    pergunta: 'Foi avaliada e registrada a decisão de existir ou não um bloqueador aberto? Se houver, qual impedimento continua pendente?',
+    porQueBloqueia: 'Texto livre ambíguo pode inverter a leitura de “sem bloqueador”; o estado precisa de decisão explícita e justificativa.',
+    exemplo: 'Registre a decisão e a justificativa reais no formulário; não copie um exemplo como evidência.',
     acaoLabel: 'Limpar Bloqueadores'
   },
   'DON-001': {
@@ -622,14 +616,15 @@ export function obterPerguntasDoCheck(codigoCheck: string): PerguntaCheck | unde
 export function diagnosticarFaltasGate(
   objeto: NexoObject,
   gateId: GateId,
-  waivers?: { codigo: string; prazo: string }[]
+  waivers?: { codigo: string; prazo: string }[],
+  nos?: NexoObject[]
 ): {
   checks: GateCheck[]
   faltas: FaltaGate[]
   bloqueantesFaltando: string[]
   aprovado: boolean
 } {
-  const ev = avaliarGate(objeto, waivers, gateId)
+  const ev = avaliarGate(objeto, waivers, gateId, nos)
   const faltas: FaltaGate[] = []
 
   for (const c of ev.checks) {
@@ -998,15 +993,13 @@ export function formatarRespostaG0Sucinta(
   objetoTitulo: string,
   falta: FaltaGate,
   restantes: number,
-  dicaExtra?: string
+  _dicaExtra?: string
 ): string {
   const linhas: string[] = []
   linhas.push(`Gate G0 - falta 1 de ${restantes}: ${falta.codigo}.`)
   linhas.push(`Pergunta: ${falta.pergunta}`)
   linhas.push(`Por que bloqueia: ${falta.porQueBloqueia}`)
-  if (dicaExtra) linhas.push(`Sugestão: ${dicaExtra.slice(0, 160)}`)
-  const clicavel = SUGESTAO_CLICAVEL_G0[falta.codigo] ?? falta.exemplo
-  linhas.push(`Responda com: "${clicavel}"`)
+  linhas.push('Registre sua resposta no formulário tipado para revisar um diff. A conversa não altera o artefato.')
   linhas.push(`Objeto: ${objetoTitulo}`)
   return linhas.slice(0, 8).join('\n')
 }
@@ -1017,360 +1010,69 @@ export function gerarPropostaPatch(
   codigoCheck: string,
   textoUsuario?: string
 ): { justificativa: string; mudancas: PatchMudanca[] } | null {
-  const mudancas: PatchMudanca[] = []
-  const titulo = objeto.titulo || 'Objeto'
-  const entrada = (textoUsuario ?? '').trim()
+  // Nunca completa schemas com exemplos inventados. Patch só parte de JSON
+  // explicitamente escrito pelo usuário; conversa livre fica como anotação.
+  return parsearPatchExplicito(objeto, codigoCheck, textoUsuario ?? '')
 
-  switch (codigoCheck) {
-    case 'FTR-007': {
-      // Ao menos 1 critério BDD verificável (determinístico: sequencial)
-      const f = objeto as unknown as Feature
-      const atual = JSON.stringify(f.criterios_bdd ?? [])
-      const seq = (f.criterios_bdd ?? []).length + 1
-      const novoId = `AC-${String(seq).padStart(3, '0')}`
+  
+}
 
-      let given = `que o usuário acessa ${titulo}`
-      let when = 'solicita a execução da operação'
-      let then = 'o sistema confirma o resultado com sucesso e atualiza o estado'
+const CAMPOS_PATCH_EXPLICITO: Record<string, string[]> = {
+  'ENQ-001': ['problema'], 'EPC-001': ['problema'],
+  'ENQ-002': ['personas'], 'ENQ-003': ['objetivo', 'kpis'], 'ENQ-004': ['owner'],
+  'ENQ-005': ['escopo_in', 'escopo_out'], 'ENQ-006': ['riscos'],
+  'EPC-002': ['kpis'], 'EPC-003': ['escopo_in', 'escopo_out'], 'EPC-004': ['objetivo'], 'EPC-005': ['riscos'],
+  'FTR-001': ['ator', 'beneficio', 'descricao'], 'FTR-002': ['fluxo_feliz'], 'FTR-003': ['regras_ids'],
+  'FTR-004': ['permissoes'], 'FTR-005': ['telas_estados'], 'FTR-006': ['integracoes'],
+  'FTR-007': ['criterios_bdd'], 'FTR-008': ['alternativos'],
+  'ARC-001': ['integracoes'], 'ARC-002': ['adr_id'], 'ARC-003': ['openapi'], 'ARC-004': ['persistencia'],
+  'ARC-005': ['integracoes'], 'ARC-006': ['dado_pessoal'], 'ARC-007': ['nfrs'], 'ARC-008': ['seguranca'],
+  'PBI-ACEITE': ['criterios_bdd'], 'PBI-ORIGEM': ['feature_id', 'owner'], 'PBI-ESCOPO': ['escopo_in', 'escopo_out'],
+  'PBI-DEP': ['dependencias'], 'PBI-OWNER': ['owner'], 'PBI-TESTE': ['estrategia_teste'],
+  'PBI-CONTRATO': ['contrato'], 'PBI-BLOQ': ['flag'], 'PBI-COND-COMPAT': ['contrato'],
+  'PBI-COND-ROLLBACK': ['rollback'], 'PBI-COND-TELA': ['contrato'], 'PBI-COND-TESTE': ['estrategia_teste'],
+  'DON-001': ['evidencia'], 'DON-002': ['evidencia'], 'DON-003': ['evidencia'],
+  'DON-004': ['evidencia'], 'DON-005': ['evidencia'], 'DON-006': ['evidencia']
+}
 
-      if (entrada.length >= 15) {
-        given = `que ${entrada}`
-        when = 'a ação é processada pelo sistema'
-        then = 'a regra de negócio é validada sem exceções'
-      }
-
-      const novoBdd: CriterioBdd[] = [
-        ...(f.criterios_bdd ?? []),
-        {
-          id: novoId,
-          given,
-          when,
-          then,
-          prioridade: 'must'
-        }
-      ]
-
-      mudancas.push({
-        campo: 'criterios_bdd',
-        de: atual,
-        para: JSON.stringify(novoBdd, null, 2)
-      })
-
-      return {
-        justificativa: `[IA Gate G2] Adicionar critério BDD Given/When/Then verificável (${novoId}) para resolver FTR-007`,
-        mudancas
-      }
-    }
-
-    case 'FTR-001': {
-      // Narrativa de benefício
-      const f = objeto as unknown as Feature
-      const deAtor = f.ator ?? ''
-      const deDesc = objeto.descricao ?? ''
-      const paraAtor = entrada || 'Usuário autenticado'
-      const paraDesc = `Permitir que ${paraAtor} execute ${titulo} com segurança e rastreabilidade total.`
-
-      mudancas.push({ campo: 'ator', de: deAtor, para: paraAtor })
-      mudancas.push({ campo: 'descricao', de: deDesc, para: paraDesc })
-
-      return {
-        justificativa: `[IA Gate G2] Definir ator e narrativa de benefício para resolver FTR-001`,
-        mudancas
-      }
-    }
-
-    case 'FTR-002': {
-      // Fluxo feliz
-      const f = objeto as unknown as Feature
-      const de = f.fluxo_feliz ?? ''
-      const para =
-        entrada.length >= 10
-          ? entrada
-          : `1. O usuário seleciona ${titulo}. 2. O sistema valida os parâmetros e pré-condições. 3. Confirma a operação com sucesso.`
-
-      mudancas.push({ campo: 'fluxo_feliz', de, para })
-      return {
-        justificativa: `[IA Gate G2] Estruturar fluxo feliz observável para resolver FTR-002`,
-        mudancas
-      }
-    }
-
-    case 'FTR-004':
-    case 'ENQ-004': {
-      // Owner
-      const de = objeto.owner ?? ''
-      const para = entrada || 'u-pm'
-      mudancas.push({ campo: 'owner', de, para })
-      return {
-        justificativa: `[IA Gate] Atribuir owner responsável formal (${para})`,
-        mudancas
-      }
-    }
-
-    case 'FTR-008': {
-      // Alternativos / exceções
-      const f = objeto as unknown as Feature
-      const de = JSON.stringify(f.alternativos ?? [])
-      const novoAlt = entrada || 'Falha de comunicação ou timeout retorna erro amigável com opção de tentar novamente.'
-      const para = JSON.stringify([...(f.alternativos ?? []), novoAlt], null, 2)
-      mudancas.push({ campo: 'alternativos', de, para })
-      return {
-        justificativa: `[IA Gate G2] Adicionar cenário alternativo/exceção para resolver FTR-008`,
-        mudancas
-      }
-    }
-
-    case 'EPC-001':
-    case 'ENQ-001': {
-      // Problema: derivar de texto livre mesmo sem formato (inferencia G0)
-      const e = objeto as unknown as Epic
-      const de = e.problema ?? objeto.descricao ?? ''
-      const ext = entrada ? extrairRespostasG0DoTexto(entrada) : {}
-      let para = ''
-      if (entrada.length >= 20) {
-        para = (ext['problema'] && ext['problema'].length >= 10 ? ext['problema'] : entrada).slice(0, 200)
-      } else if (entrada) {
-        para = inferirProblemaObjetivo(entrada, titulo).problema
-      } else {
-        para = `Clientes e operadores enfrentam atrasos e inconsistências operacionais ao tentar processar ${titulo} sem automação.`
-      }
-      mudancas.push({ campo: 'problema', de, para })
-      if (objeto.descricao !== para) {
-        mudancas.push({ campo: 'descricao', de: objeto.descricao, para })
-      }
-      return {
-        justificativa: `[IA Gate] Descrever problema e contexto detalhado (>= 30 chars)`,
-        mudancas
-      }
-    }
-
-    case 'ENQ-002': {
-      // Publico-alvo G0: extracao de texto livre -> personas
-      const rec = objeto as unknown as Record<string, unknown>
-      const de = JSON.stringify(Array.isArray(rec['personas']) ? rec['personas'] : [])
-      const ext = entrada ? extrairRespostasG0DoTexto(entrada) : {}
-      const valor = (ext['personas'] || entrada || 'Cliente com fatura').slice(0, 120)
-      const atuais = Array.isArray(rec['personas']) ? (rec['personas'] as unknown[]) : []
-      const para = JSON.stringify([...atuais, valor].filter((v, i, a) => a.indexOf(v) === i), null, 2)
-      mudancas.push({ campo: 'personas', de, para })
-      return {
-        justificativa: `[IA Gate G0] Definir publico-alvo/persona para ENQ-002`,
-        mudancas
-      }
-    }
-
-    case 'ENQ-003': {
-      // Hipotese G0: inferir objetivo + KPI de texto livre
-      const rec = objeto as unknown as Record<string, unknown>
-      const ext = entrada ? extrairRespostasG0DoTexto(entrada) : {}
-      const inf = inferirProblemaObjetivo(entrada || titulo, titulo)
-      const objAtual = String(rec['objetivo'] ?? '').trim()
-      const objNovo = (ext['objetivo'] || inf.objetivo).slice(0, 200)
-      if (objAtual.length < 10) {
-        mudancas.push({ campo: 'objetivo', de: objAtual, para: objNovo })
-      }
-      const kpisAtual = Array.isArray(rec['kpis']) ? (rec['kpis'] as unknown[]) : []
-      const alvoNum = entrada.match(/(\d+)\s?%?/)?.[1] ?? '15'
-      const semMatch = entrada.toLowerCase().match(/(\d+)\s*semanas?/)
-      const kpiNovo: Kpi = {
-        nome: ext['kpis'] ? 'Meta relatada pelo usuário' : `Conversão em ${titulo}`,
-        unidade: '%',
-        alvo: alvoNum,
-        janela: semMatch && semMatch[1] ? `${semMatch[1]}sem` : '4sem',
-        responsavel: objeto.owner || 'u-pm'
-      }
-      if (kpisAtual.length === 0) {
-        mudancas.push({ campo: 'kpis', de: JSON.stringify(kpisAtual), para: JSON.stringify([...kpisAtual, kpiNovo], null, 2) })
-      }
-      return {
-        justificativa: `[IA Gate G0] Definir hipotese mensuravel (objetivo + KPI) para ENQ-003`,
-        mudancas
-      }
-    }
-
-    case 'ENQ-005': {
-      // Restricoes/nao-objetivos derivados do dominio (max 5)
-      const rec = objeto as unknown as Record<string, unknown>
-      const fonte = `${titulo} ${objeto.descricao ?? ''}`
-      const inAtual = Array.isArray(rec['escopo_in']) ? (rec['escopo_in'] as string[]) : []
-      const outAtual = Array.isArray(rec['escopo_out']) ? (rec['escopo_out'] as string[]) : []
-      const paraIn =
-        inAtual.length > 0
-          ? inAtual
-          : [entrada && entrada.length >= 5 ? entrada.slice(0, 200) : `Operação principal de ${titulo}`]
-      const naoObjs = sugerirNaoObjetivos(fonte).slice(0, 5)
-      const paraOut = outAtual.length > 0 ? outAtual : naoObjs
-      mudancas.push({ campo: 'escopo_in', de: JSON.stringify(inAtual), para: JSON.stringify(paraIn, null, 2) })
-      mudancas.push({ campo: 'escopo_out', de: JSON.stringify(outAtual), para: JSON.stringify(paraOut, null, 2) })
-      return {
-        justificativa: `[IA Gate G0] Definir escopo_in e nao-objetivos derivados do dominio para ENQ-005: ${listaCurta(naoObjs)}`,
-        mudancas
-      }
-    }
-
-    case 'ENQ-006': {
-      // Riscos derivados do dominio (max 5)
-      const rec = objeto as unknown as Record<string, unknown>
-      const fonte = `${titulo} ${objeto.descricao ?? ''} ${entrada}`
-      const atual = Array.isArray(rec['riscos']) ? (rec['riscos'] as unknown[]) : []
-      const lista = sugerirRiscos(fonte).slice(0, 5)
-      const novos = entrada && entrada.length >= 5 ? [entrada.slice(0, 200), ...lista].slice(0, 5) : lista
-      mudancas.push({ campo: 'riscos', de: JSON.stringify(atual), para: JSON.stringify([...atual, ...novos], null, 2) })
-      return {
-        justificativa: `[IA Gate G0] Mapear riscos derivados do dominio para ENQ-006: ${listaCurta(lista)}`,
-        mudancas
-      }
-    }
-
-    case 'EPC-002': {
-      // KPI de Épico
-      const e = objeto as unknown as Epic
-      const de = JSON.stringify(e.kpis ?? [])
-      const novoKpi: Kpi = {
-        nome: entrada ? `Impacto em ${entrada}` : `Adoção de ${titulo}`,
-        unidade: '%',
-        alvo: '40',
-        janela: '90d',
-        responsavel: objeto.owner || 'u-pm'
-      }
-      const para = JSON.stringify([...(e.kpis ?? []), novoKpi], null, 2)
-      mudancas.push({ campo: 'kpis', de, para })
-      return {
-        justificativa: `[IA Gate G1] Adicionar KPI mensurável com nome, unidade, alvo e responsável para EPC-002`,
-        mudancas
-      }
-    }
-
-    case 'EPC-003': {
-      // Escopo In / Out
-      const e = objeto as unknown as Epic
-      const deIn = JSON.stringify(e.escopo_in ?? [])
-      const deOut = JSON.stringify(e.escopo_out ?? [])
-      const paraIn = JSON.stringify(
-        [...(e.escopo_in ?? []), `Operação principal e fluxo automatizado de ${titulo}`],
-        null,
-        2
-      )
-      const paraOut = JSON.stringify(
-        [...(e.escopo_out ?? []), `Suporte legado e customizações pontuais fora do padrão`],
-        null,
-        2
-      )
-      mudancas.push({ campo: 'escopo_in', de: deIn, para: paraIn })
-      mudancas.push({ campo: 'escopo_out', de: deOut, para: paraOut })
-      return {
-        justificativa: `[IA Gate G1] Definir fronteiras explícitas de escopo in e out para EPC-003`,
-        mudancas
-      }
-    }
-
-    case 'ARC-001': {
-      // Contrato / Integração
-      const de = JSON.stringify((objeto as unknown as Feature).integracoes ?? [])
-      const novaInteg =
-        entrada || `Serviço REST ${titulo} (OpenAPI 3.0 com timeout de 3000ms e política de 3 retentativas)`
-      const para = JSON.stringify([...((objeto as unknown as Feature).integracoes ?? []), novaInteg], null, 2)
-      mudancas.push({ campo: 'integracoes', de, para })
-      return {
-        justificativa: `[IA Gate G3] Declarar integração/contrato técnico para resolver ARC-001`,
-        mudancas
-      }
-    }
-
-    case 'ARC-002': {
-      // ADR
-      const de = String((objeto as unknown as Record<string, unknown>)['adr_id'] ?? '')
-      const para = entrada || 'adr-arquitetura-padrao'
-      mudancas.push({ campo: 'adr_id', de, para })
-      return {
-        justificativa: `[IA Gate G3] Vincular ADR formal (${para}) para resolver ARC-002`,
-        mudancas
-      }
-    }
-
-    case 'PBI-ACEITE':
-    case 'PBI-TESTE':
-    case 'PBI-ORIGEM':
-    case 'PBI-ESCOPO':
-    case 'PBI-DEP':
-    case 'PBI-OWNER':
-    case 'PBI-CONTRATO':
-    case 'PBI-BLOQ':
-    case 'PBI-SEMBLOQ':
-    case 'PBI-COND-COMPAT':
-    case 'PBI-COND-ROLLBACK':
-    case 'PBI-COND-TELA':
-    case 'PBI-COND-TESTE': {
-      // DoR PBI
-      const p = objeto as unknown as PBI & { criterios_bdd?: CriterioBdd[] }
-      const deBdd = JSON.stringify(p.criterios_bdd ?? [])
-      const deOwner = p.owner ?? ''
-      const deEstrategia = p.estrategia_teste ?? ''
-
-      const paraOwner = p.owner || 'u-dev'
-      const paraEstrategia = entrada || 'componente + integracao de contrato'
-      const novoBdd =
-        p.criterios_bdd && p.criterios_bdd.length > 0
-          ? p.criterios_bdd
-          : [
-              {
-                id: 'AC-PBI-01',
-                given: `que o componente ${titulo} está carregado`,
-                when: 'a requisição é processada',
-                then: 'retorna status 200 com payload validado',
-                prioridade: 'must'
-              }
-            ]
-
-      mudancas.push({ campo: 'owner', de: deOwner, para: paraOwner })
-      mudancas.push({ campo: 'estrategia_teste', de: deEstrategia, para: paraEstrategia })
-      mudancas.push({ campo: 'criterios_bdd', de: deBdd, para: JSON.stringify(novoBdd, null, 2) })
-
-      return {
-        justificativa: `[IA Gate G4] Preencher DoR completa: BDD, owner e estratégia de testes para resolver ${codigoCheck}`,
-        mudancas
-      }
-    }
-
-    case 'DON-001':
-    case 'DON-002':
-    case 'DON-003':
-    case 'DON-004':
-    case 'DON-005':
-    case 'DON-006': {
-      // DoD G5 - promover status para validated e registrar evidências completas
-      const de = objeto.status
-      const para: NexoStatus = 'validated'
-      mudancas.push({ campo: 'status', de, para })
-
-      const deEvidencia = JSON.stringify((objeto as unknown as Record<string, unknown>).evidencia ?? {})
-      const paraEvidencia = JSON.stringify(
-        {
-          pr_url: 'https://github.com/locaweb/nexo/pull/142',
-          pr_merged: true,
-          checks_ci: ['lint:pass', 'test:pass', 'sast:pass', 'policy:pass'],
-          sast_ok: true,
-          policy_ok: true,
-          aceite_registrado: true,
-          testes_verdes: true,
-          seg_aprovado: true,
-          observabilidade: ['latencia_p95', 'erro_5xx', 'grafana_dashboard_pbi'],
-          rastreabilidade: ['git_commit_sha', 'story_map_node', 'jira_issue']
-        },
-        null,
-        2
-      )
-      mudancas.push({ campo: 'evidencia', de: deEvidencia, para: paraEvidencia })
-
-      return {
-        justificativa: `[IA Gate G5] Promover status para validated e consolidar conformidade de DoD para ${codigoCheck}`,
-        mudancas
-      }
-    }
-
-    default:
-      return null
+function valorSemPlaceholder(valor: unknown): boolean {
+  if (typeof valor === 'string') return valor.trim().length > 0 && !/^(a definir|não informado|nao informado|tbd|todo|placeholder|n\/a|-)$/i.test(valor.trim())
+  if (Array.isArray(valor)) return valor.length > 0 && valor.every(valorSemPlaceholder)
+  if (valor && typeof valor === 'object') {
+    const campos = Object.values(valor as Record<string, unknown>)
+    return campos.length > 0 && campos.every(valorSemPlaceholder)
   }
+  return typeof valor === 'number' ? Number.isFinite(valor) : typeof valor === 'boolean'
+}
+
+function parsearPatchExplicito(objeto: NexoObject, codigo: string, texto: string): { justificativa: string; mudancas: PatchMudanca[] } | null {
+  const permitidos = CAMPOS_PATCH_EXPLICITO[codigo]
+  if (!permitidos || !texto.trim().startsWith('{')) return null
+  let payload: Record<string, unknown>
+  try {
+    const parsed: unknown = JSON.parse(texto)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    payload = parsed as Record<string, unknown>
+  } catch { return null }
+  const keys = Object.keys(payload).sort()
+  if (keys.length !== permitidos.length || keys.some((k) => !permitidos.includes(k))) return null
+  const atual = objeto as unknown as Record<string, unknown>
+  const mudancas: PatchMudanca[] = []
+  for (const campo of permitidos) {
+    const novo = payload[campo]
+    if (!valorSemPlaceholder(novo)) return null
+    if (['problema'].includes(campo) && (typeof novo !== 'string' || novo.trim().length < 30)) return null
+    if (campo === 'objetivo' && (typeof novo !== 'string' || novo.trim().length < 10)) return null
+    if (campo === 'fluxo_feliz' && (typeof novo !== 'string' || novo.trim().length < 10)) return null
+    if (campo === 'kpis' && (!Array.isArray(novo) || !novo.every((k) => {
+      if (!k || typeof k !== 'object') return false
+      const row = k as Record<string, unknown>
+      return ['nome', 'unidade', 'alvo', 'janela', 'responsavel'].every((f) => typeof row[f] === 'string' && valorSemPlaceholder(row[f]))
+    }))) return null
+    if (['escopo_in', 'escopo_out', 'personas', 'regras_ids', 'alternativos', 'dependencias'].includes(campo) && (!Array.isArray(novo) || !novo.every((x) => typeof x === 'string' && valorSemPlaceholder(x)))) return null
+    mudancas.push({ campo, de: JSON.stringify(atual[campo] ?? ''), para: JSON.stringify(novo) })
+  }
+  return { justificativa: `Proposta baseada somente nos valores fornecidos para ${codigo}; requer revisão humana e não comprova evidência externa.`, mudancas }
 }
 
 // Processador conversacional local interativo para GateAiSession
@@ -1760,14 +1462,13 @@ export function processarMensagemWizard(
     return { texto: formatarRespostaG0Sucinta(objeto.titulo, primeira, diag.faltas.length) }
   }
 
-  const sugestao = gerarSugestaoG0(primeira.codigo, objeto).slice(0, 160)
   const linhas = [
     `Gate ${gateId} - falta 1 de ${diag.faltas.length}: [${primeira.codigo}].`,
     `Pergunta: ${primeira.pergunta}`,
     `Por que bloqueia: ${primeira.porQueBloqueia}`,
-    sugestao ? `Responda com: "${sugestao}"` : `Responda com: "${primeira.exemplo.slice(0, 160)}"`,
+    'Use o formulário tipado para propor uma resposta como diff revisável. A conversa não altera o artefato.',
     `Objeto: ${objeto.titulo}`,
-    `Restam ${diag.faltas.length} pendencias. Responda em texto livre para avancar.`
+    `Restam ${diag.faltas.length} pendências.`
   ]
   return { texto: linhas.slice(0, 8).join('\n') }
 }

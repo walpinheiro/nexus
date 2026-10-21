@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import NovaField from '@/components/common/NovaField.vue'
+import NovaTextarea from '@/components/common/NovaTextarea.vue'
+import NovaSelect from '@/components/common/NovaSelect.vue'
+import { VDialog, VTabs } from 'vueui-nova-kit'
+
+import NovaAction from '@/components/common/NovaAction.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useStudio } from '@/stores/useStudio'
@@ -22,6 +28,7 @@ import { useUsers } from '@/stores/useUsers'
 import { useGate } from '@/stores/useGate'
 import { montarEntradaStudio, listarFeaturesElegiveis } from '@/ai/gateParaStudio'
 import type { StudioFrame, StudioGroup } from '@/types/studio'
+import { readShareHash } from '@/utils/studioShare'
 
 const studio = useStudio()
 const projects = useProjects()
@@ -32,10 +39,15 @@ const gates = useGate()
 const modalPromptFullscreen = ref(false)
 const route = useRoute()
 const router = useRouter()
+const embeddedInCanvas = computed(() => route.path === '/canvas' && route.query.view === 'studio')
 const renomeando = ref('')
 const abaEsq = ref<'parts' | 'layers' | 'telas'>('parts')
 const railTab = ref<RailTab>('parts')
 const abaDir = ref<'edit' | 'prompt'>('edit')
+const abasStudio = [
+  { value: 'parts', label: 'Parts' }, { value: 'layers', label: 'Layers' }, { value: 'telas', label: 'Telas' }
+]
+const abasPainel = [{ value: 'edit', label: 'Editar' }, { value: 'prompt', label: 'Prompt' }]
 const ferramentaStage = ref<'select' | 'hand'>('select')
 const previewAberto = ref(false)
 const dialogNovaTela = ref(false)
@@ -48,6 +60,7 @@ const menuBtn = ref<HTMLButtonElement | null>(null)
 const itemMenuAberto = ref<number>(0)
 const itensMenu = ['voltar', 'backlog', 'gates', 'canvas', 'fechar'] as const
 const stageRef = ref<{ $el: HTMLElement } | null>(null)
+const painelsRecolhidos = ref(false)
 
 // Integração Condicional com Features do Gate G2 (V2/O-STUDIO)
 const featureId = computed(() => (typeof route.query.feature === 'string' ? route.query.feature : ''))
@@ -58,8 +71,17 @@ const featureAtual = computed(() => {
 })
 // Seletor mostra SÓ G2-aprovadas com baseline (gateParaStudio.ts:111-121)
 const featuresDisponiveis = computed(() => listarFeaturesElegiveis(graph.state.nos, gates.gates))
+const featureOptions = computed(() => [
+  { value: '', label: '(Selecione uma feature)' },
+  ...featuresDisponiveis.value.map(f => ({ value: f.id, label: `${f.titulo} (${f.id})` }))
+])
+const promptScopeOptions = computed(() => [
+  { value: 'tudo', label: 'Design inteiro' },
+  ...studio.doc.frames.map(fr => ({ value: fr.id, label: `1 tela: ${fr.name}` }))
+])
 const entradaStudio = computed(() => (featureId.value ? montarEntradaStudio(featureId.value, graph.state.nos) : null))
 const mensagemGeracao = ref('')
+const erroShare = ref('')
 
 // Share real via feed da presence (featureId + provider + screenId por usuário,
 // mesma fonte que PresenceAvatars lê; sem store nova, sem setPresence).
@@ -397,8 +419,20 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', onKey)
+  if (route.hash.startsWith('#docz=') || route.hash.startsWith('#doc=')) {
+    const shared = await readShareHash(route.hash)
+    if (shared.ok && shared.doc) {
+      studio.doc = shared.doc
+      studio.screenId = shared.doc.frames[0]?.id ?? ''
+      studio.selecionados = []
+      studio.persist()
+      await router.replace({ path: route.path, query: route.query })
+    } else {
+      erroShare.value = shared.erro ?? 'Não foi possível abrir o documento compartilhado.'
+    }
+  }
   if (studio.doc.frames && studio.doc.frames.length > 0) {
     gerarPrompt()
   }
@@ -416,20 +450,23 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="studio-panel relative flex h-full min-h-[560px] flex-col bg-nexo-canvas">
-    <header class="flex h-12 shrink-0 items-center gap-2 border-b border-nexo-border bg-nexo-surface px-3">
+  <div class="studio-panel relative flex h-full w-full min-h-[560px] min-w-0 flex-col bg-nexo-canvas">
+    <div v-if="erroShare" role="alert" class="mx-3 mt-2 rounded-card border border-nexo-blocked-border bg-nexo-blocked-bg px-3 py-2 text-sm text-nexo-blocked">{{ erroShare }}</div>
+    <header class="flex min-h-12 shrink-0 items-center gap-2 border-b border-nexo-border bg-nexo-surface px-2 sm:px-3" :class="embeddedInCanvas ? 'pr-24 sm:pr-28' : ''">
       <div class="relative">
-        <button
+        <NovaAction
           ref="menuBtn"
           type="button"
+          variant="ghost"
+          size="sm"
           aria-label="Menu voltar"
           aria-haspopup="menu"
           :aria-expanded="menuAberto"
-          class="rounded-btn p-2 hover:bg-nexo-canvas"
+          class="flex h-9 w-9 min-w-0 items-center justify-center p-0"
           @click="menuAberto ? fecharMenu() : abrirMenu()"
         >
           <M3Icon name="menu" :size="20" label="Menu voltar" />
-        </button>
+        </NovaAction>
         <div
           v-if="menuAberto"
           role="menu"
@@ -438,18 +475,18 @@ onUnmounted(() => {
           @keydown="onKeyMenu"
           @keydown.escape="fecharMenu(true)"
         >
-          <button type="button" data-menuitem="voltar" role="menuitem" class="flex w-full items-center gap-2 rounded-badge px-3 py-2 text-left text-sm hover:bg-nexo-canvas" @click="voltar()">
+          <NovaAction type="button" variant="ghost" size="sm" data-menuitem="voltar" role="menuitem" class="flex min-h-10 w-full items-center gap-2 text-left text-sm" @click="voltar()">
             <M3Icon name="arrow_back" :size="16" label="Voltar" /> Voltar para {{ origemLabel }}
-          </button>
+          </NovaAction>
           <RouterLink data-menuitem="backlog" role="menuitem" to="/backlog" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Backlog</RouterLink>
           <RouterLink data-menuitem="gates" role="menuitem" to="/gates/G2" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Gates G2</RouterLink>
           <RouterLink data-menuitem="canvas" role="menuitem" to="/canvas?view=canvas" class="block rounded-badge px-3 py-2 text-sm hover:bg-nexo-canvas" @click="menuAberto = false">Ir para Canvas</RouterLink>
-          <button type="button" data-menuitem="fechar" class="flex w-full items-center gap-1 rounded-badge px-3 py-2 text-left text-sm text-nexo-muted hover:bg-nexo-canvas" @click="fecharMenu(true)">
+          <NovaAction type="button" variant="ghost" size="sm" data-menuitem="fechar" class="flex min-h-10 w-full items-center gap-1 text-left text-sm text-nexo-muted" @click="fecharMenu(true)">
             <M3Icon name="close" :size="16" label="Fechar menu" /> Fechar menu
-          </button>
+          </NovaAction>
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex min-w-0 flex-1 items-center gap-2">
         <RouterLink
           to="/"
           class="flex items-center gap-1.5 rounded focus:outline-none focus:ring-2 focus:ring-nexo-primary"
@@ -459,7 +496,7 @@ onUnmounted(() => {
           <span class="text-sm font-semibold text-nexo-muted">Studio</span>
         </RouterLink>
         <span class="hidden text-xs text-nexo-border sm:inline" aria-hidden="true">/</span>
-        <span class="hidden text-sm font-medium text-nexo-text sm:inline" :title="projetoNome">
+        <span class="hidden min-w-0 max-w-[32vw] truncate text-sm font-medium text-nexo-text sm:inline" :title="projetoNome">
           {{ projetoNome }}
         </span>
 
@@ -467,54 +504,65 @@ onUnmounted(() => {
         <RouterLink
           v-if="featureAtual"
           :to="{ path: '/gates/G2', query: { alvo: featureAtual.id } }"
-          class="inline-flex items-center gap-1.5 rounded-full border border-nexo-primary/30 bg-nexo-primary/10 px-2.5 py-0.5 text-xs font-semibold text-nexo-primary hover:bg-nexo-primary/20 hover:border-nexo-primary transition-colors shrink-0 ml-1.5"
+          class="inline-flex shrink-0 items-center gap-1 rounded-full border border-nexo-primary/30 bg-nexo-primary/10 px-2 py-1 text-xs font-semibold text-nexo-primary transition-colors hover:border-nexo-primary hover:bg-nexo-primary/20"
           :title="`Voltar ao Gate G2 da Feature: ${featureAtual.titulo}`"
+          :aria-label="`Abrir feature ${featureAtual.titulo} no Gate G2`"
         >
-          <M3Icon name="arrow_back" :size="14" />
-          <span>Feature: {{ featureAtual.titulo }}</span>
+          <M3Icon name="arrow_back" :size="14" aria-hidden="true" />
+          <span>G2</span>
         </RouterLink>
       </div>
-      <span class="ml-auto flex items-center gap-2">
-        <span v-if="featureId" class="hidden text-xs text-nexo-muted md:inline" title="Link de share: mesma URL com ?feature=">
-          compartilhando tela {{ telaAtualId || '—' }} via ?feature={{ featureId }}
-        </span>
-        <PresenceAvatars :feature-id="featureId" :screen-id="telaAtualId" :provider="providerAtual" />
-        <span class="hidden text-xs text-nexo-muted md:inline">voltando para {{ origemLabel }}</span>
-        <button type="button" class="inline-flex items-center gap-1 rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="voltar()">
+      <div class="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+        <PresenceAvatars class="hidden sm:flex" :feature-id="featureId" :screen-id="telaAtualId" :provider="providerAtual" />
+        <NovaAction
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="flex h-9 w-9 min-w-0 items-center justify-center p-0"
+          :aria-label="painelsRecolhidos ? 'Mostrar painéis laterais' : 'Expandir área de edição'"
+          :aria-pressed="painelsRecolhidos"
+          :title="painelsRecolhidos ? 'Mostrar painéis laterais' : 'Expandir área de edição'"
+          @click="painelsRecolhidos = !painelsRecolhidos"
+        >
+          <M3Icon :name="painelsRecolhidos ? 'fullscreen_exit' : 'open_in_full'" :size="18" />
+        </NovaAction>
+        <NovaAction type="button" variant="outline" size="sm" class="inline-flex min-h-9 items-center gap-1" @click="voltar()">
           <M3Icon name="arrow_back" :size="16" label="Voltar" /> Voltar
-        </button>
-      </span>
+        </NovaAction>
+      </div>
     </header>
 
     <!-- Banner Condicional de Feature & Pré-Load Gate G2 (V2) -->
     <div
       v-if="entradaStudio"
-      class="flex flex-wrap items-center justify-between gap-3 border-b border-nexo-primary/30 bg-nexo-primary/5 px-4 py-2 text-xs"
+      class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-nexo-primary/30 bg-nexo-primary/5 px-3 py-1.5 text-xs"
     >
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="rounded bg-nexo-primary text-white px-2 py-0.5 text-xs font-bold">Gate G2 Pré-load</span>
-        <span class="font-bold text-nexo-text">{{ entradaStudio.titulo }}</span>
-        <span class="text-nexo-muted">({{ entradaStudio.ator }})</span>
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+        <span class="shrink-0 rounded-badge bg-nexo-primary px-2 py-0.5 text-[11px] font-bold text-white">Gate G2</span>
+        <span class="max-w-full truncate font-semibold text-nexo-text" :title="entradaStudio.titulo">{{ entradaStudio.titulo }}</span>
+        <span class="hidden text-nexo-muted lg:inline">{{ entradaStudio.ator }}</span>
         <span class="rounded bg-nexo-primary/10 px-1.5 py-0.5 text-xs font-medium text-nexo-primary">
           {{ entradaStudio.telas.length }} telas · {{ entradaStudio.navegacao.length }} transições BDD
         </span>
       </div>
 
-      <div class="flex items-center gap-2">
-        <span v-if="mensagemGeracao" class="text-nexo-approved font-semibold text-[11px] animate-pulse">
+      <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
+        <span v-if="mensagemGeracao" class="min-w-0 truncate text-[11px] font-semibold text-nexo-approved animate-pulse">
           {{ mensagemGeracao }}
         </span>
-        <span v-else-if="semTelasDerivadas" class="text-nexo-muted font-medium text-[11px]">
+        <span v-else-if="semTelasDerivadas" class="min-w-0 truncate text-[11px] font-medium text-nexo-muted">
           Nenhuma tela derivada dos artefatos — crie a tela em branco ou complete o G2
         </span>
-        <button
+        <NovaAction
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-btn bg-nexo-primary px-3 py-1 min-h-[32px] text-sm font-semibold text-white shadow-xs hover:bg-nexo-primary/90 transition-colors"
+          variant="primary"
+          size="sm"
+          class="inline-flex shrink-0 items-center gap-1.5"
           @click="gerarNoCanvas()"
         >
           <M3Icon name="auto_awesome" :size="15" label="Gerar pré-tela" />
           {{ precisaPreTela ? 'Gerar pré-tela' : 'Gerar no canvas' }}
-        </button>
+        </NovaAction>
       </div>
     </div>
 
@@ -537,16 +585,7 @@ onUnmounted(() => {
           <div v-if="featuresDisponiveis.length > 0" class="space-y-2 pt-2 text-left">
             <label class="block text-xs font-semibold text-nexo-text">
               Carregar telas de uma feature elegível (G2 aprovada):
-              <select
-                v-model="featureSelecionadaId"
-                class="mt-1 w-full rounded-btn border border-nexo-border bg-white p-2 text-xs"
-                @change="selecionarFeature(featureSelecionadaId)"
-              >
-                <option value="">(Selecione uma feature)</option>
-                <option v-for="f in featuresDisponiveis" :key="f.id" :value="f.id">
-                  {{ f.titulo }} ({{ f.id }})
-                </option>
-              </select>
+              <NovaSelect v-model="featureSelecionadaId" :options="featureOptions" label="Feature" class="mt-1 w-full" @change="selecionarFeature(featureSelecionadaId)" />
             </label>
           </div>
           <div v-else class="rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 text-left">
@@ -559,34 +598,30 @@ onUnmounted(() => {
             >
               Ir para Gate G2
             </RouterLink>
-            <button
+            <NovaAction
               v-if="featureId"
               type="button"
               class="rounded-btn border border-nexo-border px-3 py-1.5 text-sm min-h-[32px] font-semibold text-nexo-text hover:bg-nexo-canvas"
               @click="usuarioTrabalhouNoCanvas = true"
             >
               Continuar no canvas seed
-            </button>
-            <button
+            </NovaAction>
+            <NovaAction
               v-if="featureId"
               type="button"
               class="rounded-btn bg-nexo-primary px-3 py-1.5 text-sm min-h-[32px] font-semibold text-white hover:bg-nexo-primary/90"
               @click="dialogNovaTela = true; usuarioTrabalhouNoCanvas = true"
             >
               Criar tela em branco
-            </button>
+            </NovaAction>
           </div>
         </div>
       </div>
 
-      <div v-else class="flex h-full min-h-0">
-      <StudioIconRail :ativo="railTab" @selecionar="(t) => { railTab = t; if (t === 'parts' || t === 'layers') abaEsq = t }" />
-      <aside class="flex w-60 shrink-0 flex-col border-r border-nexo-border bg-white" aria-label="Paleta, layers e telas">
-        <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas laterais">
-          <button type="button" role="tab" :aria-selected="abaEsq === 'parts'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'parts' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="irParaAbaEsq('parts')">Parts</button>
-          <button type="button" role="tab" :aria-selected="abaEsq === 'layers'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'layers' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="irParaAbaEsq('layers')">Layers</button>
-          <button type="button" role="tab" :aria-selected="abaEsq === 'telas'" class="flex-1 rounded-btn px-2 py-1" :class="abaEsq === 'telas' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="irParaAbaEsq('telas')">Telas</button>
-        </div>
+      <div v-else class="flex h-full min-h-0 min-w-0">
+      <StudioIconRail v-if="!painelsRecolhidos" :ativo="railTab" @selecionar="(t) => { railTab = t; if (t === 'parts' || t === 'layers') abaEsq = t }" />
+      <aside v-if="!painelsRecolhidos" class="flex w-[clamp(12rem,18vw,15rem)] min-w-0 shrink-0 flex-col border-r border-nexo-border bg-white" aria-label="Paleta, layers e telas">
+        <VTabs class="border-b border-nexo-border p-2" :model-value="abaEsq" :items="abasStudio" variant="underline" size="sm" :panels="false" aria-label="Abas laterais" @update:model-value="irParaAbaEsq($event as 'parts' | 'layers' | 'telas')" />
         <PartsPalette v-if="abaEsq === 'parts'" class="min-h-0 flex-1 border-r-0" />
         <LayersPanel v-else-if="abaEsq === 'layers'" class="min-h-0 flex-1" />
         <div v-else class="flex min-h-0 flex-1 flex-col overflow-auto p-2 text-xs" aria-label="Telas">
@@ -598,9 +633,9 @@ onUnmounted(() => {
               :class="fr.id === studio.screenId ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'bg-nexo-canvas'"
             >
               <div class="flex items-center justify-between gap-1">
-                <button type="button" class="truncate text-left font-medium" :title="`${fr.name} ${fr.w}×${fr.h}`" @click="studio.screenId = fr.id; studio.persist()">
+                <NovaAction type="button" class="truncate text-left font-medium" :title="`${fr.name} ${fr.w}×${fr.h}`" @click="studio.screenId = fr.id; studio.persist()">
                   {{ renomeando === fr.id ? '' : fr.name }} <span class="text-nexo-muted font-normal">{{ fr.w }}×{{ fr.h }}</span>
-                </button>
+                </NovaAction>
                 <span
                   v-if="origemDaTela(fr.id)"
                   class="rounded-full px-1.5 py-0.2 text-xs font-mono font-medium shrink-0"
@@ -611,11 +646,11 @@ onUnmounted(() => {
                 </span>
               </div>
               <div class="mt-1 flex gap-1">
-                <button type="button" class="flex-1 rounded-btn border border-nexo-border px-1.5 py-0.5" :title="`Renomear ${fr.name}`" @click="renomeando = renomeando === fr.id ? '' : fr.id">Renomear</button>
-                <button type="button" class="flex-1 rounded-btn border border-nexo-border px-1.5 py-0.5" :title="`Duplicar ${fr.name}`" @click="studio.duplicarFrame(fr.id)">Duplicar</button>
-                <button type="button" class="flex-1 rounded-btn border border-nexo-blocked-border px-1.5 py-0.5 text-nexo-blocked" :title="`Remover ${fr.name}`" @click="confirmarRemocao(fr.id)">Remover</button>
+                <NovaAction type="button" class="flex-1 rounded-btn border border-nexo-border px-1.5 py-0.5" :title="`Renomear ${fr.name}`" @click="renomeando = renomeando === fr.id ? '' : fr.id">Renomear</NovaAction>
+                <NovaAction type="button" class="flex-1 rounded-btn border border-nexo-border px-1.5 py-0.5" :title="`Duplicar ${fr.name}`" @click="studio.duplicarFrame(fr.id)">Duplicar</NovaAction>
+                <NovaAction type="button" class="flex-1 rounded-btn border border-nexo-blocked-border px-1.5 py-0.5 text-nexo-blocked" :title="`Remover ${fr.name}`" @click="confirmarRemocao(fr.id)">Remover</NovaAction>
               </div>
-              <input
+              <NovaField
                 v-if="renomeando === fr.id"
                 :value="fr.name"
                 aria-label="Renomear tela"
@@ -624,15 +659,12 @@ onUnmounted(() => {
               />
             </li>
           </ul>
-          <button type="button" title="Criar tela (abre diálogo)" class="mt-2 rounded-btn border border-nexo-primary px-3 py-1.5 font-semibold text-nexo-primary" @click="dialogNovaTela = true">+ Nova tela</button>
+          <NovaAction type="button" title="Criar tela (abre diálogo)" class="mt-2 rounded-btn border border-nexo-primary px-3 py-1.5 font-semibold text-nexo-primary" @click="dialogNovaTela = true">+ Nova tela</NovaAction>
         </div>
       </aside>
-      <StudioStage ref="stageRef" v-model:ferramenta="ferramentaStage" class="m-2" @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" @abrir-ask="askAiAberto = true" />
-      <aside class="flex w-72 shrink-0 flex-col border-l border-nexo-border bg-white" aria-label="Painel direito">
-        <div class="flex gap-1 border-b border-nexo-border p-2 text-xs" role="tablist" aria-label="Abas da direita">
-          <button type="button" role="tab" :aria-selected="abaDir === 'edit'" class="flex-1 rounded-btn px-2 py-1" :class="abaDir === 'edit' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaDir = 'edit'">Editar</button>
-          <button type="button" role="tab" :aria-selected="abaDir === 'prompt'" class="flex-1 rounded-btn px-2 py-1" :class="abaDir === 'prompt' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : ''" @click="abaDir = 'prompt'">Prompt</button>
-        </div>
+      <StudioStage ref="stageRef" v-model:ferramenta="ferramentaStage" class="m-2 min-w-0 flex-1" @preview="abrirPreview()" @abrir-prompt="abrirPromptPainel()" @abrir-ask="askAiAberto = true" />
+      <aside v-if="!painelsRecolhidos" class="flex w-[clamp(16rem,22vw,18rem)] min-w-0 shrink-0 flex-col border-l border-nexo-border bg-white" aria-label="Painel direito">
+        <VTabs class="border-b border-nexo-border p-2" :model-value="abaDir" :items="abasPainel" variant="underline" size="sm" :panels="false" aria-label="Abas da direita" @update:model-value="abaDir = $event as 'edit' | 'prompt'" />
         <div v-if="abaDir === 'edit'" class="min-h-0 flex-1 overflow-auto">
           <FramePanel />
           <StudioInspector />
@@ -641,23 +673,18 @@ onUnmounted(() => {
           <p class="font-semibold">Prompt da tela</p>
           <p class="mt-1 text-nexo-muted">Destino: Web (Vue 3 + TS + Tailwind).</p>
 
-          <label class="mt-2 block">Escopo
-            <select v-model="promptEscopo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1" @change="gerarPrompt()">
-              <option value="tudo">Design inteiro</option>
-              <option v-for="fr in studio.doc.frames" :key="fr.id" :value="fr.id">1 tela: {{ fr.name }}</option>
-            </select>
-          </label>
+          <NovaSelect v-model="promptEscopo" :options="promptScopeOptions" label="Escopo" class="mt-2 w-full" @change="gerarPrompt()" />
 
-          <textarea v-model="promptTexto" rows="12" class="mt-2 w-full flex-1 resize-none rounded-btn border border-nexo-border p-2 font-mono text-[11px] leading-relaxed" aria-label="Prompt editável" />
+          <NovaTextarea v-model="promptTexto" rows="12" class="mt-2 w-full flex-1 resize-none rounded-btn border border-nexo-border p-2 font-mono text-[11px] leading-relaxed" aria-label="Prompt editável" />
           <p class="mt-1 text-nexo-muted">{{ promptTexto.length }} caracteres</p>
 
           <div class="mt-2 flex flex-col gap-1.5">
-            <button type="button" class="flex items-center justify-center gap-1.5 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white shadow-xs hover:opacity-95" @click="copiarPrompt()">
+            <NovaAction type="button" class="flex items-center justify-center gap-1.5 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white shadow-xs hover:opacity-95" @click="copiarPrompt()">
               <M3Icon name="content_copy" :size="16" label="Copiar" /> Copiar prompt
-            </button>
-            <button type="button" class="flex items-center justify-center gap-1.5 rounded-btn border border-nexo-border px-3 py-1.5 font-medium text-nexo-text hover:bg-slate-50" @click="modalPromptFullscreen = true">
+            </NovaAction>
+            <NovaAction type="button" class="flex items-center justify-center gap-1.5 rounded-btn border border-nexo-border px-3 py-1.5 font-medium text-nexo-text hover:bg-slate-50" @click="modalPromptFullscreen = true">
               <M3Icon name="open_in_full" :size="16" label="Tela cheia" /> Edit full screen
-            </button>
+            </NovaAction>
           </div>
           <p v-if="promptCopiado" class="mt-1 text-center text-nexo-approved" role="status">{{ promptCopiado }}</p>
         </div>
@@ -669,35 +696,19 @@ onUnmounted(() => {
     <AiTube v-model:aberto="askAiAberto" @abrir-prompt="abrirPromptPainel()" />
 
     <!-- Modal Edit Full Screen do Prompt (M3E paridade) -->
-    <div
-      v-if="modalPromptFullscreen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-6 backdrop-blur-xs"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Editar prompt em tela cheia"
-      @keydown.escape="modalPromptFullscreen = false"
-    >
-      <div class="flex h-[90vh] w-[90vw] max-w-5xl flex-col rounded-card bg-white p-5 shadow-card">
-        <div class="flex items-center justify-between border-b border-nexo-border pb-3">
-          <div class="flex items-center gap-2">
-            <M3Icon name="auto_awesome" :size="20" class="text-nexo-primary" />
-            <h2 class="text-base font-bold">Prompt do Studio</h2>
-          </div>
-          <button type="button" class="rounded-btn p-1.5 text-nexo-muted hover:bg-slate-100 hover:text-nexo-text" aria-label="Fechar" @click="modalPromptFullscreen = false">
-            <M3Icon name="close" :size="20" label="Fechar" />
-          </button>
-        </div>
-        <textarea v-model="promptTexto" class="mt-4 flex-1 w-full resize-none rounded-btn border border-nexo-border p-3 font-mono text-xs leading-relaxed focus:border-nexo-primary" aria-label="Prompt em tela cheia" />
+    <VDialog v-model="modalPromptFullscreen" title="Prompt do Studio" size="lg" variant="fullscreen" aria-label="Editar prompt em tela cheia">
+      <div class="flex h-[85vh] w-[90vw] max-w-5xl flex-col p-5">
+        <NovaTextarea v-model="promptTexto" class="mt-4 flex-1 w-full resize-none rounded-btn border border-nexo-border p-3 font-mono text-xs leading-relaxed focus:border-nexo-primary" aria-label="Prompt em tela cheia" />
         <div class="mt-4 flex items-center justify-between">
           <span class="text-xs text-nexo-muted">{{ promptTexto.length }} caracteres</span>
           <div class="flex gap-2">
-            <button type="button" class="rounded-btn border border-nexo-border px-4 py-2 text-sm hover:bg-slate-50" @click="modalPromptFullscreen = false">Fechar</button>
-            <button type="button" class="flex items-center gap-1.5 rounded-btn bg-nexo-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-95" @click="copiarPrompt()">
+            <NovaAction type="button" class="rounded-btn border border-nexo-border px-4 py-2 text-sm hover:bg-slate-50" @click="modalPromptFullscreen = false">Fechar</NovaAction>
+            <NovaAction type="button" class="flex items-center gap-1.5 rounded-btn bg-nexo-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-95" @click="copiarPrompt()">
               <M3Icon name="content_copy" :size="16" label="Copiar" /> Copiar prompt
-            </button>
+            </NovaAction>
           </div>
         </div>
       </div>
-    </div>
+    </VDialog>
   </div>
 </template>

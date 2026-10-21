@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import NovaField from '@/components/common/NovaField.vue'
+import NovaTextarea from '@/components/common/NovaTextarea.vue'
+import NovaSelect from '@/components/common/NovaSelect.vue'
+import { VButton, VDialog, VTabs } from 'vueui-nova-kit'
+
+import NovaAction from '@/components/common/NovaAction.vue'
 import { ref, computed, watch } from 'vue'
 import { useGraph } from '@/stores/useGraph'
 import { useUI } from '@/stores/useUI'
@@ -14,9 +20,30 @@ import LucideIcon from '@/components/common/LucideIcon.vue'
 const graph = useGraph()
 const ui = useUI()
 const users = useUsers()
+const emit = defineEmits<{ (e: 'centralizar'): void }>()
 
 const sel = computed(() => graph.selecionado)
 const tab = computed(() => ui.state.painelTab)
+const contagemImpacto = computed(() => {
+  if (!sel.value) return { features: 0, servicos: 0, pbis: 0 }
+  const dependentes = calcularImpacto(sel.value.id, graph.state.nos, graph.state.arestas, (id) => id).itens
+  return {
+    features: dependentes.filter((item) => graph.noPorId(item.id)?.tipo === 'feature').length,
+    servicos: dependentes.filter((item) => graph.noPorId(item.id)?.tipo === 'api').length,
+    pbis: dependentes.filter((item) => graph.noPorId(item.id)?.tipo === 'pbi').length
+  }
+})
+const detailTabs = [
+  { value: 'detalhes', label: 'Detalhes' }, { value: 'copilot', label: 'Copilot' },
+  { value: 'impacto', label: 'Impacto' }, { value: 'texto', label: 'Texto' }
+]
+const statusOptions = computed(() => [
+  { value: '', label: `(manter ${sel.value?.status ?? 'atual'})` },
+  ...(['draft','review','stale','regenerated'] as NexoStatus[]).map(s => ({ value: s, label: s }))
+])
+const promptEscopoOptions = [{ value: 'selecao', label: 'Seleção' }, { value: 'tudo', label: 'Tudo' }]
+const promptAlvoOptions = [{ value: 'vue', label: 'Vue 3' }, { value: 'ruby', label: 'API Ruby' }]
+const promptIdiomaOptions = [{ value: 'pt', label: 'PT-BR' }, { value: 'en', label: 'EN' }]
 
 // --- Copilot ---
 const pergunta = ref('')
@@ -329,14 +356,17 @@ function proporTexto() {
 </script>
 
 <template>
-  <aside class="flex w-panel shrink-0 flex-col border-l border-nexo-border bg-white" aria-label="Painel de detalhe">
+  <aside class="flex h-full min-h-0 w-full min-w-0 flex-col bg-white" aria-label="Painel de detalhe">
     <div v-if="!sel" class="p-4 text-sm text-nexo-muted">
       Selecione um nó no canvas para ver detalhes. Duplo-clique cria um nó no vazio.
     </div>
     <template v-else>
-      <div class="flex items-start justify-between p-4 pb-0">
-        <h2 class="text-lg font-bold">{{ sel.titulo }}</h2>
-        <button type="button" aria-label="Fechar painel" class="p-1 text-nexo-muted hover:text-nexo-text" @click="fecharPainel"><LucideIcon name="x" :size="14" /></button>
+      <div class="flex min-w-0 items-start gap-2 p-4 pb-0">
+        <h2 class="min-w-0 flex-1 break-words text-lg font-bold">{{ sel.titulo }}</h2>
+        <div class="flex shrink-0 items-center gap-1">
+          <VButton variant="outline" size="sm" class="detail-header-icon" aria-label="Centralizar artefato no canvas" title="Centralizar artefato no canvas" @click="emit('centralizar')"><LucideIcon name="expand" :size="16" /></VButton>
+          <VButton variant="ghost" size="sm" class="detail-header-icon detail-header-close" aria-label="Fechar painel" title="Fechar painel" @click="fecharPainel"><LucideIcon name="x" :size="16" /></VButton>
+        </div>
       </div>
       <p class="px-4 pt-1 text-sm">
         <span v-if="sel.status === 'approved'" class="inline-flex items-center gap-1 font-semibold text-nexo-approved"><LucideIcon name="check" :size="14" /> Aprovada</span>
@@ -346,38 +376,26 @@ function proporTexto() {
         <span class="font-semibold text-nexo-primary">Gate {{ sel.gate.replace('G', '') === sel.gate ? sel.gate : sel.gate }}</span>
       </p>
 
-      <div class="mt-2 flex gap-4 border-b border-nexo-border px-4" role="tablist" aria-label="Abas do painel">
-        <button
-          v-for="t in (['detalhes', 'copilot', 'impacto', 'texto'] as const)"
-          :key="t"
-          role="tab"
-          :aria-selected="tab === t"
-          class="pb-2 text-sm capitalize"
-          :class="tab === t ? 'font-semibold text-nexo-primary underline decoration-nexo-primary decoration-2 underline-offset-8' : 'text-nexo-muted'"
-          @click="ui.setTab(t)"
-        >
-          {{ t === 'copilot' ? 'Copilot' : t === 'detalhes' ? 'Detalhes' : t === 'impacto' ? 'Impacto' : 'Texto' }}
-        </button>
-      </div>
+      <VTabs class="mt-2 px-4" :model-value="tab" :items="detailTabs" variant="underline" size="sm" :panels="false" aria-label="Abas do painel" @update:model-value="ui.setTab($event as 'detalhes' | 'copilot' | 'impacto' | 'texto')" />
 
       <div class="min-h-0 flex-1 overflow-auto p-4">
         <!-- DETALHES -->
         <div v-if="tab === 'detalhes'" role="tabpanel" class="space-y-4">
           <div>
-            <h3 class="text-sm font-semibold">Descrição da regra</h3>
+            <h3 class="text-sm font-semibold">Descrição do artefato</h3>
             <p class="mt-1 text-[13.5px] leading-relaxed">{{ sel.descricao }}</p>
             <p v-if="sel.id === 'ft-confirmar'" class="mt-2 text-[13.5px] leading-relaxed">
               A confirmação de pagamento via Pix deve ser idempotente. Requisições repetidas com o mesmo identificador de transação (idTx) devem retornar o mesmo resultado da primeira confirmação, sem gerar duplicidade de registros ou efeitos colaterais.
             </p>
           </div>
-          <button
+          <NovaAction
             type="button"
-            class="w-full rounded-badge border border-nexo-banner-border bg-nexo-stale-bg p-3 text-left"
+            class="detail-impact-card !flex !min-w-0 !w-full !flex-col !items-start !justify-start whitespace-normal rounded-badge border border-nexo-banner-border bg-nexo-stale-bg p-3 text-left"
             @click="irImpacto()"
           >
-            <span class="flex items-center gap-2 text-sm font-semibold text-nexo-stale"><LucideIcon name="alert" :size="14" /> Impacto identificado <span class="ml-auto inline-flex"><LucideIcon name="chevR" :size="14" /></span></span>
-            <span class="mt-1 block text-[13px] text-nexo-stale">Alterações nesta feature podem impactar 3 features, 2 serviços e 4 PBIs.</span>
-          </button>
+            <span class="flex w-full min-w-0 items-center gap-2 whitespace-normal text-sm font-semibold text-nexo-stale"><LucideIcon name="alert" :size="14" /> <span class="min-w-0 flex-1">Impacto identificado</span> <span class="shrink-0"><LucideIcon name="chevR" :size="14" /></span></span>
+            <span v-if="contagemImpacto.features + contagemImpacto.servicos + contagemImpacto.pbis > 0" class="mt-1 block whitespace-normal break-words text-[13px] text-nexo-stale">O grafo atual alcança {{ contagemImpacto.features }} feature(s), {{ contagemImpacto.servicos }} serviço(s) e {{ contagemImpacto.pbis }} PBI(s).</span>
+          </NovaAction>
           <div v-if="gateEval" class="rounded-badge border border-nexo-border p-3 text-xs">
             <p class="font-semibold">Gate {{ sel.gate }} — {{ gateEval.bloqueantesOk ? 'bloqueantes OK' : 'bloqueantes faltando: ' + gateEval.bloqueantesFaltando.join(', ') }}</p>
             <ul class="mt-1 space-y-1">
@@ -385,40 +403,35 @@ function proporTexto() {
             </ul>
           </div>
           <div class="space-y-2">
-            <button type="button" class="flex w-full items-center justify-center gap-2 rounded-btn border border-nexo-primary px-4 py-3 text-sm font-semibold text-nexo-primary" @click="ui.setTab('copilot')"><LucideIcon name="sparkles" :size="14" /> Perguntar à IA</button>
-            <button type="button" class="flex w-full items-center justify-center gap-2 rounded-btn bg-nexo-primary px-4 py-3 text-sm font-semibold text-white" @click="proporAberto = !proporAberto"><LucideIcon name="pencil" :size="14" /> Propor alteração</button>
+            <NovaAction type="button" class="flex w-full items-center justify-center gap-2 rounded-btn border border-nexo-primary px-4 py-3 text-sm font-semibold text-nexo-primary" @click="ui.setTab('copilot')"><LucideIcon name="sparkles" :size="14" /> Perguntar à IA</NovaAction>
+            <NovaAction type="button" class="flex w-full items-center justify-center gap-2 rounded-btn bg-nexo-primary px-4 py-3 text-sm font-semibold text-white" @click="proporAberto = !proporAberto"><LucideIcon name="pencil" :size="14" /> Propor alteração</NovaAction>
           </div>
           <div v-if="proporAberto" class="space-y-2 rounded-badge border border-nexo-border p-3">
-            <label class="block text-xs">Título<input v-model="campoTitulo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-sm" /></label>
-            <label class="block text-xs">Descrição<textarea v-model="campoDescricao" rows="3" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-sm" /></label>
-            <label class="block text-xs">Status
-              <select v-model="campoStatus" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-sm">
-                <option value="">(manter {{ sel.status }})</option>
-                <option v-for="s in (['draft','review','approved','baseline','stale','regenerated','validated','published'] as NexoStatus[])" :key="s" :value="s">{{ s }}</option>
-              </select>
-            </label>
-            <label class="block text-xs">Justificativa<input v-model="justificativa" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-sm" /></label>
+            <label class="block text-xs">Título<NovaField v-model="campoTitulo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-sm" /></label>
+            <label class="block text-xs">Descrição<NovaTextarea v-model="campoDescricao" rows="3" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-sm" /></label>
+            <NovaSelect v-model="campoStatus" :options="statusOptions" label="Status" class="w-full" />
+            <label class="block text-xs">Justificativa<NovaField v-model="justificativa" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1 text-sm" /></label>
             <div v-if="diffPreview.length > 0" class="rounded-badge bg-nexo-canvas p-2 text-xs">
               <p class="font-semibold">Diff (aplica só com Aceitar):</p>
               <ul><li v-for="d in diffPreview" :key="d.campo">{{ d.campo }}: "{{ d.de }}" → "{{ d.para }}"</li></ul>
             </div>
-            <button type="button" :disabled="diffPreview.length === 0" class="w-full rounded-btn bg-nexo-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" @click="propor()">Propor (cria patch pendente)</button>
+            <NovaAction type="button" :disabled="diffPreview.length === 0" class="w-full rounded-btn bg-nexo-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" @click="propor()">Propor (cria patch pendente)</NovaAction>
           </div>
           <div v-if="patchPendente" class="space-y-2 rounded-badge border border-nexo-primary-border bg-nexo-primary-soft p-3 text-xs">
             <p class="font-semibold">Patch pendente de {{ patchPendente.autor_id }} — {{ patchPendente.criado_em }}</p>
             <ul><li v-for="m in patchPendente.mudancas" :key="m.campo">{{ m.campo }}: "{{ m.de }}" → "{{ m.para }}"</li></ul>
             <p>{{ patchPendente.justificativa }}</p>
             <div class="flex gap-2">
-              <button type="button" class="rounded-btn bg-nexo-primary px-3 py-1.5 min-h-[32px] text-sm font-semibold text-white" @click="graph.aceitarPatch(patchPendente.patch_id, users.state.currentUserId)">Aceitar (nova versão)</button>
-              <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="graph.rejeitarPatch(patchPendente.patch_id, users.state.currentUserId)">Rejeitar</button>
+              <NovaAction type="button" class="rounded-btn bg-nexo-primary px-3 py-1.5 min-h-[32px] text-sm font-semibold text-white" @click="graph.aceitarPatch(patchPendente.patch_id, users.state.currentUserId)">Aceitar (nova versão)</NovaAction>
+              <NovaAction type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="graph.rejeitarPatch(patchPendente.patch_id, users.state.currentUserId)">Rejeitar</NovaAction>
             </div>
           </div>
           <div class="space-y-2 border-t border-nexo-border pt-3">
             <p class="text-xs font-semibold">Prompt de implementação / compartilhamento</p>
-            <div class="flex gap-2">
-              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2 min-h-[32px] text-sm" @click="abrirPrompt()">Copiar prompt</button>
-              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2 min-h-[32px] text-sm" @click="copiarShare()">Copiar share-link</button>
-              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-2 min-h-[32px] text-sm" @click="exportarPNG()">Exportar PNG</button>
+            <div class="flex min-w-0 flex-wrap gap-2">
+              <NovaAction type="button" class="min-w-[96px] flex-1 whitespace-normal rounded-btn border border-nexo-border px-2 py-2 min-h-[32px] text-sm" @click="abrirPrompt()">Copiar prompt</NovaAction>
+              <NovaAction type="button" class="min-w-[96px] flex-1 whitespace-normal rounded-btn border border-nexo-border px-2 py-2 min-h-[32px] text-sm" @click="copiarShare()">Copiar share-link</NovaAction>
+              <NovaAction type="button" class="min-w-[96px] flex-1 whitespace-normal rounded-btn border border-nexo-border px-2 py-2 min-h-[32px] text-sm" @click="exportarPNG()">Exportar PNG</NovaAction>
             </div>
           </div>
         </div>
@@ -431,39 +444,39 @@ function proporTexto() {
             </div>
           </div>
           <div v-if="acaoPendente" class="flex gap-2">
-            <button type="button" class="flex-1 rounded-btn bg-nexo-primary px-3 py-2 text-sm font-semibold text-white" @click="acaoPendente.executar()">Confirmar: {{ acaoPendente.texto }}</button>
-            <button type="button" class="rounded-btn border border-nexo-border px-3 py-2 text-sm" @click="acaoPendente = null">Descartar</button>
+            <NovaAction type="button" class="flex-1 rounded-btn bg-nexo-primary px-3 py-2 text-sm font-semibold text-white" @click="acaoPendente.executar()">Confirmar: {{ acaoPendente.texto }}</NovaAction>
+            <NovaAction type="button" class="rounded-btn border border-nexo-border px-3 py-2 text-sm" @click="acaoPendente = null">Descartar</NovaAction>
           </div>
           <ul v-if="pendenciasCopilot.length > 0" class="space-y-1 text-xs" aria-label="Pendências do gate">
             <li v-for="p in pendenciasCopilot.slice(0, 12)" :key="p.noId + p.codigo">
-              <button type="button" class="w-full rounded-badge border border-nexo-stale-border bg-nexo-stale-bg px-2 py-1.5 min-h-[32px] text-left text-xs text-nexo-stale" @click="abrirPendencia(p.noId)">
+              <NovaAction type="button" class="w-full rounded-badge border border-nexo-stale-border bg-nexo-stale-bg px-2 py-1.5 min-h-[32px] text-left text-xs text-nexo-stale" @click="abrirPendencia(p.noId)">
                 {{ p.codigo }} em "{{ p.titulo }}" — abrir nó
-              </button>
+              </NovaAction>
             </li>
           </ul>
           <form class="flex gap-2" @submit.prevent="enviarPergunta">
-            <input v-model="pergunta" placeholder='Ex.: criar feature Notificação' aria-label="Perguntar à IA" class="min-w-0 flex-1 rounded-btn border border-nexo-border px-3 py-2 text-sm" />
-            <button type="submit" class="rounded-btn bg-nexo-primary px-3 py-2 text-sm font-semibold text-white">Enviar</button>
+            <NovaField v-model="pergunta" placeholder='Ex.: criar feature Notificação' aria-label="Perguntar à IA" class="min-w-0 flex-1 rounded-btn border border-nexo-border px-3 py-2 text-sm" />
+            <NovaAction type="submit" class="rounded-btn bg-nexo-primary px-3 py-2 text-sm font-semibold text-white">Enviar</NovaAction>
           </form>
         </div>
 
         <!-- IMPACTO -->
         <div v-else-if="tab === 'impacto'" role="tabpanel" class="space-y-2">
-          <button type="button" class="w-full rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="gerarPlano()">Calcular impacto de "{{ sel.titulo }}"</button>
+          <NovaAction type="button" class="w-full rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="gerarPlano()">Calcular impacto de "{{ sel.titulo }}"</NovaAction>
           <div v-if="planoLocal" class="space-y-2 text-xs">
             <p class="font-semibold">Plano {{ planoLocal.correlation_id }} — {{ planoLocal.itens.length }} dependente(s)</p>
-            <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="aprovarLote()">Aprovar lote</button>
+            <NovaAction type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 min-h-[32px] text-sm" @click="aprovarLote()">Aprovar lote</NovaAction>
             <ul class="space-y-1">
               <li v-for="it in planoLocal.itens" :key="it.id" class="rounded-badge border border-nexo-border p-2">
                 <strong>{{ it.titulo }}</strong> via {{ it.via.join('→') }} · op {{ it.operacao }} · owner {{ it.owner }}
                 <span v-if="it.aplicado" class="text-nexo-stale"> · aplicado (stale)</span>
-                <button v-if="!it.aprovado" type="button" class="ml-2 underline text-sm px-1 py-1" @click="aprovarItem(it.id)">aprovar</button>
+                <NovaAction v-if="!it.aprovado" type="button" class="ml-2 underline text-sm px-1 py-1" @click="aprovarItem(it.id)">aprovar</NovaAction>
                 <span v-else class="ml-2 text-nexo-approved">aprovado</span>
               </li>
             </ul>
             <div class="flex gap-2">
-              <button type="button" class="flex-1 rounded-btn bg-nexo-primary px-2 py-1.5 min-h-[32px] text-sm font-semibold text-white" @click="aplicarPlano()">Aplicar aprovados (marca stale)</button>
-              <button type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-1.5 min-h-[32px] text-sm" @click="reverterPlano()">Reverter aplicados</button>
+              <NovaAction type="button" class="flex-1 rounded-btn bg-nexo-primary px-2 py-1.5 min-h-[32px] text-sm font-semibold text-white" @click="aplicarPlano()">Aplicar aprovados (marca stale)</NovaAction>
+              <NovaAction type="button" class="flex-1 rounded-btn border border-nexo-border px-2 py-1.5 min-h-[32px] text-sm" @click="reverterPlano()">Reverter aplicados</NovaAction>
             </div>
           </div>
         </div>
@@ -472,24 +485,24 @@ function proporTexto() {
         <div v-else-if="tab === 'texto'" role="tabpanel" class="space-y-2 text-sm">
           <p v-if="patchPendente" class="rounded-badge bg-nexo-stale-bg px-2 py-1 text-xs text-nexo-stale">Patch pendente — aceite ou rejeite antes de propor de novo.</p>
           <label class="block text-xs">Título (5–140)
-            <input v-model="txtTitulo" :disabled="!!patchPendente" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
+            <NovaField v-model="txtTitulo" :disabled="!!patchPendente" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
             <span v-if="txtTitulo.length > 0 && (txtTitulo.length < 5 || txtTitulo.length > 140)" class="text-nexo-blocked">OBJ-001: título fora do limite.</span>
           </label>
           <label class="block text-xs">Descrição
-            <textarea v-model="txtDescricao" :disabled="!!patchPendente" rows="3" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
+            <NovaTextarea v-model="txtDescricao" :disabled="!!patchPendente" rows="3" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
           </label>
           <label v-if="sel.tipo === 'feature'" class="block text-xs">Fluxo feliz
-            <textarea v-model="txtFluxo" :disabled="!!patchPendente" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
+            <NovaTextarea v-model="txtFluxo" :disabled="!!patchPendente" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
           </label>
           <p v-else class="text-xs text-nexo-muted">Fluxo feliz disponível apenas para features.</p>
           <label class="block text-xs">Critérios BDD (um por linha: Given | When | Then)
-            <textarea v-model="txtBdd" :disabled="!!patchPendente" rows="4" class="mt-1 w-full rounded-btn border border-nexo-border p-2 font-mono text-xs" />
+            <NovaTextarea v-model="txtBdd" :disabled="!!patchPendente" rows="4" class="mt-1 w-full rounded-btn border border-nexo-border p-2 font-mono text-xs" />
           </label>
           <ul v-if="bddErros.length > 0" class="text-xs text-nexo-blocked">
             <li v-for="(e, i) in bddErros" :key="i">linha {{ e.linha }}: {{ e.msg }}</li>
           </ul>
           <label class="block text-xs">regras_ids (CSV)
-            <input v-model="txtRegras" :disabled="!!patchPendente" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
+            <NovaField v-model="txtRegras" :disabled="!!patchPendente" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
           </label>
           <div v-if="txtDiff.length > 0" class="rounded-badge bg-nexo-canvas p-2 text-xs">
             <p class="font-semibold">Diff (aplica só com Aceitar):</p>
@@ -500,30 +513,63 @@ function proporTexto() {
               </tbody>
             </table>
           </div>
-          <button type="button" :disabled="txtDiff.length === 0 || !!patchPendente" class="w-full rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white disabled:opacity-40" @click="proporTexto()">Propor</button>
+          <NovaAction type="button" :disabled="txtDiff.length === 0 || !!patchPendente" class="w-full rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white disabled:opacity-40" @click="proporTexto()">Propor</NovaAction>
           <div v-if="patchPendente" class="flex gap-2">
-            <button type="button" class="flex-1 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white" @click="graph.aceitarPatch(patchPendente.patch_id, users.state.currentUserId)">Aceitar (nova versão)</button>
-            <button type="button" class="flex-1 rounded-btn border border-nexo-border px-3 py-2" @click="graph.rejeitarPatch(patchPendente.patch_id, users.state.currentUserId)">Rejeitar</button>
+            <NovaAction type="button" class="flex-1 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white" @click="graph.aceitarPatch(patchPendente.patch_id, users.state.currentUserId)">Aceitar (nova versão)</NovaAction>
+            <NovaAction type="button" class="flex-1 rounded-btn border border-nexo-border px-3 py-2" @click="graph.rejeitarPatch(patchPendente.patch_id, users.state.currentUserId)">Rejeitar</NovaAction>
           </div>
         </div>
       </div>
 
-      <div v-if="promptAberto" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6" role="dialog" aria-modal="true" aria-label="Prompt de implementação" @click.self="promptAberto = false">
-        <div class="flex max-h-full w-full max-w-2xl flex-col rounded-card bg-white p-4 shadow-card">
+      <VDialog v-model="promptAberto" title="Prompt de implementação" size="lg" variant="fullscreen" :show-close="false" aria-label="Prompt de implementação" @close="promptAberto = false">
+        <div class="flex max-h-[80vh] w-full max-w-2xl flex-col p-4">
           <div class="flex flex-wrap items-center gap-2 text-xs">
-            <label>Escopo <select v-model="promptEscopo" class="rounded-btn border border-nexo-border px-2 py-1" @change="atualizarPrompt"><option value="selecao">Seleção</option><option value="tudo">Tudo</option></select></label>
-            <label>Alvo <select v-model="promptAlvo" class="rounded-btn border border-nexo-border px-2 py-1" @change="atualizarPrompt"><option value="vue">Vue 3</option><option value="ruby">API Ruby</option></select></label>
-            <label>Idioma <select v-model="promptIdioma" class="rounded-btn border border-nexo-border px-2 py-1" @change="atualizarPrompt"><option value="pt">PT-BR</option><option value="en">EN</option></select></label>
-            <button type="button" class="ml-auto text-nexo-muted" @click="promptAberto = false"><LucideIcon name="x" :size="14" /></button>
+            <NovaSelect v-model="promptEscopo" label="Escopo" :options="promptEscopoOptions" @change="atualizarPrompt" />
+            <NovaSelect v-model="promptAlvo" label="Alvo" :options="promptAlvoOptions" @change="atualizarPrompt" />
+            <NovaSelect v-model="promptIdioma" label="Idioma" :options="promptIdiomaOptions" @change="atualizarPrompt" />
+            <NovaAction type="button" class="ml-auto text-nexo-muted" @click="promptAberto = false"><LucideIcon name="x" :size="14" /></NovaAction>
           </div>
-          <textarea v-model="promptTexto" rows="16" class="mt-2 w-full rounded-btn border border-nexo-border p-2 font-mono text-xs" aria-label="Prompt editável" />
+          <NovaTextarea v-model="promptTexto" rows="16" class="mt-2 w-full rounded-btn border border-nexo-border p-2 font-mono text-xs" aria-label="Prompt editável" />
           <div class="mt-2 flex gap-2">
-            <button type="button" class="flex-1 rounded-btn bg-nexo-primary px-3 py-2 text-sm font-semibold text-white" @click="copiar(promptTexto, 'Prompt copiado.')">Copiar prompt</button>
-            <button type="button" class="flex-1 rounded-btn border border-nexo-border px-3 py-2 text-sm" @click="copiar('Copie o agent.md de public/agent.md junto com o prompt.', 'Instrução copiada')">Copiar instrução p/ agente</button>
+            <NovaAction type="button" class="flex-1 rounded-btn bg-nexo-primary px-3 py-2 text-sm font-semibold text-white" @click="copiar(promptTexto, 'Prompt copiado.')">Copiar prompt</NovaAction>
+            <NovaAction type="button" class="flex-1 rounded-btn border border-nexo-border px-3 py-2 text-sm" @click="copiar('Copie o agent.md de public/agent.md junto com o prompt.', 'Instrução copiada')">Copiar instrução p/ agente</NovaAction>
           </div>
         </div>
-      </div>
+      </VDialog>
       <div v-if="aviso" class="border-t border-nexo-border bg-nexo-approved-bg p-2 text-center text-xs text-nexo-approved" role="status">{{ aviso }}</div>
     </template>
   </aside>
 </template>
+
+<style scoped>
+.detail-header-icon {
+  display: inline-flex;
+  flex: 0 0 32px !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  border-radius: 0.5rem;
+}
+
+.detail-header-icon :deep(.v-button__label) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-impact-card :deep(.v-button__label) {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  white-space: normal;
+}
+</style>

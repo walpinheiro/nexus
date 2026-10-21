@@ -1,61 +1,49 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Edge, NexoObject } from '@/types/nexo'
+import { edgePath, facingHandles, handlePoint, NODE_DEFAULT_HEIGHT, NODE_WIDTH, type CanvasRect } from './geometry'
 
 const props = defineProps<{
   aresta: Edge
   origem: NexoObject
   destino: NexoObject
+  origemSize?: { width: number; height: number }
+  destinoSize?: { width: number; height: number }
   selecionada: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'selecionar-aresta', id: string): void }>()
 
-// Pontos de ancoragem: centro-direita da origem -> centro-esquerda do destino,
-// com fallback vertical quando empilhados.
-const path = computed(() => {
-  const W = 280
-  const H = 190
-  const ox = props.origem.x
-  const oy = props.origem.y
-  const dx = props.destino.x
-  const dy = props.destino.y
-  let x1 = ox + W
-  let y1 = oy + H / 2
-  let x2 = dx
-  let y2 = dy + H / 2
-  if (Math.abs(dy - oy) > Math.abs(dx - ox)) {
-    if (dy > oy) {
-      y1 = oy + H
-      y2 = dy
-      x1 = ox + W / 2
-      x2 = dx + W / 2
-    } else {
-      y1 = oy
-      y2 = dy + H
-      x1 = ox + W / 2
-      x2 = dx + W / 2
-    }
-  }
-  const mx = (x1 + x2) / 2
-  return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`
+const rects = computed<[CanvasRect, CanvasRect]>(() => [
+  { x: props.origem.x, y: props.origem.y, width: props.origemSize?.width ?? NODE_WIDTH, height: props.origemSize?.height ?? NODE_DEFAULT_HEIGHT },
+  { x: props.destino.x, y: props.destino.y, width: props.destinoSize?.width ?? NODE_WIDTH, height: props.destinoSize?.height ?? NODE_DEFAULT_HEIGHT }
+])
+const sides = computed(() => {
+  const [autoSource, autoTarget] = facingHandles(...rects.value)
+  return [props.aresta.origemHandle ?? autoSource, props.aresta.destinoHandle ?? autoTarget] as const
+})
+const path = computed(() => edgePath(rects.value[0], rects.value[1], sides.value[0], sides.value[1]))
+const mid = computed(() => {
+  const a = handlePoint(rects.value[0], sides.value[0])
+  const b = handlePoint(rects.value[1], sides.value[1])
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
 })
 
 const cor = computed(() => {
   switch (props.aresta.tipo) {
     case 'contem':
-      return '#64748B'
+      return 'var(--v-color-text-muted)'
     case 'realiza':
     case 'consome':
-      return '#1D4ED8'
+      return 'var(--v-color-primary)'
     case 'valida':
-      return '#15803D'
+      return 'var(--v-color-success-strong)'
     case 'restringe':
-      return '#B91C1C'
+      return 'var(--v-color-error-strong)'
     case 'impacta':
-      return '#D97706'
+      return 'var(--v-color-warning-strong)'
     default:
-      return '#1D4ED8'
+      return 'var(--v-color-primary)'
   }
 })
 
@@ -64,10 +52,25 @@ const tracejada = computed(() =>
 )
 
 const rotulo = computed(() => `${props.aresta.tipo} · ${props.origem.titulo} → ${props.destino.titulo}`)
+
+function onKeydown(ev: KeyboardEvent) {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return
+  ev.preventDefault()
+  ev.stopPropagation()
+  emit('selecionar-aresta', props.aresta.edge_id)
+}
 </script>
 
 <template>
-  <g @click.stop="emit('selecionar-aresta', aresta.edge_id)">
+  <g
+    role="button"
+    tabindex="0"
+    :aria-label="rotulo"
+    :aria-pressed="selecionada"
+    class="canvas-edge-action"
+    @click.stop="emit('selecionar-aresta', aresta.edge_id)"
+    @keydown="onKeydown"
+  >
     <title>{{ rotulo }}</title>
     <path
       :d="path"
@@ -86,12 +89,20 @@ const rotulo = computed(() => `${props.aresta.tipo} · ${props.origem.titulo} �
       marker-end="url(#nexo-arrow)"
     />
     <circle
-      :cx="(origem.x + destino.x) / 2"
-      :cy="(origem.y + destino.y) / 2"
+      :cx="mid.x"
+      :cy="mid.y"
       r="4"
-      :fill="selecionada ? cor : '#fff'"
+      :fill="selecionada ? cor : 'var(--v-color-surface)'"
       :stroke="cor"
       stroke-width="2"
     />
   </g>
 </template>
+
+<style scoped>
+.canvas-edge-action:focus-visible > path:first-of-type {
+  stroke: var(--v-color-primary);
+  stroke-opacity: 0.28;
+  stroke-width: 16px;
+}
+</style>

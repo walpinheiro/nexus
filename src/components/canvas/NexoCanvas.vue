@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import NovaAction from '@/components/common/NovaAction.vue'
+import { ref, computed, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useGraph } from '@/stores/useGraph'
 import { useProject } from '@/stores/useProject'
@@ -9,6 +10,7 @@ import CanvasNode from '@/components/canvas/CanvasNode.vue'
 import CanvasEdge from '@/components/canvas/CanvasEdge.vue'
 import CanvasToolbar from '@/components/canvas/CanvasToolbar.vue'
 import type { Edge } from '@/types/nexo'
+import { adjustCanvasZoom, CANVAS_MAX_ZOOM, clientToWorld, edgePathToPoint, fitViewportToBounds, handlePoint, layoutMeasuredNodes, nearestHandle, NODE_DEFAULT_HEIGHT, NODE_WIDTH, usableCanvasRect, type CanvasHandle, type CanvasRect } from './geometry'
 
 const graph = useGraph()
 const project = useProject()
@@ -22,13 +24,20 @@ const zoom = ref(1)
 const panX = ref(40)
 const panY = ref(20)
 const canvasRef = ref<HTMLDivElement | null>(null)
+const toolbarRef = ref<HTMLDivElement | null>(null)
 const espacoRef = ref<HTMLDivElement | null>(null)
+const liveMessage = ref('')
+const medidasNos = reactive<Record<string, { width: number; height: number }>>({})
+const elementosNos = new Map<string, HTMLElement>()
+let nodeObserver: ResizeObserver | null = null
+let viewportObserver: ResizeObserver | null = null
 
 // seleção múltipla + caixa + conexão + aresta
 const multiSel = ref<string[]>([])
 const caixa = ref<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
-const conexao = ref<{ de: string; tipo: Edge['tipo']; mx: number; my: number } | null>(null)
+const conexao = ref<{ de: string; tipo: Edge['tipo']; mx: number; my: number; origemHandle: CanvasHandle; teclado: boolean } | null>(null)
 const tipoConexao = ref<Edge['tipo']>('realiza')
+const ladoRotulo: Record<CanvasHandle, string> = { l: 'esquerda', r: 'direita', t: 'superior', b: 'inferior' }
 const arestaSel = ref<string | null>(null)
 
 // teclas modificadoras globais
@@ -37,9 +46,49 @@ let shiftOn = false
 let ctrlOn = false
 let panAtivo = false
 let panStart = { x: 0, y: 0, px: 0, py: 0 }
+let panNoStart: { panX: number; panY: number } | null = null
 
-const W_NO = 280
-const H_NO = 190
+function tamanhoNo(id: string) {
+  return medidasNos[id] ?? { width: NODE_WIDTH, height: NODE_DEFAULT_HEIGHT }
+}
+function organizarNosMedidos() {
+  graph.aplicarLayout(layoutMeasuredNodes(graph.state.nos, medidasNos))
+}
+function rectNo(id: string): CanvasRect | null {
+  const no = graph.noPorId(id)
+  if (!no) return null
+  const size = tamanhoNo(id)
+  return { x: no.x, y: no.y, width: size.width, height: size.height }
+}
+function refNo(id: string, el: Element | null) {
+  const anterior = elementosNos.get(id)
+  if (anterior === el) return
+  if (anterior) nodeObserver?.unobserve(anterior)
+  if (!el || !(el instanceof HTMLElement)) {
+    elementosNos.delete(id)
+    delete medidasNos[id]
+    return
+  }
+  elementosNos.set(id, el)
+  nodeObserver?.observe(el)
+  medidasNos[id] = { width: el.offsetWidth || NODE_WIDTH, height: el.offsetHeight || NODE_DEFAULT_HEIGHT }
+}
+
+function viewportInsets() {
+  const width = canvasRef.value?.clientWidth ?? window.innerWidth
+  const height = canvasRef.value?.clientHeight ?? window.innerHeight
+  const mobile = width <= 720
+  const canvasTop = canvasRef.value?.getBoundingClientRect().top ?? 0
+  const toolbarTopInset = toolbarRef.value
+    ? toolbarRef.value.getBoundingClientRect().bottom - canvasTop + 12
+    : (mobile ? 104 : 64)
+  if (graph.state.selecionadoId) {
+    return mobile
+      ? { left: 12, right: 12, top: Math.max(64, toolbarTopInset), bottom: height * 0.6 + 12 }
+      : { left: 64, right: 376, top: Math.max(64, toolbarTopInset), bottom: 16 }
+  }
+  return { left: 64, right: 64, top: Math.max(64, toolbarTopInset), bottom: mobile ? 16 : 88 }
+}
 
 const nosFiltrados = computed(() => {
   const t = ui.state.buscaTexto.trim().toLowerCase()
@@ -56,12 +105,39 @@ const nosFiltrados = computed(() => {
 })
 
 const transform = computed(() => `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`)
+const caminhoConexao = computed(() => {
+  const c = conexao.value
+  if (!c) return ''
+  const rect = rectNo(c.de)
+  return rect ? edgePathToPoint(rect, { x: c.mx, y: c.my }, c.origemHandle) : ''
+})
 
 // ?selecionado= reflete seleção (default ft-confirmar)
 onMounted(() => {
+  nodeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const id = [...elementosNos.entries()].find(([, el]) => el === entry.target)?.[0]
+      if (id && entry.target instanceof HTMLElement) {
+        // Keep measurements in border-box coordinates, matching refNo() and the node's ports.
+        medidasNos[id] = { width: entry.target.offsetWidth || NODE_WIDTH, height: entry.target.offsetHeight || NODE_DEFAULT_HEIGHT }
+      }
+    }
+  })
+  viewportObserver = new ResizeObserver(() => {
+    const id = graph.state.selecionadoId
+    if (id) void nextTick(() => centralizarNo(id))
+  })
+  if (canvasRef.value) viewportObserver.observe(canvasRef.value)
+  if (toolbarRef.value) viewportObserver.observe(toolbarRef.value)
+  for (const el of elementosNos.values()) nodeObserver.observe(el)
   const q = route.query.selecionado
   if (typeof q === 'string' && graph.noPorId(q)) graph.selecionar(q)
   else if (!graph.state.selecionadoId) graph.selecionar('ft-confirmar')
+  void nextTick(() => {
+    const selectedId = typeof q === 'string' && graph.noPorId(q) ? q : graph.state.selecionadoId
+    if (selectedId) centralizarNo(selectedId)
+    else fit()
+  })
   window.addEventListener('keydown', onGlobalKeyDown, true)
   window.addEventListener('keyup', onGlobalKeyUp, true)
   canvasRef.value?.addEventListener('wheel', onWheelNative, { passive: false })
@@ -71,6 +147,9 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onGlobalKeyDown, true)
   window.removeEventListener('keyup', onGlobalKeyUp, true)
   canvasRef.value?.removeEventListener('wheel', onWheelNative)
+  nodeObserver?.disconnect()
+  viewportObserver?.disconnect()
+  elementosNos.clear()
 })
 
 function onGlobalKeyDown(e: KeyboardEvent) {
@@ -84,23 +163,30 @@ function onGlobalKeyUp(e: KeyboardEvent) {
   if (e.key === 'Control' || e.key === 'Meta') ctrlOn = false
 }
 
-import { watch } from 'vue'
 watch(
   () => graph.state.selecionadoId,
   (id) => {
     const atual = route.query.selecionado
     if ((id ?? null) !== (typeof atual === 'string' ? atual : null)) {
-      router.replace({ path: '/canvas', query: id ? { selecionado: id } : {} })
+      router.replace({
+        path: '/canvas',
+        query: { ...route.query, view: route.query.view ?? 'canvas', selecionado: id ?? undefined }
+      })
     }
+  }
+)
+watch(
+  () => route.query.selecionado,
+  (value) => {
+    if (typeof value !== 'string' || !graph.noPorId(value)) return
+    if (graph.state.selecionadoId !== value) graph.selecionar(value)
+    void nextTick(() => centralizarNo(value))
   }
 )
 
 function paraMundo(ev: PointerEvent | MouseEvent | WheelEvent): { x: number; y: number } {
-  const rect = espacoRef.value!.getBoundingClientRect()
-  return {
-    x: (ev.clientX - rect.left - panX.value) / zoom.value,
-    y: (ev.clientY - rect.top - panY.value) / zoom.value
-  }
+  const rect = canvasRef.value!.getBoundingClientRect()
+  return clientToWorld({ x: ev.clientX, y: ev.clientY }, rect, { x: panX.value, y: panY.value }, zoom.value)
 }
 
 function snap(v: number, semSnap: boolean): number {
@@ -121,6 +207,7 @@ function iniciarPan(ev: PointerEvent) {
 function onPointerDownFundo(ev: PointerEvent) {
   if ((ev.target as HTMLElement).closest('[role="button"], button, input, textarea, select, a')) return
   if (conexao.value) return
+  if (ui.state.ferramenta === 'connect') return
   // Middle-press inicia pan em qualquer ferramenta; suprime caixa e autoscroll.
   if (ev.button === 1) {
     ev.preventDefault()
@@ -163,7 +250,7 @@ function onPointerUpFundo() {
     const y1 = Math.min(c.y1, c.y2)
     const y2 = Math.max(c.y1, c.y2)
     multiSel.value = graph.state.nos
-      .filter((n) => n.x + W_NO >= x1 && n.x <= x2 && n.y + H_NO >= y1 && n.y <= y2)
+      .filter((n) => n.x + tamanhoNo(n.id).width >= x1 && n.x <= x2 && n.y + tamanhoNo(n.id).height >= y1 && n.y <= y2)
       .map((n) => n.id)
     caixa.value = null
   }
@@ -173,6 +260,13 @@ function onPointerUpFundo() {
 const dragBase = new Map<string, { x: number; y: number }>()
 
 function onMoverNo(id: string, dx: number, dy: number) {
+  if (ui.state.ferramenta === 'hand') {
+    if (!panNoStart) panNoStart = { panX: panX.value, panY: panY.value }
+    panX.value = panNoStart.panX + dx
+    panY.value = panNoStart.panY + dy
+    return
+  }
+  if (ui.state.ferramenta !== 'select') return
   if (dragBase.size === 0) {
     graph.beginDrag()
     const alvos = multiSel.value.includes(id) ? multiSel.value : [id]
@@ -187,12 +281,18 @@ function onMoverNo(id: string, dx: number, dy: number) {
   }
 }
 function onFimMoverNo(id: string) {
+  if (ui.state.ferramenta === 'hand') {
+    panNoStart = null
+    return
+  }
+  if (dragBase.size === 0) return
   dragBase.clear()
   graph.commitMoverNo(id)
 }
 
 function onSelecionarNo(id: string) {
   arestaSel.value = null
+  if (ui.state.ferramenta === 'hand') return
   if (ui.state.preview) {
     graph.selecionar(id)
     project.aprofundar()
@@ -205,6 +305,7 @@ function onSelecionarNo(id: string) {
   }
   multiSel.value = []
   graph.selecionar(id)
+  void nextTick(() => centralizarNo(id))
   if (ui.state.ferramenta === 'comment') ui.setTab('copilot')
 }
 
@@ -212,9 +313,11 @@ function onAprofundar() {
   project.aprofundar()
 }
 
-function onIniciarConexao(id: string, _lado: string, ev: PointerEvent) {
+function onIniciarConexao(id: string, lado: CanvasHandle, ev: PointerEvent) {
+  if (ui.state.ferramenta !== 'connect') return
   const p = paraMundo(ev)
-  conexao.value = { de: id, tipo: tipoConexao.value, mx: p.x, my: p.y }
+  conexao.value = { de: id, tipo: tipoConexao.value, mx: p.x, my: p.y, origemHandle: lado, teclado: false }
+  liveMessage.value = ''
   const move = (m: PointerEvent) => {
     const q = paraMundo(m)
     if (conexao.value) {
@@ -225,51 +328,95 @@ function onIniciarConexao(id: string, _lado: string, ev: PointerEvent) {
   const up = (u: PointerEvent) => {
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
-    const el = document.elementFromPoint(u.clientX, u.clientY)?.closest?.('[data-nodo]')
-    const para = el?.getAttribute('data-nodo')
+    const hit = document.elementFromPoint(u.clientX, u.clientY) as HTMLElement | null
+    const handle = hit?.closest<HTMLElement>('[data-handle]')
+    const nodeEl = handle?.closest<HTMLElement>('[data-nodo]') ?? hit?.closest<HTMLElement>('[data-nodo]')
+    const para = nodeEl?.getAttribute('data-nodo')
     if (para && para !== id) {
-      graph.criarAresta(id, para, conexao.value?.tipo ?? 'realiza', users.state.currentUserId)
+      const targetRect = rectNo(para)
+      const targetSide = handle?.dataset.handle as CanvasHandle | undefined
+        ?? (targetRect ? nearestHandle(targetRect, paraMundo(u)) : 'l')
+      completarConexao(para, targetSide)
+    } else {
+      conexao.value = null
     }
-    conexao.value = null
   }
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
 }
 
+function iniciarConexaoTeclado(id: string, lado: CanvasHandle) {
+  const rect = rectNo(id)
+  if (!rect) return
+  const point = handlePoint(rect, lado)
+  conexao.value = { de: id, tipo: tipoConexao.value, mx: point.x, my: point.y, origemHandle: lado, teclado: true }
+  liveMessage.value = `Conexão iniciada em ${graph.noPorId(id)?.titulo ?? id}, lado ${ladoRotulo[lado]}. Escolha o handle de outro nó e pressione Enter. Escape cancela.`
+}
+
+function ativarHandleTeclado(id: string, lado: CanvasHandle) {
+  if (ui.state.ferramenta !== 'connect') return
+  if (!conexao.value) {
+    iniciarConexaoTeclado(id, lado)
+    return
+  }
+  if (conexao.value.teclado && conexao.value.de !== id) completarConexao(id, lado)
+}
+
+function completarConexao(destinoId: string, destinoHandle: CanvasHandle) {
+  const ativa = conexao.value
+  if (!ativa || ativa.de === destinoId) return
+  const aresta = graph.criarAresta(ativa.de, destinoId, ativa.tipo, users.state.currentUserId, '', {
+    origemHandle: ativa.origemHandle,
+    destinoHandle
+  })
+  if (aresta) liveMessage.value = `Conexão criada entre ${graph.noPorId(ativa.de)?.titulo ?? ativa.de} e ${graph.noPorId(destinoId)?.titulo ?? destinoId}.`
+  conexao.value = null
+}
+
 // --- ações ---
 function zoomIn() {
-  zoom.value = Math.min(2, Math.round((zoom.value + 0.15) * 100) / 100)
+  zoom.value = adjustCanvasZoom(zoom.value, 0.15)
 }
 function zoomOut() {
-  zoom.value = Math.max(0.4, Math.round((zoom.value - 0.15) * 100) / 100)
+  zoom.value = adjustCanvasZoom(zoom.value, -0.15)
 }
 function fit() {
   const el = canvasRef.value
   if (!el || graph.state.nos.length === 0) return
   const rect = el.getBoundingClientRect()
-  const xs = graph.state.nos.map((n) => n.x)
-  const ys = graph.state.nos.map((n) => n.y)
-  const minX = Math.min(...xs) - 60
-  const minY = Math.min(...ys) - 60
-  const maxX = Math.max(...xs.map((x) => x + W_NO)) + 60
-  const maxY = Math.max(...ys.map((y) => y + H_NO)) + 60
-  const z = Math.min(rect.width / (maxX - minX), rect.height / (maxY - minY), 1.5)
-  zoom.value = Math.round(z * 100) / 100
-  panX.value = (rect.width - (maxX - minX) * zoom.value) / 2 - minX * zoom.value
-  panY.value = (rect.height - (maxY - minY) * zoom.value) / 2 - minY * zoom.value
+  const left = Math.min(...graph.state.nos.map((n) => n.x))
+  const top = Math.min(...graph.state.nos.map((n) => n.y))
+  const right = Math.max(...graph.state.nos.map((n) => n.x + tamanhoNo(n.id).width))
+  const bottom = Math.max(...graph.state.nos.map((n) => n.y + tamanhoNo(n.id).height))
+  const fit = fitViewportToBounds(rect.width, rect.height, { x: left, y: top, width: right - left, height: bottom - top }, viewportInsets())
+  if (!fit) return
+  zoom.value = fit.zoom
+  panX.value = fit.panX
+  panY.value = fit.panY
 }
 function navegarPara(x: number, y: number) {
   const el = canvasRef.value
   if (!el) return
   const rect = el.getBoundingClientRect()
-  panX.value = rect.width / 2 - x * zoom.value
-  panY.value = rect.height / 2 - y * zoom.value
+  const usable = usableCanvasRect(rect.width, rect.height, viewportInsets())
+  panX.value = usable.centerX - x * zoom.value
+  panY.value = usable.centerY - y * zoom.value
+}
+function centralizarNo(id: string) {
+  const rect = rectNo(id)
+  const el = canvasRef.value
+  if (!rect || !el) return
+  const fit = fitViewportToBounds(el.clientWidth, el.clientHeight, rect, viewportInsets(), 16, zoom.value)
+  if (!fit) return
+  zoom.value = fit.zoom
+  panX.value = fit.panX
+  panY.value = fit.panY
 }
 function onWheelNative(ev: WheelEvent) {
   ev.preventDefault()
   if (ev.ctrlKey || ev.metaKey) {
     const f = ev.deltaY < 0 ? 1.1 : 0.9
-    zoom.value = Math.min(2, Math.max(0.4, Math.round(zoom.value * f * 100) / 100))
+    zoom.value = adjustCanvasZoom(zoom.value * f, 0, undefined, CANVAS_MAX_ZOOM)
   } else {
     panX.value -= ev.deltaX
     panY.value -= ev.deltaY
@@ -278,8 +425,9 @@ function onWheelNative(ev: WheelEvent) {
 function adicionarNo() {
   const el = canvasRef.value
   const rect = el?.getBoundingClientRect()
-  const cx = rect ? (rect.width / 2 - panX.value) / zoom.value - W_NO / 2 : 300
-  const cy = rect ? (rect.height / 2 - panY.value) / zoom.value - H_NO / 2 : 200
+  const usable = rect ? usableCanvasRect(rect.width, rect.height, viewportInsets()) : null
+  const cx = rect && usable ? (usable.centerX - panX.value) / zoom.value - NODE_WIDTH / 2 : 300
+  const cy = rect && usable ? (usable.centerY - panY.value) / zoom.value - NODE_DEFAULT_HEIGHT / 2 : 200
   const no = graph.criarNo(
     {
       tipo: 'feature',
@@ -320,6 +468,7 @@ function nudge(dx: number, dy: number) {
   graph.commitMoverNo(ids[0])
 }
 function onDuploCliqueVazio(ev: MouseEvent) {
+  if (ui.state.ferramenta === 'connect') return
   if ((ev.target as HTMLElement).closest('[data-nodo], button, a')) return
   const p = paraMundo(ev)
   const no = graph.criarNo(
@@ -337,8 +486,9 @@ function onDuploCliqueVazio(ev: MouseEvent) {
 }
 
 function onKeydownCanvas(ev: KeyboardEvent) {
-  const tag = (ev.target as HTMLElement)?.tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || (ev.target as HTMLElement)?.isContentEditable) return
+  const target = ev.target as HTMLElement
+  const tag = target?.tagName
+  if (target?.closest('.canvas-floating-tools') || tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
     ev.preventDefault()
     if (ev.shiftKey) graph.redo()
@@ -355,6 +505,12 @@ function onKeydownCanvas(ev: KeyboardEvent) {
     return
   }
   if (ev.key === 'Escape') {
+    if (conexao.value) {
+      conexao.value = null
+      liveMessage.value = 'Conexão cancelada.'
+      ev.preventDefault()
+      return
+    }
     graph.selecionar(null)
     multiSel.value = []
     arestaSel.value = null
@@ -376,41 +532,20 @@ function onKeydownCanvas(ev: KeyboardEvent) {
   }
 }
 
-defineExpose({ fit, navegarPara, zoomIn, zoomOut })
+defineExpose({ fit, navegarPara, centralizarNo, zoomIn, zoomOut, medidasNos })
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 w-full flex-1 gap-0">
-    <CanvasToolbar
-      @zoom-in="zoomIn"
-      @zoom-out="zoomOut"
-      @fit="fit"
-      @tidy="graph.tidy()"
-      @undo="graph.undo()"
-      @redo="graph.redo()"
-      @adicionar="adicionarNo"
-    />
-
+  <div class="h-full min-h-0 w-full min-w-0 flex-1">
     <div class="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
-      <div class="mb-2 flex flex-wrap items-center gap-2 text-xs">
-        <label class="flex items-center gap-1">
-          Tipo da próxima conexão
-          <select v-model="tipoConexao" class="rounded-btn border border-nexo-border bg-white px-2 py-1">
-            <option value="contem">contém</option>
-            <option value="realiza">realiza</option>
-            <option value="consome">consome</option>
-            <option value="valida">valida</option>
-            <option value="restringe">restringe</option>
-            <option value="impacta">impacta</option>
-          </select>
-        </label>
+      <div v-if="multiSel.length > 0 || ui.state.preview" class="absolute left-14 top-2 z-30 flex min-h-0 flex-wrap items-center gap-2 text-xs">
         <span v-if="multiSel.length > 0" class="rounded-badge bg-nexo-primary-soft px-2 py-1 text-nexo-primary">
           {{ multiSel.length }} selecionados (Shift+clique, caixa) —
-          <button type="button" class="underline" @click="graph.agrupar(multiSel, 'grupo-' + Date.now().toString(36))">agrupar</button>
+          <NovaAction type="button" class="underline" @click="graph.agrupar(multiSel, 'grupo-' + Date.now().toString(36))">agrupar</NovaAction>
           ·
-          <button type="button" class="underline" @click="graph.desagrupar(multiSel)">desagrupar</button>
+          <NovaAction type="button" class="underline" @click="graph.desagrupar(multiSel)">desagrupar</NovaAction>
           ·
-          <button type="button" class="underline" @click="multiSel = []">limpar</button>
+          <NovaAction type="button" class="underline" @click="multiSel = []">limpar</NovaAction>
         </span>
         <span v-if="ui.state.preview" class="rounded-badge bg-nexo-approved-bg px-2 py-1 text-nexo-approved">
           Preview (P) — clique navega sem editar
@@ -419,7 +554,7 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
 
       <div
         ref="canvasRef"
-        class="canvas-dots relative h-full min-h-0 w-full flex-1 overflow-hidden rounded-card border border-nexo-border"
+        class="canvas-dots relative h-full min-h-0 w-full min-w-0 flex-1 overflow-clip"
         :class="middlePan || panAtivo ? 'cursor-grabbing' : ''"
         tabindex="0"
         role="application"
@@ -428,6 +563,32 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
         @mousedown="($event.button === 1 ? $event.preventDefault() : undefined)"
         @auxclick="($event.button === 1 ? $event.preventDefault() : undefined)"
       >
+        <p class="sr-only" role="status" aria-live="polite">{{ liveMessage }}</p>
+        <div class="sr-only" role="group" aria-label="Conexões do grafo">
+          <button
+            v-for="edge in graph.state.arestas.filter((item) => graph.noPorId(item.origem_id) && graph.noPorId(item.destino_id))"
+            :key="edge.edge_id"
+            type="button"
+            class="focus:not-sr-only focus:fixed focus:left-24 focus:top-24 focus:z-[70] focus:rounded-btn focus:border focus:border-nexo-primary focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:shadow-lg"
+            :aria-label="`${edge.tipo}: ${graph.noPorId(edge.origem_id)?.titulo ?? edge.origem_id} para ${graph.noPorId(edge.destino_id)?.titulo ?? edge.destino_id}`"
+            :aria-pressed="arestaSel === edge.edge_id"
+            @click.stop="arestaSel = edge.edge_id; liveMessage = `Conexão ${edge.tipo} selecionada.`"
+          >
+            {{ edge.tipo }}: {{ graph.noPorId(edge.origem_id)?.titulo ?? edge.origem_id }} → {{ graph.noPorId(edge.destino_id)?.titulo ?? edge.destino_id }}
+          </button>
+        </div>
+        <div ref="toolbarRef" class="canvas-toolbar-position absolute left-1/2 top-3 z-[60] max-w-[calc(100%-2rem)] -translate-x-1/2" @pointerdown.stop @wheel.stop>
+          <CanvasToolbar
+            v-model:tipo-conexao="tipoConexao"
+            @zoom-in="zoomIn"
+            @zoom-out="zoomOut"
+            @fit="fit"
+            @tidy="organizarNosMedidos()"
+            @undo="graph.undo()"
+            @redo="graph.redo()"
+            @adicionar="adicionarNo"
+          />
+        </div>
         <div
           ref="espacoRef"
           class="absolute left-0 top-0"
@@ -437,10 +598,10 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
           @pointerup="onPointerUpFundo"
           @dblclick="onDuploCliqueVazio"
         >
-          <svg class="absolute left-0 top-0" width="2000" height="1400" aria-hidden="true">
+          <svg class="absolute left-0 top-0" width="2000" height="1400">
             <defs>
               <marker id="nexo-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 1 L 9 5 L 0 9" fill="none" stroke="#1D4ED8" stroke-width="1.5" />
+                <path d="M 0 1 L 9 5 L 0 9" fill="none" stroke="context-stroke" stroke-width="1.5" />
               </marker>
             </defs>
             <CanvasEdge
@@ -449,14 +610,16 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
               :aresta="e"
                 :origem="graph.noPorId(e.origem_id)!"
               :destino="graph.noPorId(e.destino_id)!"
+              :origem-size="tamanhoNo(e.origem_id)"
+              :destino-size="tamanhoNo(e.destino_id)"
               :selecionada="arestaSel === e.edge_id"
               @selecionar-aresta="arestaSel = $event"
             />
             <path
               v-if="conexao && graph.noPorId(conexao.de)"
-              :d="`M ${graph.noPorId(conexao.de)!.x + 280} ${graph.noPorId(conexao.de)!.y + 95} C ${(graph.noPorId(conexao.de)!.x + 280 + conexao.mx) / 2} ${graph.noPorId(conexao.de)!.y + 95}, ${(graph.noPorId(conexao.de)!.x + 280 + conexao.mx) / 2} ${conexao.my}, ${conexao.mx} ${conexao.my}`"
+              :d="caminhoConexao"
               fill="none"
-              stroke="#1D4ED8"
+              stroke="var(--v-color-primary)"
               stroke-width="2"
               stroke-dasharray="6 4"
             />
@@ -465,6 +628,7 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
           <div
             v-for="n in nosFiltrados"
             :key="n.id"
+            :ref="(el) => refNo(n.id, el as Element | null)"
             :data-nodo="n.id"
             class="absolute"
             :style="{ left: n.x + 'px', top: n.y + 'px', zIndex: (n.z ?? 0) + 10 }"
@@ -477,6 +641,7 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
               @selecionar="onSelecionarNo"
               @aprofundar="onAprofundar"
               @iniciar-conexao="onIniciarConexao"
+              @ativar-handle="ativarHandleTeclado"
               @mover="onMoverNo"
               @fim-mover="onFimMoverNo"
             />
@@ -498,3 +663,16 @@ defineExpose({ fit, navegarPara, zoomIn, zoomOut })
     </div>
   </div>
 </template>
+
+<style scoped>
+.canvas-dots {
+  container-type: inline-size;
+}
+
+@container (max-width: 720px) {
+  .canvas-toolbar-position {
+    top: 64px;
+    max-width: calc(100% - 32px);
+  }
+}
+</style>

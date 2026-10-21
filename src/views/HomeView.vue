@@ -7,8 +7,10 @@ import { useGate } from '@/stores/useGate'
 import { useUsers } from '@/stores/useUsers'
 import type { Classificacao } from '@/types/nexo'
 import IngestaoDialog from '@/components/projects/IngestaoDialog.vue'
-import { getProviderPadrao, saveConfig, type ProvedorIaLocal } from '@/ai/ollamaClient'
 import { PASSOS_WIZARD_CRIACAO } from '@/ai/gateSkills'
+import { VButton, VCard, VBadge, VProgress, VStatCard, VDialog, VTextInput, VTextarea, VSelect, VTabs } from 'vueui-nova-kit'
+import { ORDEM_GATES, gateAnterior, gateDesbloqueado } from '@/utils/gates'
+import LucideIcon from '@/components/common/LucideIcon.vue'
 
 const projects = useProjects()
 const graph = useGraph()
@@ -99,11 +101,23 @@ function aoIngestaoCancelar() {
 }
 
 function criar() {
+  if (!wizardConcluidoNovo.value) return
   // Item5 FIXGERAL-TELA: usa criarProjetoComIA do MOTOR (não criarProjeto
   // direto) — título/campos confirmados no wizard; G0-001 sem título vazio.
-  const tituloFinal = titulo.value.trim() || sugestaoTituloIa.value.trim()
+  const tituloFinal = titulo.value.trim()
   if (!tituloFinal) {
-    erros.value = [{ campo: 'titulo', codigo: 'G0-001', mensagem: 'Título é obrigatório (G0-001). Confirme a sugestão da IA ou digite o título.' }]
+    erros.value = [{ campo: 'titulo', codigo: 'G0-001', mensagem: 'Revise o título: escolha a sugestão ou escreva um título antes de criar.' }]
+    return
+  }
+  const camposObrigatorios = [
+    { campo: 'contexto', valor: contexto.value, minimo: 30, nome: 'Contexto' },
+    { campo: 'objetivo', valor: objetivo.value, minimo: 1, nome: 'Objetivo' },
+    { campo: 'publico', valor: publico.value, minimo: 1, nome: 'Público afetado' },
+    { campo: 'metrica', valor: metrica.value, minimo: 1, nome: 'Métrica inicial' }
+  ]
+  const respostaInsuficiente = camposObrigatorios.find((item) => item.valor.trim().length < item.minimo)
+  if (respostaInsuficiente) {
+    erros.value = [{ campo: respostaInsuficiente.campo, codigo: 'G0-001', mensagem: `${respostaInsuficiente.nome} é obrigatório; revise este campo antes de criar.` }]
     return
   }
   const r = projects.criarProjetoComIA(
@@ -113,7 +127,9 @@ function criar() {
       usuarios: publico.value,
       escopo: restricoesTxt.value,
       metrica: metrica.value,
-      naoObjetivos: naoObjetivosTxt.value
+      naoObjetivos: naoObjetivosTxt.value,
+      titulo: tituloFinal,
+      classificacao: classificacao.value
     },
     users.state.currentUserId
   )
@@ -131,8 +147,8 @@ function criar() {
 // Item5 FIXGERAL-TELA: 5 passos SEM passo usuário (problema, objetivo,
 // usuários, escopo, métrica) — consome PASSOS_WIZARD_CRIACAO do MOTOR, sem
 // duplicar; métrica usa criarProjetoComIA; preenche TODOS (métrica +
-// naoObjetivos); responsável sempre = usuário logado. Sugestão de título
-// via IA (W2): confirma/ajusta antes de criar.
+// naoObjetivos); responsável sempre = usuário logado. O título sugerido é
+// uma prévia local determinística derivada das respostas.
 const passoWizard = ref(0)
 const respostaPasso = ref('')
 const erroPasso = ref('')
@@ -141,26 +157,36 @@ const wizardConcluidoNovo = ref(false)
 // Métrica tem ajuda própria; demais usam a ajuda do MOTOR.
 const passoAtualWizard = computed(() => PASSOS_WIZARD_CRIACAO[passoWizard.value])
 const ajudaPassoAtual = computed(() => {
+  if (passoAtualWizard.value.id === 'problema') return 'Descreva o contexto e a dor observável com ao menos 30 caracteres.'
   if (passoAtualWizard.value.id === 'metrica') return 'Nome da métrica de sucesso (ex.: Adoção inicial).'
   return passoAtualWizard.value.ajuda
 })
 
 function iniciarWizardNovo() {
+  titulo.value = ''
+  contexto.value = ''
+  publico.value = ''
+  objetivo.value = ''
+  metrica.value = ''
+  restricoesTxt.value = ''
+  naoObjetivosTxt.value = ''
+  classificacao.value = 'internal'
   passoWizard.value = 0
   respostaPasso.value = ''
   erroPasso.value = ''
   wizardConcluidoNovo.value = false
-  sugestaoTituloIa.value = ''
-  tituloConfirmadoIa.value = false
+  sugestaoTitulo.value = ''
+  sugestaoAplicada.value = false
 }
 
 function validarPassoAtual(): boolean {
-  // Item5: validação espelha o MOTOR (problema/objetivo/usuários mín. 10;
-  // escopo/métrica opcionais); mensagem curta PT-BR na tela.
   const passoId = passoAtualWizard.value.id
   if (passoId === 'escopo' || passoId === 'metrica') return true
-  if (respostaPasso.value.trim().length < 10) {
-    erroPasso.value = 'Resposta curta demais: use ao menos 10 caracteres.'
+  const minimo = passoId === 'problema' ? 30 : 10
+  if (respostaPasso.value.trim().length < minimo) {
+    erroPasso.value = passoId === 'problema'
+      ? 'Descreva o contexto com ao menos 30 caracteres.'
+      : 'Resposta curta demais: use ao menos 10 caracteres.'
     return false
   }
   return true
@@ -183,40 +209,58 @@ function avancarWizard() {
   erroPasso.value = ''
   if (passoWizard.value < PASSOS_WIZARD_CRIACAO.length - 1) {
     passoWizard.value += 1
-    respostaPasso.value = ''
+    respostaPasso.value = valorDoPasso(PASSOS_WIZARD_CRIACAO[passoWizard.value].id)
   } else {
     wizardConcluidoNovo.value = true
-    sugerirTituloIa()
+    sugerirTitulo()
   }
 }
 
-// W2 CRIACAOIA2-TELA: sugestão de título via IA (respostas do wizard) —
-// confirmar/ajustar antes de criar. Título final editável no campo abaixo.
-const sugestaoTituloIa = ref('')
-const tituloConfirmadoIa = ref(false)
+function enviarWizard() {
+  if (tipoProjeto.value !== 'novo') return
+  if (wizardConcluidoNovo.value) criar()
+  else avancarWizard()
+}
 
-function sugerirTituloIa() {
+// Sugestão local e determinística derivada das respostas; não chama um modelo.
+const sugestaoTitulo = ref('')
+const sugestaoAplicada = ref(false)
+
+function sugerirTitulo() {
   const base = (objetivo.value.trim() || contexto.value.trim()).replace(/\s+/g, ' ').trim()
-  sugestaoTituloIa.value = base ? base.slice(0, 60) : ''
-  tituloConfirmadoIa.value = false
-  if (sugestaoTituloIa.value && !titulo.value.trim()) {
-    titulo.value = sugestaoTituloIa.value
-  }
+  sugestaoTitulo.value = base ? base.slice(0, 60) : ''
+  sugestaoAplicada.value = false
 }
 
-function confirmarSugestaoTitulo() {
-  if (sugestaoTituloIa.value.trim()) {
-    titulo.value = sugestaoTituloIa.value.trim().slice(0, 60)
+function aplicarSugestaoTitulo() {
+  if (sugestaoTitulo.value.trim()) {
+    titulo.value = sugestaoTitulo.value.trim().slice(0, 60)
   }
-  tituloConfirmadoIa.value = true
+  sugestaoAplicada.value = true
 }
 
 function voltarWizard() {
   erroPasso.value = ''
   if (passoWizard.value > 0) {
     passoWizard.value -= 1
-    respostaPasso.value = ''
+    respostaPasso.value = valorDoPasso(PASSOS_WIZARD_CRIACAO[passoWizard.value].id)
   }
+}
+
+function valorDoPasso(passoId: string): string {
+  if (passoId === 'problema') return contexto.value
+  if (passoId === 'objetivo') return objetivo.value
+  if (passoId === 'usuarios') return publico.value
+  if (passoId === 'escopo') return restricoesTxt.value
+  if (passoId === 'metrica') return metrica.value
+  return ''
+}
+
+function editarPasso(indice: number) {
+  passoWizard.value = indice
+  respostaPasso.value = valorDoPasso(PASSOS_WIZARD_CRIACAO[indice].id)
+  erroPasso.value = ''
+  wizardConcluidoNovo.value = false
 }
 
 // W1 CRIACAOIA2-TELA: responsável sempre = usuário logado (sem campo owner).
@@ -225,153 +269,202 @@ const usuarioResponsavel = computed(() => {
   const u = users.state.usuarios.find((x) => x.id === users.state.currentUserId)
   return u ? `${u.nome} — ${u.papel}` : users.state.currentUserId
 })
-const providerIa = ref<ProvedorIaLocal>(getProviderPadrao())
-
-function trocarProviderIa(p: ProvedorIaLocal) {
-  providerIa.value = saveConfig({ provider: p }).provider
-}
-
 const temProjetos = computed(() => projects.state.projetos.length > 0)
+const gatesDoProjeto = computed(() => gates.gates)
+const totalGates = ORDEM_GATES.length
+const aprovados = computed(() => gatesDoProjeto.value.filter((g) => g.status === 'aprovado').length)
+const gateAtual = computed(() => gatesDoProjeto.value.find((g) => g.status !== 'aprovado') ?? null)
+const gateCompleto = computed(() => gateAtual.value === null)
+const proximoGate = computed(() => gateAtual.value?.id ?? null)
+const gateEmRevisao = computed(() => gateAtual.value?.status === 'revisao')
+const gateLiberado = computed(() => proximoGate.value ? gateDesbloqueado(proximoGate.value, gatesDoProjeto.value) : false)
+const dependenciaGate = computed(() => proximoGate.value ? gateAnterior(proximoGate.value) : null)
+const proximaAcao = computed(() => {
+  if (gateCompleto.value) return 'Todos os gates aprovados'
+  if (gateEmRevisao.value) return `Revisar Gate ${proximoGate.value}`
+  if (proximoGate.value === 'G0') return 'Completar o enquadramento G0'
+  if (gateLiberado.value) return `Completar artefatos do Gate ${proximoGate.value}`
+  return `Resolver dependências do Gate ${proximoGate.value}`
+})
+const descricaoProximaAcao = computed(() => {
+  if (gateCompleto.value) return `Os ${totalGates} gates deste projeto estão aprovados.`
+  if (gateEmRevisao.value) return `O Gate ${proximoGate.value} está em revisão; a aprovação ainda está pendente.`
+  if (gateLiberado.value) return `O Gate ${proximoGate.value} está disponível para preencher os artefatos e solicitar revisão.`
+  return `O Gate ${proximoGate.value} depende da aprovação e da baseline do ${dependenciaGate.value ?? 'gate anterior'}. Consulte o backlog para resolver as pendências.`
+})
+const statusProximoGate = computed(() => {
+  if (gateCompleto.value) return 'Todos aprovados'
+  if (gateEmRevisao.value) return 'Em revisão'
+  return gateLiberado.value ? 'Disponível para iniciar' : 'Aguardando dependência'
+})
+const rotuloMarcadorGate = computed(() => {
+  if (gateCompleto.value) return 'GATES CONCLUÍDOS'
+  if (gateEmRevisao.value) return 'GATE EM REVISÃO'
+  return gateLiberado.value ? 'PRÓXIMO GATE' : 'GATE PENDENTE'
+})
+const rotuloContinuar = computed(() => {
+  if (gateCompleto.value) return 'Ver backlog'
+  if (gateEmRevisao.value) return `Revisar ${proximoGate.value}`
+  if (proximoGate.value === 'G0') return 'Completar G0'
+  return gateLiberado.value ? `Abrir ${proximoGate.value}` : 'Ver pendências'
+})
+function continuarProjeto() {
+  if (!projects.state.atualId) return
+  if (gateCompleto.value) router.push('/backlog')
+  else if (proximoGate.value === 'G0') router.push(`/gates/G0?alvo=${encodeURIComponent(projects.atual?.epicoId ?? '')}&modo=wizard`)
+  else if (gateLiberado.value && proximoGate.value) router.push(`/gates/${proximoGate.value}`)
+  else router.push('/backlog')
+}
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="flex items-center gap-3">
-      <h1 class="text-xl font-bold">Projetos</h1>
-      <button type="button" class="ml-auto rounded-btn bg-nexo-primary px-4 py-2 text-sm font-semibold text-white" @click="abrirDialog()">Novo projeto</button>
-    </div>
+  <div class="home-dashboard">
+    <header class="home-heading"><div class="home-heading-copy"><span class="home-kicker">ESPAÇO DE PRODUTO</span><h1>Visão do projeto</h1><p>Acompanhe o discovery e avance pelos gates com contexto.</p></div><VButton class="home-new-project" variant="primary" size="md" @click="abrirDialog()">Novo projeto</VButton></header>
+    <section v-if="temProjetos" class="home-next-action">
+      <div class="home-next-copy">
+        <div class="home-next-top">
+          <div class="home-project-badge-wrap">
+            <VBadge class="home-project-badge" variant="primary" size="sm" :aria-label="`Projeto atual: ${projects.atual?.titulo ?? ''}`">{{ projects.atual?.titulo }}</VBadge>
+          </div>
+          <div class="home-gates-summary">{{ aprovados }} de {{ totalGates }} gates aprovados</div>
+        </div>
+        <h2>{{ proximaAcao }}</h2>
+        <p>{{ descricaoProximaAcao }}</p>
+        <VProgress :value="Math.round(aprovados / totalGates * 100)" :label="`${aprovados}/${totalGates} gates`" aria-label="Progresso dos gates aprovados" />
+        <VButton variant="primary" class="home-continue" @click="continuarProjeto">{{ rotuloContinuar }} <LucideIcon name="arrow-right" :size="16" /></VButton>
+      </div>
+      <div class="home-gate-marker">
+        <span>{{ rotuloMarcadorGate }}</span>
+        <strong>{{ proximoGate ?? '✓' }}</strong>
+        <small>{{ statusProximoGate }}</small>
+      </div>
+    </section>
+    <div class="home-metrics" v-if="temProjetos"><VStatCard label="Projetos" :value="projects.state.projetos.length" caption="No espaço de trabalho" variant="outlined" /><VStatCard label="Gates aprovados" :value="`${aprovados}/${totalGates}`" caption="Dos gates do projeto" variant="outlined" /><VStatCard label="Objetos no grafo" :value="graph.state.nos.length" caption="Rastreáveis no Canvas" variant="outlined" /></div>
+    <div class="flex items-center justify-between"><h2 class="home-section-title">Projetos</h2></div>
 
-    <div v-if="!temProjetos" class="rounded-card border border-nexo-border bg-white p-8 text-center">
+    <div v-if="!temProjetos" class="home-empty">
       <p class="font-semibold">Nenhum projeto ainda.</p>
       <p class="mt-1 text-sm text-nexo-muted">Crie o primeiro projeto respondendo ao enquadramento G0.</p>
-      <button type="button" class="mt-4 rounded-btn bg-nexo-primary px-4 py-2 text-sm font-semibold text-white" @click="abrirDialog()">Criar primeiro projeto</button>
+      <VButton variant="primary" class="mt-4" @click="abrirDialog()">Criar primeiro projeto</VButton>
     </div>
 
     <div v-else class="grid gap-3 md:grid-cols-2">
-      <article
+      <VCard
         v-for="p in projects.state.projetos"
         :key="p.id"
-        class="rounded-card border bg-white p-4 shadow-card"
+        class="home-project-card"
         :class="p.id === projects.state.atualId ? 'border-nexo-primary' : 'border-nexo-border'"
+        variant="outlined"
       >
-        <h2 class="font-bold">{{ p.titulo }}</h2>
+        <template #title><h2 class="font-bold">{{ p.titulo }}</h2></template>
+        <template #description>
         <p class="mt-1 text-sm text-nexo-muted">{{ p.descricao || 'Sem descrição' }}</p>
         <p class="mt-2 text-xs text-nexo-muted">
           Épico: {{ p.epicoTitulo }} · {{ contagem(p.id).nos }} nós · {{ contagem(p.id).arestas }} arestas ·
           {{ resumoGates(p.id) }} · owner {{ p.owner }}
         </p>
-        <div class="mt-3 flex gap-2">
-          <button type="button" class="rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white" @click="abrirProjeto(p.id)">
+        </template>
+        <template #default>
+        <div class="home-project-actions mt-3 flex gap-2">
+          <VButton class="home-project-action" variant="primary" size="sm" @click="abrirProjeto(p.id)">
             {{ p.id === projects.state.atualId ? 'Ver backlog' : 'Abrir projeto' }}
-          </button>
-          <button type="button" class="rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="abrirCanvasProjeto(p.id)">Abrir Canvas</button>
+          </VButton>
+          <VButton class="home-project-action" variant="outline" size="sm" @click="abrirCanvasProjeto(p.id)">Abrir Canvas</VButton>
         </div>
-      </article>
+        </template>
+      </VCard>
     </div>
 
-    <div v-if="dialogAberto" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6" role="dialog" aria-modal="true" aria-label="Novo projeto (G0)" @click.self="dialogAberto = false">
-      <div class="max-h-full w-full max-w-xl overflow-auto rounded-card bg-white p-4 shadow-card">
-        <h2 class="font-bold">Novo projeto — Enquadramento G0</h2>
-        <!-- W3 CRIACAOIA2-TELA: config do provider padrão de IA (persistido, default definido) -->
-        <div class="mt-2 flex flex-wrap items-center gap-2 rounded-btn border border-nexo-border bg-nexo-canvas p-2 text-sm" aria-label="Provedor padrão de IA">
-          <span class="text-xs font-semibold text-nexo-muted">IA padrão:</span>
-          <div class="flex gap-1" role="radiogroup" aria-label="Provedor padrão de IA">
-            <button
-              v-for="p in (['ollama', 'llama.cpp', 'local'] as const)"
-              :key="p"
-              type="button"
-              role="radio"
-              :aria-checked="providerIa === p"
-              class="min-h-[32px] rounded-btn border px-2.5 py-1 text-xs"
-              :class="providerIa === p ? 'border-nexo-primary bg-white font-semibold text-nexo-primary' : 'border-nexo-border text-nexo-muted'"
-              @click="trocarProviderIa(p)"
-            >{{ p }}</button>
-          </div>
-          <span class="text-xs text-nexo-muted">Usado no Novo e no Existente.</span>
-        </div>
-        <div role="radiogroup" aria-label="Tipo de projeto" class="mt-3 flex gap-2">
-          <button
-            type="button"
-            role="radio"
-            :aria-checked="tipoProjeto === 'novo'"
-            class="min-h-[32px] flex-1 rounded-btn border px-3 py-1.5 text-sm"
-            :class="tipoProjeto === 'novo' ? 'border-nexo-primary bg-nexo-primary-soft font-semibold' : 'border-nexo-border'"
-            @click="tipoProjeto = 'novo'"
-          >Novo</button>
-          <button
-            type="button"
-            role="radio"
-            :aria-checked="tipoProjeto === 'existente'"
-            class="min-h-[32px] flex-1 rounded-btn border px-3 py-1.5 text-sm"
-            :class="tipoProjeto === 'existente' ? 'border-nexo-primary bg-nexo-primary-soft font-semibold' : 'border-nexo-border'"
-            @click="tipoProjeto = 'existente'"
-          >Existente</button>
-        </div>
-        <form v-if="tipoProjeto === 'novo'" @submit.prevent="criar">
+    <VDialog v-model="dialogAberto" title="Novo projeto — Enquadramento G0" description="Responda às perguntas do wizard para iniciar uma trilha rastreável de produto." variant="basic" size="lg" @close="dialogAberto = false">
+      <div class="w-full px-1">
+        <VTabs class="mt-3" :model-value="tipoProjeto" :items="[{value:'novo',label:'Novo projeto'},{value:'existente',label:'Projeto existente'}]" variant="pill" size="sm" :panels="false" aria-label="Tipo de projeto" @update:model-value="tipoProjeto = $event as 'novo' | 'existente'" />
+        <form v-if="tipoProjeto === 'novo'" @submit.prevent="enviarWizard">
         <!-- Item5 FIXGERAL-TELA: wizard IA 5 passos do MOTOR — pergunta por vez, pré-preenche ao final -->
         <div class="mt-3 space-y-2 text-sm" aria-label="Assistente de criação">
-          <div class="flex items-center justify-between text-xs text-nexo-muted">
-            <span class="font-semibold text-nexo-text">Passo {{ passoWizard + 1 }} de {{ PASSOS_WIZARD_CRIACAO.length }} — {{ passoAtualWizard.pergunta }}</span>
-            <span>{{ Math.round(((passoWizard + (wizardConcluidoNovo ? 1 : 0)) / PASSOS_WIZARD_CRIACAO.length) * 100) }}%</span>
+          <div v-if="!wizardConcluidoNovo" class="flex items-center justify-between text-xs text-nexo-muted">
+            <span class="font-semibold text-nexo-text">Passo {{ passoWizard + 1 }} de {{ PASSOS_WIZARD_CRIACAO.length }}</span>
+            <span>{{ Math.round(((passoWizard + 1) / PASSOS_WIZARD_CRIACAO.length) * 100) }}%</span>
           </div>
-          <div class="h-1.5 w-full overflow-hidden rounded-full bg-nexo-canvas" role="progressbar" :aria-valuenow="passoWizard + 1" aria-valuemin="1" :aria-valuemax="PASSOS_WIZARD_CRIACAO.length">
-            <div class="h-full rounded-full bg-nexo-primary transition-all" :style="{ width: `${((passoWizard + (wizardConcluidoNovo ? 1 : 0)) / PASSOS_WIZARD_CRIACAO.length) * 100}%` }" />
-          </div>
-          <p class="text-xs text-nexo-muted">{{ ajudaPassoAtual }}</p>
-          <p class="rounded-badge bg-nexo-canvas px-2 py-1 text-xs text-nexo-muted">Responsável: usuário logado ({{ usuarioResponsavel }})</p>
-          <label class="block">{{ passoAtualWizard.pergunta }}
-            <textarea v-model="respostaPasso" rows="3" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" />
-          </label>
-          <p v-if="erroPasso" class="text-xs text-nexo-blocked">{{ erroPasso }}</p>
-          <div class="flex gap-2">
-            <button v-if="passoWizard > 0" type="button" class="min-h-[32px] rounded-btn border border-nexo-border px-3 py-1.5 text-sm" @click="voltarWizard()">Voltar</button>
-            <button v-if="!wizardConcluidoNovo" type="button" class="min-h-[32px] flex-1 rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white" @click="avancarWizard()">{{ passoWizard < PASSOS_WIZARD_CRIACAO.length - 1 ? 'Responder e avançar' : 'Concluir respostas' }}</button>
-          </div>
-          <p v-if="wizardConcluidoNovo" class="rounded-badge bg-nexo-approved-bg px-2 py-1 text-xs text-nexo-approved">Respostas aplicadas aos campos abaixo. Revise e clique em Criar projeto.</p>
+          <VProgress v-if="!wizardConcluidoNovo" :value="Math.round(((passoWizard + 1) / PASSOS_WIZARD_CRIACAO.length) * 100)" :label="false" size="md" aria-label="Progresso do enquadramento" />
+          <template v-if="!wizardConcluidoNovo">
+            <h3 class="home-wizard-question">{{ passoAtualWizard.pergunta }}</h3>
+            <VTextarea v-model="respostaPasso" label="Sua resposta" :aria-label="passoAtualWizard.pergunta" :helper-text="ajudaPassoAtual" :rows="3" auto-resize />
+            <p v-if="erroPasso" class="text-xs text-nexo-blocked">{{ erroPasso }}</p>
+            <div class="flex gap-2">
+              <VButton v-if="passoWizard > 0" type="button" variant="outline" @click="voltarWizard()">Voltar</VButton>
+              <VButton type="button" variant="primary" class="flex-1" @click="avancarWizard()">{{ passoWizard < PASSOS_WIZARD_CRIACAO.length - 1 ? 'Responder e avançar' : 'Concluir respostas' }}</VButton>
+            </div>
+          </template>
+          <VCard v-else variant="outlined" class="space-y-2">
+            <template #title><h3 class="font-semibold">Revise suas respostas</h3></template>
+            <p class="text-xs text-nexo-muted">As respostas estão aplicadas ao enquadramento. Edite qualquer etapa antes de criar.</p>
+            <div v-for="(passo, indice) in PASSOS_WIZARD_CRIACAO" :key="passo.id" class="flex items-start justify-between gap-3 border-b border-nexo-border py-2 last:border-0">
+              <div class="min-w-0"><p class="text-xs font-semibold">{{ passo.pergunta }}</p><p class="whitespace-pre-wrap text-sm text-nexo-muted">{{ valorDoPasso(passo.id) || 'Sem resposta' }}</p></div>
+              <VButton type="button" variant="ghost" size="sm" @click="editarPasso(indice)">Editar</VButton>
+            </div>
+            <p class="text-xs text-nexo-muted">Responsável · {{ usuarioResponsavel }}</p>
+          </VCard>
         </div>
-        <!-- W2 CRIACAOIA2-TELA: título com sugestão IA — confirmar/ajustar, preview editável -->
-        <div v-if="wizardConcluidoNovo && sugestaoTituloIa" class="mt-2 rounded-btn border border-nexo-border bg-nexo-canvas p-2 text-sm">
-          <p class="text-xs font-semibold text-nexo-text">Sugestão de título via IA</p>
-          <p class="mt-1 text-xs text-nexo-muted">{{ sugestaoTituloIa }}</p>
+        <!-- Sugestão local; o campo de título permanece editável. -->
+        <div v-if="wizardConcluidoNovo && sugestaoTitulo" class="mt-2 rounded-btn border border-nexo-border bg-nexo-canvas p-2 text-sm">
+          <p class="text-xs font-semibold text-nexo-text">Sugestão de título a partir das respostas</p>
+          <p class="mt-1 text-xs text-nexo-muted">{{ sugestaoTitulo }}</p>
           <div class="mt-2 flex gap-2">
-            <button type="button" class="min-h-[32px] rounded-btn bg-nexo-primary px-3 py-1.5 text-sm font-semibold text-white" @click="confirmarSugestaoTitulo()">Confirmar sugestão</button>
-            <button type="button" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm" @click="sugerirTituloIa()">Sugerir de novo</button>
+            <VButton type="button" variant="outline" @click="aplicarSugestaoTitulo()">Usar sugestão</VButton>
           </div>
-          <p v-if="tituloConfirmadoIa" class="mt-1 text-xs text-nexo-approved">Título aplicado. Ajuste no campo Título abaixo se precisar.</p>
+          <p v-if="sugestaoAplicada" class="mt-1 text-xs text-nexo-approved">Sugestão aplicada. Você ainda pode editar o título.</p>
         </div>
-        <div class="mt-3 space-y-2 text-sm">
-          <label class="block">Título<input v-model="titulo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
-          <label class="block">Contexto / dor observável (mín. 30 caracteres)<textarea v-model="contexto" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
-          <label class="block">Público afetado<input v-model="publico" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
-          <label class="block">Objetivo<input v-model="objetivo" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
-          <label class="block">Métrica inicial (nome)<input v-model="metrica" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
-          <label class="block">Restrições (uma por linha)<textarea v-model="restricoesTxt" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
-          <label class="block">Não-objetivos (um por linha)<textarea v-model="naoObjetivosTxt" rows="2" class="mt-1 w-full rounded-btn border border-nexo-border px-2 py-1.5" /></label>
-          <!-- W1 CRIACAOIA2-TELA: sem campo owner — responsável sempre = usuário logado -->
-          <div class="flex gap-2">
-            <p class="flex-1 rounded-btn border border-nexo-border bg-nexo-canvas px-2 py-1.5 text-sm text-nexo-muted">Responsável: usuário logado ({{ usuarioResponsavel }})</p>
-            <label>Classificação
-              <select v-model="classificacao" class="mt-1 rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
-                <option value="internal">internal</option>
-                <option value="confidential">confidential</option>
-                <option value="restricted">restricted</option>
-              </select>
-            </label>
-          </div>
+        <div v-if="wizardConcluidoNovo" class="mt-3 space-y-2 text-sm">
+          <VTextInput v-model="titulo" label="Título" required />
+          <VTextarea v-model="contexto" label="Contexto / dor observável (mín. 30 caracteres)" :counter="500" :rows="2" auto-resize />
+          <VTextInput v-model="publico" label="Público afetado" />
+          <VTextInput v-model="objetivo" label="Objetivo" />
+          <VTextInput v-model="metrica" label="Métrica inicial (nome)" />
+          <VTextarea v-model="restricoesTxt" label="Restrições (uma por linha)" :rows="2" auto-resize />
+          <VTextarea v-model="naoObjetivosTxt" label="Não-objetivos (um por linha)" :rows="2" auto-resize />
+          <VSelect v-model="classificacao" label="Classificação" :options="[{value:'internal',label:'Interna'},{value:'confidential',label:'Confidencial'},{value:'restricted',label:'Restrita'}]" />
         </div>
         <ul v-if="erros.length > 0" class="mt-2 space-y-1 text-xs">
           <li v-for="e in erros" :key="e.codigo + e.campo" class="rounded-badge bg-nexo-blocked-bg px-2 py-1 text-nexo-blocked">{{ e.codigo }} — {{ e.mensagem }}</li>
         </ul>
         <p v-if="avisoG0002" class="mt-2 rounded-badge bg-nexo-stale-bg px-2 py-1 text-xs text-nexo-stale">{{ avisoG0002 }}</p>
         <div class="mt-3 flex gap-2">
-          <button type="submit" class="flex-1 rounded-btn bg-nexo-primary px-3 py-2 font-semibold text-white">Criar projeto</button>
-          <button type="button" class="rounded-btn border border-nexo-border px-3 py-2" @click="dialogAberto = false">Cancelar</button>
+          <VButton v-if="wizardConcluidoNovo" type="submit" variant="primary" class="flex-1">Criar projeto</VButton>
+          <VButton type="button" variant="outline" @click="dialogAberto = false">Cancelar</VButton>
         </div>
         </form>
         <div v-else class="mt-3">
           <IngestaoDialog @concluido="aoIngestaoConcluido" @cancelar="aoIngestaoCancelar" />
         </div>
       </div>
-    </div>
+    </VDialog>
   </div>
 </template>
+
+<style scoped>
+.home-dashboard{max-width:1320px;margin:0 auto;padding:8px 4px 36px}.home-heading{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:10px 2px 23px}.home-heading h1{margin:7px 0 4px;color:var(--v-color-text);font-size:28px;font-weight:750;letter-spacing:-.04em}.home-heading p{margin:0;color:var(--v-color-text-muted);font-size:13px}.home-kicker{color:var(--v-color-primary-text);font-size:10px;font-weight:750;letter-spacing:.13em}.home-next-action{display:grid;grid-template-columns:1fr 190px;align-items:center;gap:22px;border:1px solid var(--v-color-primary-100);border-radius:16px;background:linear-gradient(110deg,var(--v-color-primary-50),var(--v-color-bg) 60%,var(--v-color-primary-50));padding:21px 25px}.home-next-top{display:flex;align-items:center;gap:12px}.home-next-top>span{color:var(--v-color-text-muted);font-size:11px}.home-next-copy h2{margin:14px 0 5px;color:var(--v-color-text);font-size:19px;letter-spacing:-.025em}.home-next-copy>p{max-width:690px;margin:0 0 14px;color:var(--v-color-text-muted);font-size:12px;line-height:1.55}.home-continue{margin-top:15px}.home-gate-marker{display:grid;justify-items:center;gap:5px;border-left:1px solid var(--v-color-border);padding:5px 0 5px 23px;text-align:center}.home-gate-marker span{color:var(--v-color-text-muted);font-size:9px;font-weight:750;letter-spacing:.12em}.home-gate-marker strong{color:var(--v-color-primary-text);font-size:42px;line-height:1.15;letter-spacing:-.06em}.home-gate-marker small{color:var(--v-color-text-muted);font-size:10px}.home-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0 24px}.home-section-title{margin:20px 0 11px;color:var(--v-color-text);font-size:16px;font-weight:700}.home-project-card{min-width:0}.home-empty{padding:28px 20px;text-align:center;border:1px dashed var(--v-color-border);border-radius:14px;background:var(--v-color-surface)}.nexo-main .home-heading+.home-next-action{margin-bottom:2px}@media(max-width:700px){.home-heading{align-items:flex-start;padding-bottom:17px}.home-heading h1{font-size:24px}.home-heading p{max-width:240px;font-size:12px}.home-next-action{grid-template-columns:1fr;padding:17px}.home-gate-marker{grid-template-columns:auto auto 1fr;justify-items:start;align-items:center;border-left:0;border-top:1px solid var(--v-color-border);padding:12px 0 0;text-align:left}.home-gate-marker strong{font-size:27px}.home-gate-marker small{justify-self:end}.home-metrics{grid-template-columns:1fr;gap:8px}}
+</style>
+
+<style scoped>
+.home-wizard-question { margin: 4px 0 0; color: var(--v-color-text); font-size: 16px; font-weight: 650; line-height: 1.4; }
+.home-heading-copy { min-width: 0; flex: 1 1 auto; }
+.home-new-project { flex: 0 0 auto; }
+.home-next-top { min-width: 0; flex-wrap: wrap; }
+.home-project-badge-wrap { min-width: 0; max-width: 100%; }
+.home-project-badge { max-width: 100%; }
+.home-project-badge :deep(.v-badge__label) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-gates-summary { color: var(--v-color-text-muted); font-size: 11px; }
+.home-next-copy h2 { overflow-wrap: anywhere; }
+.home-continue { max-width: 100%; height: auto; min-height: 44px; white-space: normal; }
+.home-continue :deep(.v-button__label) { flex-wrap: wrap; white-space: normal; }
+.home-project-actions { flex-wrap: wrap; }
+.home-project-action { min-width: 0; flex: 1 1 8rem; white-space: normal; }
+.home-project-action :deep(.v-button__label) { white-space: normal; }
+
+@media (max-width: 360px) {
+  .home-heading { flex-direction: column; align-items: stretch; gap: 12px; }
+  .home-new-project { align-self: flex-start; }
+  .home-next-action { padding: 14px; }
+  .home-next-top { align-items: flex-start; gap: 8px; }
+}
+</style>

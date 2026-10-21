@@ -1,39 +1,27 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useGraph } from '@/stores/useGraph'
 import { useProject } from '@/stores/useProject'
-import { useUI } from '@/stores/useUI'
 import NexoCanvas from '@/components/canvas/NexoCanvas.vue'
 import DetailPanel from '@/components/canvas/DetailPanel.vue'
 import Minimap from '@/components/layout/Minimap.vue'
 import StudioView from '@/views/StudioView.vue'
 import { decodeShare } from '@/utils/share'
 import type { NivelZoom } from '@/types/nexo'
+import { VButton, VSelect } from 'vueui-nova-kit'
 
 const graph = useGraph()
 const project = useProject()
-const ui = useUI()
 const route = useRoute()
 const router = useRouter()
-const canvasComp = ref<{ fit: () => void; navegarPara: (x: number, y: number) => void } | null>(null)
+const canvasComp = ref<{ fit: () => void; navegarPara: (x: number, y: number) => void; centralizarNo: (id: string) => void; medidasNos: Record<string, { width: number; height: number }> } | null>(null)
 
 const vista = computed(() => (route.query.view === 'studio' ? 'studio' : route.query.view === 'canvas' ? 'canvas' : 'contexto'))
 const comPainel = computed(() => vista.value === 'canvas' && !!graph.state.selecionadoId)
 
-function irVista(v: 'canvas' | 'studio' | 'contexto') {
-  router.replace({ path: '/canvas', query: { ...route.query, view: v } })
-}
-
 function navegarMinimap(x: number, y: number) {
   canvasComp.value?.navegarPara(x, y)
-}
-
-function limparBusca() {
-  ui.state.buscaTexto = ''
-  ui.state.filtroEstado = ''
-  ui.state.filtroOwner = ''
-  ui.persist()
 }
 
 // deep-link #hash (share-link) reconstrói layout
@@ -57,17 +45,32 @@ const objetosDoNivel = computed(() => {
   if (nivelSel.value === 'pbi') return graph.state.nos.filter((n) => n.tipo === 'pbi')
   return graph.state.nos
 })
-
-// G7: aba Telas (Studio) só existe via-feature (query feature= ou seleção feature)
-const podeVerTelas = computed(() => {
-  const q = route.query.feature
-  if (typeof q === 'string' && q) return true
-  const selId = (typeof route.query.selecionado === 'string' && route.query.selecionado)
-    || objetoSel.value
-    || graph.state.selecionadoId
-  if (!selId) return false
-  return graph.noPorId(selId)?.tipo === 'feature'
-})
+const nivelOptions = [
+  { value: 'projeto', label: 'Projeto' }, { value: 'epico', label: 'Épico' },
+  { value: 'feature', label: 'Feature' }, { value: 'pbi', label: 'PBI' }
+]
+const objetoOptions = computed(() => [
+  { value: '', label: '(atual)' },
+  ...objetosDoNivel.value.map(n => ({ value: n.id, label: n.titulo }))
+])
+watch([nivelSel, () => route.query.selecionado, () => graph.state.selecionadoId], () => {
+  const candidato = typeof route.query.selecionado === 'string' ? route.query.selecionado : graph.state.selecionadoId
+  objetoSel.value = candidato && objetosDoNivel.value.some((no) => no.id === candidato)
+    ? candidato
+    : objetosDoNivel.value[0]?.id ?? ''
+}, { immediate: true })
+watch([() => route.query.view, () => route.query.feature, () => route.query.selecionado], () => {
+  if (route.query.view !== 'studio') return
+  const requested = typeof route.query.feature === 'string' ? route.query.feature : ''
+  const selected = typeof route.query.selecionado === 'string' ? route.query.selecionado : ''
+  const candidate = [requested, selected].map((id) => graph.noPorId(id)).find((node) => node?.tipo === 'feature')
+    ?? graph.state.nos.find((node) => node.tipo === 'feature')
+  if (!candidate) return
+  if (graph.state.selecionadoId !== candidate.id) graph.selecionar(candidate.id)
+  if (route.query.feature !== candidate.id || route.query.selecionado !== candidate.id) {
+    void router.replace({ path: '/canvas', query: { ...route.query, view: 'studio', feature: candidate.id, selecionado: candidate.id } })
+  }
+}, { immediate: true })
 
 function abrirGrafo() {
   project.abrirNivel(nivelSel.value)
@@ -80,77 +83,56 @@ function abrirGrafo() {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 w-full flex-col gap-2">
-    <div class="flex shrink-0 items-center gap-2 text-sm" role="tablist" aria-label="Vista do canvas">
-      <button type="button" role="tab" :aria-selected="vista !== 'studio'" class="rounded-btn border px-3 py-1" :class="vista !== 'studio' ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'" @click="irVista('canvas')">Grafo NEXO</button>
-      <button v-if="podeVerTelas" type="button" role="tab" :aria-selected="vista === 'studio'" class="rounded-btn border px-3 py-1" :class="vista === 'studio' ? 'border-nexo-primary font-semibold text-nexo-primary' : 'border-nexo-border'" @click="irVista('studio')">Telas (Studio)</button>
-    </div>
-
-    <template v-if="vista === 'studio' && podeVerTelas">
+  <div class="canvas-view-workspace relative flex h-full min-h-0 w-full min-w-0 overflow-hidden">
+    <template v-if="vista === 'studio'">
       <StudioView />
     </template>
 
     <template v-else-if="vista === 'contexto'">
-      <div class="rounded-card border border-nexo-border bg-white p-6">
+      <div class="min-w-0 rounded-card border border-nexo-border bg-white p-4 sm:p-6">
         <h1 class="text-lg font-bold">Canvas sob demanda</h1>
         <p class="mt-1 text-sm text-nexo-muted">Escolha o contexto (nível + objeto) para abrir o grafo. O grafo não monta neste modo.</p>
-        <div class="mt-3 flex flex-wrap gap-2 text-sm">
-          <label>Nível
-            <select v-model="nivelSel" class="ml-1 min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
-              <option value="projeto">Projeto</option>
-              <option value="epico">Épico</option>
-              <option value="feature">Feature</option>
-              <option value="pbi">PBI</option>
-            </select>
-          </label>
-          <label>Objeto
-            <select v-model="objetoSel" class="ml-1 min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
-              <option value="">(atual)</option>
-              <option v-for="n in objetosDoNivel" :key="n.id" :value="n.id">{{ n.titulo }}</option>
-            </select>
-          </label>
-          <button type="button" class="rounded-btn bg-nexo-primary px-4 py-1.5 font-semibold text-white" @click="abrirGrafo()">Abrir grafo</button>
+        <div class="mt-3 flex min-w-0 flex-wrap items-end gap-3 text-sm">
+          <VSelect v-model="nivelSel" :options="nivelOptions" label="Nível" class="w-56 max-w-full" size="sm" />
+          <VSelect v-model="objetoSel" :options="objetoOptions" label="Objeto" class="w-72 max-w-full" size="sm" />
+          <VButton class="!h-9 !min-h-9 self-end" variant="primary" size="sm" @click="abrirGrafo()">Abrir grafo</VButton>
         </div>
         <p class="mt-2 text-xs text-nexo-muted">{{ graph.state.nos.length }} nós · {{ graph.state.arestas.length }} arestas no nível atual.</p>
       </div>
     </template>
 
     <template v-else>
-      <div class="flex shrink-0 flex-wrap items-center gap-2 text-xs">
-        <input
-          v-model="ui.state.buscaTexto"
-          placeholder="Filtrar canvas por título/id/owner…"
-          aria-label="Filtrar canvas"
-          class="w-64 min-h-[32px] rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm text-nexo-text"
+      <div class="absolute inset-0 h-full min-h-0 w-full min-w-0 overflow-hidden" data-export-root>
+        <NexoCanvas ref="canvasComp" />
+        <Minimap :node-sizes="canvasComp?.medidasNos" :class="comPainel ? 'right-[390px]' : 'right-2'" class="canvas-minimap absolute bottom-2 z-20 h-[70px] w-[110px] cursor-crosshair opacity-90 shadow-card hover:opacity-100" @navegar="navegarMinimap" />
+        <DetailPanel
+          v-if="comPainel"
+          class="canvas-detail-panel absolute right-4 top-[72px] bottom-4 z-40 !h-auto max-h-[calc(100%-88px)] min-h-0 !w-[min(360px,calc(100%-2rem))] overflow-hidden rounded-card border border-nexo-border bg-white shadow-lg"
+          @centralizar="canvasComp?.centralizarNo(graph.state.selecionadoId ?? '')"
         />
-        <select v-model="ui.state.filtroEstado" aria-label="Filtrar por estado" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
-          <option value="">Todos os estados</option>
-          <option value="draft">Rascunho</option>
-          <option value="review">Em revisão</option>
-          <option value="approved">Aprovado</option>
-          <option value="stale">Desatualizado</option>
-        </select>
-        <select v-model="ui.state.filtroOwner" aria-label="Filtrar por owner" class="min-h-[32px] rounded-btn border border-nexo-border bg-white px-2 py-1.5 text-sm text-nexo-text">
-          <option value="">Todos os owners</option>
-          <option v-for="u in ['u-pm','u-ux','u-arq','u-tl','u-dev','u-qa','u-sec']" :key="u" :value="u">{{ u }}</option>
-        </select>
-        <button v-if="ui.state.buscaTexto || ui.state.filtroEstado || ui.state.filtroOwner" type="button" class="underline" @click="limparBusca()">limpar filtros</button>
-        <span class="ml-auto text-nexo-muted">{{ graph.state.nos.length }} nós · {{ graph.state.arestas.length }} arestas</span>
-      </div>
-
-      <div class="flex min-h-0 h-full w-full flex-1 gap-0">
-        <div class="flex min-h-0 h-full w-full min-w-0 flex-1 flex-col" data-export-root>
-          <NexoCanvas ref="canvasComp" />
-        </div>
-        <DetailPanel v-if="comPainel" class="ml-3 hidden h-full min-h-0 lg:flex" />
-      </div>
-
-      <DetailPanel v-if="comPainel" class="lg:hidden" />
-
-      <div class="flex shrink-0 items-center gap-3">
-        <Minimap @navegar="navegarMinimap" />
-        <span class="text-xs text-nexo-muted">Minimap clicável · filtros só alteram a vista · duplo-clique no vazio cria nó · arraste handle para conectar</span>
       </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.canvas-view-workspace {
+  container-type: inline-size;
+}
+
+@container (max-width: 720px) {
+  .canvas-detail-panel {
+    top: auto !important;
+    right: 16px !important;
+    bottom: 16px !important;
+    left: 16px !important;
+    width: calc(100% - 32px) !important;
+    height: 60% !important;
+    max-height: 60% !important;
+  }
+
+  .canvas-minimap {
+    display: none;
+  }
+}
+</style>

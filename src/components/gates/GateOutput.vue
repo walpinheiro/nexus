@@ -9,6 +9,7 @@ import { montarEntradaStudio, isFeatureProntaParaStudio } from '@/ai/gateParaStu
 import { useGate } from '@/stores/useGate'
 import { exportarGateMarkdown } from '@/utils/exportWiki'
 import { montarArtefato } from '@/utils/artefatos'
+import { VButton } from 'vueui-nova-kit'
 
 interface Props {
   gateId: GateId
@@ -186,7 +187,7 @@ function baixarGateMarkdown() {
         <span class="font-semibold">Progresso do artefato</span>
         <span class="text-nexo-muted">{{ progressoArtefato.preenchidos }} de {{ progressoArtefato.total }} campos preenchidos</span>
       </div>
-      <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200" role="progressbar" :aria-valuenow="progressoArtefato.percentual" aria-valuemin="0" aria-valuemax="100">
+      <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-nexo-border" role="progressbar" :aria-valuenow="progressoArtefato.percentual" aria-valuemin="0" aria-valuemax="100">
         <div class="h-full rounded-full bg-nexo-primary transition-all" :style="{ width: progressoArtefato.percentual + '%' }"></div>
       </div>
     </div>
@@ -201,30 +202,30 @@ function baixarGateMarkdown() {
       <template v-if="props.gateId === 'G2'" #acoes-secundarias>
         <div
           class="rounded-card border p-3 text-xs space-y-2 shadow-xs transition-colors"
-          :class="prontaParaStudio ? 'border-green-300 bg-green-50/60' : 'border-amber-300 bg-amber-50/50'"
+          :class="prontaParaStudio ? 'border-nexo-approved-border bg-nexo-approved-bg/60' : 'border-nexo-stale-border bg-nexo-stale-bg/50'"
         >
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-1.5">
-              <LucideIcon :name="prontaParaStudio ? 'check-circle-2' : 'clock'" :size="15" :class="prontaParaStudio ? 'text-green-700' : 'text-amber-700'" />
-              <span class="font-bold uppercase tracking-wide text-xs" :class="prontaParaStudio ? 'text-green-900' : 'text-amber-900'">
+              <LucideIcon :name="prontaParaStudio ? 'check-circle-2' : 'clock'" :size="15" :class="prontaParaStudio ? 'text-nexo-approved' : 'text-nexo-stale'" />
+              <span class="font-bold uppercase tracking-wide text-xs" :class="prontaParaStudio ? 'text-nexo-approved' : 'text-nexo-stale'">
                 {{ prontaParaStudio ? 'Pronto para Studio' : 'Pendente de Baseline G2 para Studio' }}
               </span>
             </div>
             <div class="flex items-center gap-2">
-              <button
+              <VButton
                 v-if="vinculosTela.length > 0"
                 type="button"
-                class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-green-600 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 shadow-xs hover:bg-green-50 transition-colors"
+                class="inline-flex min-h-[32px] items-center gap-1 rounded-btn border border-nexo-approved-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-approved shadow-xs hover:bg-nexo-approved-bg transition-colors"
                 @click="emit('preview', vinculosTela[0].telaId)"
               >
                 <LucideIcon name="eye" :size="12" />
                 Preview
-              </button>
+              </VButton>
               <RouterLink
                 v-if="props.alvo"
                 :to="{ path: '/studio-full', query: { feature: props.alvo.id, from: 'gates/G2' } }"
                 class="inline-flex min-h-[32px] items-center gap-1 rounded-btn px-3 py-1.5 text-sm font-semibold text-white shadow-xs transition-colors"
-                :class="prontaParaStudio ? 'bg-green-700 hover:bg-green-800' : 'bg-amber-600 hover:bg-amber-700'"
+                :class="prontaParaStudio ? 'bg-nexo-approved hover:bg-nexo-approved/90' : 'bg-nexo-stale hover:bg-nexo-stale'"
               >
                 <LucideIcon :name="vinculosTela.length > 0 ? 'layout' : 'auto_awesome'" :size="12" />
                 {{ vinculosTela.length > 0 ? `Ver telas (${vinculosTela.length})` : 'Gerar telas' }}
@@ -232,7 +233,7 @@ function baixarGateMarkdown() {
             </div>
           </div>
 
-          <p class="text-[11px] leading-relaxed" :class="prontaParaStudio ? 'text-green-900' : 'text-amber-900'">
+          <p class="text-[11px] leading-relaxed" :class="prontaParaStudio ? 'text-nexo-approved' : 'text-nexo-stale'">
             {{ prontaParaStudio
               ? 'Esta feature atingiu baseline formal aprovada no Gate G2. Seus fluxos, exceções e critérios BDD estão prontos para compor o canvas do Studio.'
               : 'Para qualificar esta feature para o Studio com baseline garantida, complete todos os requisitos bloqueantes e obtenha aprovação formal no Gate G2.'
@@ -253,14 +254,14 @@ function baixarGateMarkdown() {
                   <span class="font-medium shrink-0">{{ t.nome }}:</span>
                   <span class="text-nexo-muted truncate">{{ t.descricao }}</span>
                 </div>
-                <button
+                <VButton
                   type="button"
                   class="shrink-0 inline-flex min-h-[32px] items-center gap-0.5 text-xs text-nexo-primary hover:underline px-2 py-1.5"
                   @click="emit('preview', t.id)"
                 >
                   <LucideIcon name="eye" :size="11" />
                   preview
-                </button>
+                </VButton>
               </li>
             </ul>
           </div>
@@ -273,11 +274,11 @@ function baixarGateMarkdown() {
             v-for="step in pipelinePassos"
             :key="step.numero"
             class="rounded p-2 border text-xs space-y-1 transition-colors"
-            :class="step.ok ? 'bg-green-50/70 border-green-200 text-green-950' : 'bg-white border-nexo-border text-nexo-text'"
+            :class="step.ok ? 'bg-nexo-approved-bg/70 border-nexo-approved-border text-nexo-approved' : 'bg-white border-nexo-border text-nexo-text'"
           >
             <div class="flex items-center justify-between">
               <span class="font-bold text-xs">Passo {{ step.numero }}</span>
-              <LucideIcon :name="step.ok ? 'check-circle-2' : 'alert-circle'" :size="13" :class="step.ok ? 'text-green-600' : 'text-amber-500'" />
+              <LucideIcon :name="step.ok ? 'check-circle-2' : 'alert-circle'" :size="13" :class="step.ok ? 'text-nexo-approved' : 'text-nexo-stale'" />
             </div>
             <p class="font-medium text-xs leading-tight">{{ step.titulo }}</p>
             <p class="text-xs text-nexo-muted truncate" :title="step.detalhe">{{ step.detalhe }}</p>

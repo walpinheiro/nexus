@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import NovaAction from '@/components/common/NovaAction.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { VDialog } from 'vueui-nova-kit'
 import { useStudio } from '@/stores/useStudio'
 import { useGraph } from '@/stores/useGraph'
 import { montarEntradaStudio } from '@/ai/gateParaStudio'
@@ -268,16 +270,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/90 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Preview tap-through"
-    @click.self="emit('fechar')"
-    @pointerdown="onPointerDown"
-    @pointerup="onPointerUp"
-  >
-    <div class="flex max-h-full flex-col items-center gap-3" @click.stop>
+  <VDialog :model-value="true" title="Preview tap-through" size="lg" variant="fullscreen" :show-close="false" aria-label="Preview tap-through" @update:model-value="!$event && emit('fechar')" @close="emit('fechar')">
+    <div class="flex max-h-full flex-col items-center gap-3" @click.stop @pointerdown="onPointerDown" @pointerup="onPointerUp">
       <!-- Viewport / Bezel do Dispositivo -->
       <div
         :key="topo?.id"
@@ -357,14 +351,14 @@ onUnmounted(() => {
                 <span v-else class="text-[11px] text-slate-500">
                   Preencha e teste as regras
                 </span>
-                <button
+                <NovaAction
                   type="button"
                   class="inline-flex items-center gap-1.5 rounded-btn bg-nexo-primary px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-nexo-primary/90 transition-colors"
                   @click.stop="executarValidacao()"
                 >
                   <M3Icon name="check_circle" :size="14" />
                   <span>Validar</span>
-                </button>
+                </NovaAction>
               </div>
             </div>
           </div>
@@ -395,7 +389,7 @@ onUnmounted(() => {
       <!-- Controles no Rodapé (Voltar | Seletor de Telas | Testar validações | Moldura | Fechar) -->
       <div class="relative flex flex-wrap items-center justify-center gap-2 rounded-full border border-white/10 bg-slate-900/90 px-3.5 py-1.5 text-sm text-white shadow-xl backdrop-blur-md">
         <!-- Botão Voltar -->
-        <button
+        <NovaAction
           type="button"
           class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 transition-colors"
           :class="pilha.length <= 1 ? 'cursor-not-allowed opacity-35 text-white/50' : 'text-white hover:bg-white/15 active:bg-white/25'"
@@ -406,13 +400,13 @@ onUnmounted(() => {
         >
           <M3Icon name="arrow_back" :size="18" label="Voltar" />
           <span>Voltar</span>
-        </button>
+        </NovaAction>
 
         <div class="h-4 w-px bg-white/20" aria-hidden="true" />
 
         <!-- Seletor de Telas -->
         <div class="relative">
-          <button
+          <NovaAction
             type="button"
             class="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1 font-medium text-white transition-colors hover:bg-white/20 active:bg-white/25"
             :aria-expanded="seletorAberto"
@@ -423,7 +417,7 @@ onUnmounted(() => {
             <M3Icon name="smartphone" :size="18" />
             <span class="max-w-[150px] truncate text-xs sm:text-sm">{{ frame?.name ?? 'Tela' }}</span>
             <M3Icon :name="seletorAberto ? 'expand_less' : 'expand_more'" :size="18" />
-          </button>
+          </NovaAction>
 
           <!-- Dropdown Flutuante de Telas -->
           <div
@@ -431,7 +425,7 @@ onUnmounted(() => {
             class="absolute bottom-full left-1/2 mb-2 w-52 -translate-x-1/2 overflow-hidden rounded-2xl border border-white/15 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-lg"
             role="listbox"
           >
-            <button
+            <NovaAction
               v-for="f in framesDisponiveis"
               :key="f.id"
               type="button"
@@ -443,14 +437,14 @@ onUnmounted(() => {
             >
               <M3Icon :name="f.id === frame?.id ? 'check' : 'smartphone'" :size="16" />
               <span class="truncate">{{ f.name }}</span>
-            </button>
+            </NovaAction>
           </div>
         </div>
 
         <div class="h-4 w-px bg-white/20" aria-hidden="true" />
 
         <!-- Modo 'Testar validações' Toggle -->
-        <button
+        <NovaAction
           type="button"
           class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors"
           :class="modoTestarValidacoes ? 'bg-nexo-primary text-white font-semibold' : 'text-white/80 hover:bg-white/15 hover:text-white'"
@@ -459,24 +453,24 @@ onUnmounted(() => {
         >
           <M3Icon name="fact_check" :size="16" />
           <span>Testar validações</span>
-        </button>
+        </NovaAction>
 
         <div class="h-4 w-px bg-white/20" aria-hidden="true" />
 
         <!-- Alternar Moldura Phone/Desktop -->
-        <button
+        <NovaAction
           type="button"
           class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs text-white/80 transition-colors hover:bg-white/15 hover:text-white"
           title="Alternar moldura phone/desktop"
           @click="alternarMoldura()"
         >
           {{ ehPhone ? 'Phone' : 'Desktop' }}
-        </button>
+        </NovaAction>
 
         <div class="h-4 w-px bg-white/20" aria-hidden="true" />
 
         <!-- Botão Fechar -->
-        <button
+        <NovaAction
           type="button"
           class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-white/90 transition-colors hover:bg-white/15 hover:text-white active:bg-white/25"
           aria-label="Fechar preview (Esc)"
@@ -485,8 +479,8 @@ onUnmounted(() => {
         >
           <M3Icon name="close" :size="18" label="Fechar" />
           <span>Fechar</span>
-        </button>
+        </NovaAction>
       </div>
     </div>
-  </div>
+  </VDialog>
 </template>

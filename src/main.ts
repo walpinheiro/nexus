@@ -8,6 +8,8 @@ import { useGraph } from '@/stores/useGraph'
 import { useGate } from '@/stores/useGate'
 import { useUsers } from '@/stores/useUsers'
 import { useUI } from '@/stores/useUI'
+import 'vueui-nova-kit/index.css'
+import 'vueui-nova-kit/tokens.css'
 import '@/assets/main.css'
 import '@/components/studio/m3/m3.css'
 

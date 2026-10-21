@@ -1,16 +1,21 @@
 <script setup lang="ts">
+import NovaAction from '@/components/common/NovaAction.vue'
+import NovaSelect from '@/components/common/NovaSelect.vue'
+import { ArrowRight } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { useStudio } from '@/stores/useStudio'
-import { paletteOf } from './m3/theme'
 import type { StudioTransition } from '@/types/studio'
 
 const props = defineProps<{ itemId: string | null }>()
 const emit = defineEmits<{ (e: 'change', v: { to: string; transition: StudioTransition }): void }>()
 
 const studio = useStudio()
-const scheme = computed(() => paletteOf(studio.doc.paletteKey, false))
 const item = computed(() => (props.itemId ? studio.itemPorId(props.itemId) : undefined))
 const destino = ref(item.value?.action?.to ?? '')
+const destinos = computed(() => [
+  { value: '', label: '(sem ação)' }, { value: 'back', label: 'back' },
+  ...studio.doc.frames.map(fr => ({ value: fr.id, label: fr.name }))
+])
 const transicao = ref<StudioTransition>((item.value?.action?.transition as StudioTransition) ?? 'slide')
 
 const TRANSICOES: StudioTransition[] = ['slide', 'slideLeft', 'slideUp', 'slideDown', 'fade', 'expand', 'none']
@@ -23,39 +28,37 @@ function aplicar() {
   emit('change', { to: destino.value, transition: transicao.value })
 }
 
-void scheme
 </script>
 
 <template>
-  <div v-if="item" class="rounded-card border border-nexo-border bg-nexo-canvas p-2" aria-label="Tap-through da ação">
-    <div class="flex items-center justify-center gap-2">
-      <span class="rounded-badge border border-nexo-border bg-white px-2 py-1 text-[11px]">{{ item.kind }} {{ (item.label ?? '').slice(0, 14) }}</span>
-      <svg width="28" height="16" viewBox="0 0 28 16" aria-hidden="true">
-        <path d="M2 8 H22 M16 2 L23 8 L16 14" fill="none" stroke="#1D4ED8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <span class="rounded-badge border border-nexo-primary bg-white px-2 py-1 text-[11px] text-nexo-primary">
-        {{ destino === 'back' ? 'back' : studio.doc.frames.find((f) => f.id === destino)?.name ?? '—' }}
+  <div v-if="item" class="min-w-0 rounded-card border border-nexo-border bg-nexo-surface p-3" aria-label="Tap-through da ação">
+    <div class="flex min-w-0 flex-wrap items-center gap-2 text-xs text-nexo-text">
+      <span class="max-w-full truncate rounded-badge border border-nexo-border bg-white px-2 py-1">{{ item.kind }} · {{ item.label || 'sem rótulo' }}</span>
+      <ArrowRight class="shrink-0 text-nexo-primary" :size="16" aria-hidden="true" />
+      <span class="max-w-full truncate rounded-badge border border-nexo-border bg-white px-2 py-1 font-medium">
+        {{ destino === 'back' ? 'Voltar' : studio.doc.frames.find((f) => f.id === destino)?.name ?? 'Sem destino' }}
       </span>
     </div>
-    <div class="mt-2 flex flex-wrap items-center gap-1">
-      <select v-model="destino" class="rounded-btn border border-nexo-border bg-white px-1.5 py-1 text-[11px]" aria-label="Tela destino" @change="aplicar()">
-        <option value="">(sem ação)</option>
-        <option value="back">back</option>
-        <option v-for="fr in studio.doc.frames" :key="fr.id" :value="fr.id">{{ fr.name }}</option>
-      </select>
-      <div class="flex gap-1 overflow-x-auto" role="group" aria-label="Transição">
-        <button
+    <div class="mt-3 grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(160px,1fr)_auto] xl:items-end">
+      <NovaSelect v-model="destino" :options="destinos" label="Tela destino" @change="aplicar()" />
+      <div class="min-w-0 overflow-x-auto pb-1" role="group" aria-label="Transição">
+        <span class="mb-1 block text-xs font-medium text-nexo-text">Transição</span>
+        <div class="flex min-w-max gap-1">
+        <NovaAction
           v-for="t in TRANSICOES"
           :key="t"
           type="button"
           :title="t"
           :aria-pressed="transicao === t"
-          class="rounded-badge border px-1.5 py-1 text-[10px]"
-          :class="transicao === t ? 'border-nexo-primary bg-nexo-primary-soft text-nexo-primary' : 'border-nexo-border bg-white'"
+          variant="outline"
+          size="sm"
+          class="rounded-badge border px-2 py-1 text-xs"
+          :class="transicao === t ? 'border-nexo-primary bg-nexo-primary-soft text-nexo-primary' : 'border-nexo-border bg-white text-nexo-text'"
           @click="transicao = t; aplicar()"
         >
           {{ t }}
-        </button>
+        </NovaAction>
+        </div>
       </div>
     </div>
   </div>

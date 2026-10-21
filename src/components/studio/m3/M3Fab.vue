@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NovaAction from '@/components/common/NovaAction.vue'
 import { computed } from 'vue'
 import type { StudioItem } from '@/types/studio'
 import type { Scheme } from './theme'
@@ -16,7 +17,7 @@ const estilo = computed(() => {
 </script>
 
 <template>
-  <button
+  <NovaAction
     type="button"
     class="m3-ripple m3-elev-2 flex h-14 w-14 items-center justify-center"
     :style="{
@@ -29,5 +30,5 @@ const estilo = computed(() => {
     :aria-label="item.label || item.icon || 'fab'"
   >
     <M3Icon :name="item.icon ?? 'add'" :size="24" />
-  </button>
+  </NovaAction>
 </template>

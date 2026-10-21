@@ -56,8 +56,11 @@ export interface CriarProjetoExistenteInput {
 
 export interface RespostasWizardCriacao {
   // OPCIONAL e ignorado: owner sempre deriva do usuario logado (atorId).
-  // Passos CRIACAOIA-1 (sem passo usuario): problema, objetivo, usuarios,
-  // escopo, metrica. Titulo e campos sugeridos pela IA e confirmados na tela.
+  // Passos: problema, objetivo, usuarios, escopo e metrica.
+  // Campos opcionais carregam título/classificação revisados; callers antigos
+  // podem omiti-los e seguem pela compatibilidade legada.
+  titulo?: string
+  classificacao?: Classificacao
   usuario?: string
   problema: string
   objetivo: string
@@ -71,6 +74,19 @@ export interface CriarProjetoResult {
   ok: boolean
   erros: { campo: string; codigo: string; mensagem: string }[]
   projeto?: Projeto
+}
+
+export interface ConcluirIngestaoPayload {
+  projetoId: string
+  epicoId: string
+}
+
+export interface ConcluirIngestaoResult {
+  ok: boolean
+  erros: CriarProjetoResult['erros']
+  projetoId?: string
+  epicoId?: string
+  rotaGate?: string
 }
 
 function graphKey(pid: string): string {
@@ -274,7 +290,7 @@ export const useProjects = defineStore('projects', () => {
     return erros
   }
 
-  function criarProjeto(input: CriarProjetoInput, atorId: string): CriarProjetoResult {
+  function criarProjeto(input: CriarProjetoInput, atorId: string, preservarCamposRevisados = false): CriarProjetoResult {
     // G0-002 é aviso alto: bloqueia apenas G0-001 e G0-003.
     const todos = validarG0(input)
     const bloqueantes = todos.filter((e) => e.codigo !== 'G0-002')
@@ -305,11 +321,11 @@ export const useProjects = defineStore('projects', () => {
       grupo: null,
       created_at: agora,
       updated_at: agora,
-      problema: `${input.contexto} Público: ${input.publico}.`,
+      problema: preservarCamposRevisados ? input.contexto : `${input.contexto} Público: ${input.publico}.`,
       objetivo: input.objetivo,
       kpis: [{ nome: input.metricaNome, unidade: '-', alvo: 'a definir', janela: '90d', responsavel: input.owner }],
       personas: [input.publico],
-      escopo_in: input.restricoes.length > 0 ? ['Escopo a detalhar'] : [],
+      escopo_in: preservarCamposRevisados ? input.restricoes : input.restricoes.length > 0 ? ['Escopo a detalhar'] : [],
       escopo_out: input.naoObjetivos,
       riscos: todos.some((e) => e.codigo === 'G0-002') ? ['Escopo incompleto (G0-002): completar restrições/não-objetivos'] : []
     }
@@ -421,19 +437,6 @@ export const useProjects = defineStore('projects', () => {
   // (graphKey/gatesKey próprios, sem zerar banco), troca o projeto atual e
   // devolve a rota do Gate G0 com alvo=epicoId e modo=wizard. criarProjeto
   // atual NÃO é alterado.
-  interface ConcluirIngestaoPayload {
-    projetoId: string
-    epicoId: string
-  }
-
-  interface ConcluirIngestaoResult {
-    ok: boolean
-    erros: CriarProjetoResult['erros']
-    projetoId?: string
-    epicoId?: string
-    rotaGate?: string
-  }
-
   function concluirIngestaoExistente(payload: ConcluirIngestaoPayload, atorId: string): ConcluirIngestaoResult {
     const projetoId = payload.projetoId?.trim() ?? ''
     const epicoId = payload.epicoId?.trim() ?? ''
@@ -553,11 +556,30 @@ export const useProjects = defineStore('projects', () => {
   }
 
   function criarProjetoComIA(respostas: RespostasWizardCriacao, atorId: string): CriarProjetoResult {
-    // Titulo e campos sugeridos pela IA e confirmados pelo usuario na tela
-    // (respostas.problema/objetivo/usuarios/escopo/metrica/naoObjetivos ja
-    // ajustadas). Sem campo responsavel no fluxo IA: owner sempre = atorId
-    // (usuario logado). Preenche TODOS os campos (incluindo metrica e
-    // naoObjetivos via coerencia Pix) para nao bloquear em G0-001.
+    // New callers include reviewed fields. Treat their answers as authoritative:
+    // validate and persist them literally rather than applying the legacy
+    // seed-coherence/default path below.
+    if (respostas.titulo !== undefined || respostas.classificacao !== undefined) {
+      const tituloRevisado = respostas.titulo?.trim() ?? ''
+      if (!tituloRevisado) {
+        return { ok: false, erros: [{ campo: 'titulo', codigo: 'G0-001', mensagem: 'Título é obrigatório (G0-001).' }] }
+      }
+      const linhas = (texto: string | undefined) => (texto ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+      return criarProjeto({
+        titulo: tituloRevisado,
+        contexto: respostas.problema?.trim() ?? '',
+        publico: respostas.usuarios?.trim() ?? '',
+        objetivo: respostas.objetivo?.trim() ?? '',
+        metricaNome: respostas.metrica?.trim() ?? '',
+        restricoes: linhas(respostas.escopo),
+        naoObjetivos: linhas(respostas.naoObjetivos),
+        owner: atorId,
+        classificacao: respostas.classificacao ?? 'internal'
+      }, atorId, true)
+    }
+
+    // Compatibilidade para callers antigos sem título/classificação revisados.
+    // Mantém os defaults e as coerências históricas somente nesse caminho.
     const problema = respostas.problema?.trim() ?? ''
     const objetivo = respostas.objetivo?.trim() ?? ''
     const usuarios = respostas.usuarios?.trim() ?? ''
@@ -565,6 +587,7 @@ export const useProjects = defineStore('projects', () => {
     const metrica = respostas.metrica?.trim() ?? ''
     const naoObjetivosTxt = respostas.naoObjetivos ?? ''
     const titulo = (objetivo || problema).slice(0, 60) || 'Novo projeto'
+    const classificacao = respostas.classificacao ?? 'internal'
     const contextoBase = `${problema} ${objetivo}`.trim() || 'Novo projeto'
     const coerencia = aplicarSeedCoerenteTexto(contextoBase, objetivo || contextoBase)
     const contextoBruto = coerencia.problema
@@ -592,7 +615,7 @@ export const useProjects = defineStore('projects', () => {
       restricoes: restricoes.length > 0 ? restricoes : ['Escopo a detalhar'],
       naoObjetivos: naoObjetivos.length > 0 ? naoObjetivos : ['Fora do padrão a definir'],
       owner: atorId,
-      classificacao: 'internal'
+      classificacao
     }
     const resultado = criarProjeto(input, atorId)
     // Item6 (caller real Novo): coerência Pix pós-criação no épico gravado.

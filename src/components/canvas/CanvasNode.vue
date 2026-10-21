@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import NovaAction from '@/components/common/NovaAction.vue'
+import { onBeforeUnmount } from 'vue'
 import type { NexoObject } from '@/types/nexo'
 import LucideIcon from '@/components/common/LucideIcon.vue'
 
@@ -8,6 +10,7 @@ const emit = defineEmits<{
   (e: 'selecionar', id: string): void
   (e: 'aprofundar', id: string): void
   (e: 'iniciar-conexao', id: string, lado: 'l' | 'r' | 't' | 'b', ev: PointerEvent): void
+  (e: 'ativar-handle', id: string, lado: 'l' | 'r' | 't' | 'b'): void
   (e: 'mover', id: string, dx: number, dy: number): void
   (e: 'fim-mover', id: string): void
 }>()
@@ -22,47 +25,99 @@ const estadoRotulo: Record<string, string> = {
   validated: 'Validada',
   published: 'Publicada'
 }
-
-function onPointerDownCard(id: string, ev: PointerEvent) {
-  if ((ev.target as HTMLElement).closest('[data-handle]')) return
-  ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
-  const sx = ev.clientX
-  const sy = ev.clientY
-  let dx = 0
-  let dy = 0
-  let moveu = false
-  const move = (m: PointerEvent) => {
-    dx = m.clientX - sx
-    dy = m.clientY - sy
-    if (Math.abs(dx) + Math.abs(dy) > 3) moveu = true
-    emit('mover', id, dx, dy)
-  }
-  const up = () => {
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', up)
-    if (!moveu) emit('selecionar', id)
-    else emit('fim-mover', id)
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
+const ladoRotulo: Record<'l' | 'r' | 't' | 'b', string> = {
+  l: 'esquerda', r: 'direita', t: 'superior', b: 'inferior'
 }
 
-function onKeydown(id: string, ev: KeyboardEvent) {
-  if (ev.key === 'Enter') {
+type NodeGesture = {
+  pointerId: number
+  id: string
+  startX: number
+  startY: number
+  moved: boolean
+  element: HTMLElement
+  onMove: (event: PointerEvent) => void
+  onUp: (event: PointerEvent) => void
+  onCancel: (event: PointerEvent) => void
+  onLostCapture: (event: PointerEvent) => void
+}
+
+let activeGesture: NodeGesture | null = null
+
+function finishGesture(gesture: NodeGesture, cancelled: boolean) {
+  if (activeGesture !== gesture) return
+  activeGesture = null
+  window.removeEventListener('pointermove', gesture.onMove)
+  window.removeEventListener('pointerup', gesture.onUp)
+  window.removeEventListener('pointercancel', gesture.onCancel)
+  gesture.element.removeEventListener('lostpointercapture', gesture.onLostCapture)
+
+  if (gesture.moved) emit('fim-mover', gesture.id)
+  else if (!cancelled) emit('selecionar', gesture.id)
+}
+
+function onPointerDownCard(id: string, ev: PointerEvent) {
+  if (ev.button !== 0) return
+  if ((ev.target as HTMLElement).closest('[data-handle], [data-node-action]')) return
+  if (activeGesture) finishGesture(activeGesture, true)
+
+  const element = ev.currentTarget as HTMLElement
+  try {
+    element.setPointerCapture(ev.pointerId)
+  } catch {
+    // Window listeners still handle the gesture if pointer capture is unavailable.
+  }
+  const sx = ev.clientX
+  const sy = ev.clientY
+  const gesture = {} as NodeGesture
+  gesture.pointerId = ev.pointerId
+  gesture.id = id
+  gesture.startX = sx
+  gesture.startY = sy
+  gesture.moved = false
+  gesture.element = element
+  gesture.onMove = (moveEvent) => {
+    if (moveEvent.pointerId !== gesture.pointerId) return
+    const dx = moveEvent.clientX - gesture.startX
+    const dy = moveEvent.clientY - gesture.startY
+    if (!gesture.moved && Math.hypot(dx, dy) <= 3) return
+    gesture.moved = true
+    emit('mover', gesture.id, dx, dy)
+  }
+  gesture.onUp = (upEvent) => {
+    if (upEvent.pointerId === gesture.pointerId) finishGesture(gesture, false)
+  }
+  gesture.onCancel = (cancelEvent) => {
+    if (cancelEvent.pointerId === gesture.pointerId) finishGesture(gesture, true)
+  }
+  gesture.onLostCapture = (lostEvent) => {
+    if (lostEvent.pointerId === gesture.pointerId) finishGesture(gesture, true)
+  }
+  activeGesture = gesture
+  window.addEventListener('pointermove', gesture.onMove)
+  window.addEventListener('pointerup', gesture.onUp)
+  window.addEventListener('pointercancel', gesture.onCancel)
+  element.addEventListener('lostpointercapture', gesture.onLostCapture)
+}
+
+onBeforeUnmount(() => {
+  if (activeGesture) finishGesture(activeGesture, true)
+})
+
+function onNodeActionKeydown(id: string, ev: KeyboardEvent) {
+  if (ev.key === 'Enter' && ev.shiftKey) {
     ev.preventDefault()
-    if (ev.shiftKey) emit('aprofundar', id)
-    else emit('selecionar', id)
+    emit('aprofundar', id)
   }
 }
 </script>
 
 <template>
   <div
-    role="button"
-    tabindex="0"
+    role="group"
     :aria-label="`${no.titulo}, ${no.tipo}, ${estadoRotulo[no.status] ?? no.status}`"
-    :aria-pressed="selecionado"
-    class="relative w-[280px] select-none rounded-card border bg-white p-4 shadow-card focus-visible:outline-2 focus-visible:outline-nexo-primary"
+    class="relative w-[280px] select-none rounded-card border bg-white p-4 shadow-card"
+    :style="{ '--canvas-node-border-width': selecionado ? '2px' : '1px' }"
     :class="
       no.status === 'stale'
         ? 'border-dashed border-nexo-stale-border bg-nexo-stale-bg/40'
@@ -70,9 +125,8 @@ function onKeydown(id: string, ev: KeyboardEvent) {
           ? 'border-2 border-nexo-primary shadow-node-selected'
           : 'border-nexo-border'
     "
-    @pointerdown="onPointerDownCard(no.id, $event)"
+    @pointerdown.stop="onPointerDownCard(no.id, $event)"
     @dblclick="emit('aprofundar', no.id)"
-    @keydown="onKeydown(no.id, $event)"
   >
     <div class="flex items-start justify-between">
       <span
@@ -148,7 +202,18 @@ function onKeydown(id: string, ev: KeyboardEvent) {
           <line x1="9" y1="17" x2="15" y2="17" />
         </svg>
       </span>
-      <span v-if="selecionado" class="text-nexo-muted" aria-hidden="true">···</span>
+      <button
+        type="button"
+        data-node-action
+        :aria-label="`${no.titulo}, ${no.tipo}, ${estadoRotulo[no.status] ?? no.status}`"
+        :aria-pressed="selecionado"
+        class="pointer-events-none absolute right-2 top-2 z-10 rounded-btn px-2 py-1 text-xs text-nexo-muted opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-nexo-primary"
+        @pointerdown.stop
+        @click.stop="emit('selecionar', no.id)"
+        @keydown="onNodeActionKeydown(no.id, $event)"
+      >
+        Selecionar
+      </button>
     </div>
 
     <p class="mt-2 text-[15px] font-semibold leading-snug text-nexo-text">{{ no.titulo }}</p>
@@ -184,32 +249,72 @@ function onKeydown(id: string, ev: KeyboardEvent) {
 
     <!-- handles de conexão (4 lados), sempre visíveis no hover/seleção -->
     <template v-if="!preview">
-      <button
+      <NovaAction
         v-for="lado in (['l', 'r', 't', 'b'] as const)"
         :key="lado"
         type="button"
-        data-handle
-        :aria-label="`Conectar a partir de ${no.titulo} (${lado})`"
-        class="absolute h-3 w-3 rounded-full border-2 border-nexo-primary bg-white hover:bg-nexo-primary"
+      variant="icon"
+      empty
+        :data-handle="lado"
+        :aria-label="`Iniciar ou concluir conexão em ${no.titulo}, lado ${ladoRotulo[lado]}`"
+        class="canvas-node-handle absolute h-6 w-6 rounded-full"
         :class="{
           'left-1/2 top-0 -translate-x-1/2 -translate-y-1/2': lado === 't',
           'bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2': lado === 'b',
           'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2': lado === 'l',
-          'right-0 top-1/2 -translate-x-1/2 translate-y-1/2': lado === 'r'
+          'right-0 top-1/2 translate-x-1/2 -translate-y-1/2': lado === 'r'
         }"
-        :style="{ opacity: selecionado ? 1 : undefined }"
+      :style="{
+        width: '24px', height: '24px', minWidth: '24px', minHeight: '24px', padding: '0',
+        left: lado === 'l' ? 'calc(0px - var(--canvas-node-border-width))' : undefined,
+        right: lado === 'r' ? 'calc(0px - var(--canvas-node-border-width))' : undefined,
+        top: lado === 't' ? 'calc(0px - var(--canvas-node-border-width))' : undefined,
+        bottom: lado === 'b' ? 'calc(0px - var(--canvas-node-border-width))' : undefined,
+        opacity: selecionado ? 1 : undefined
+      }"
         @pointerdown.stop="emit('iniciar-conexao', no.id, lado, $event)"
+        @keydown.enter.prevent.stop="emit('ativar-handle', no.id, lado)"
+        @keydown.space.prevent.stop="emit('ativar-handle', no.id, lado)"
       />
     </template>
   </div>
 </template>
 
 <style scoped>
-div[role='button']:not(:focus-within) > button[data-handle]:not(:hover) {
+:deep(.canvas-node-handle) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:deep(.canvas-node-handle:hover) {
+  background: transparent;
+}
+
+:deep(.canvas-node-handle::before) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--v-color-primary);
+  border-radius: 9999px;
+  background: var(--v-color-surface);
+  content: '';
+  pointer-events: none;
+}
+
+:deep(.canvas-node-handle:hover::before) {
+  background: var(--v-color-primary);
+}
+
+[role='group']:not(:focus-within) > button[data-handle]:not(:hover) {
   opacity: 0;
 }
-div[role='button']:hover > button[data-handle],
-div[role='button']:focus-within > button[data-handle] {
+[role='group']:hover > button[data-handle],
+[role='group']:focus-within > button[data-handle] {
   opacity: 1;
 }
 </style>

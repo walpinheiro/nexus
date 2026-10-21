@@ -64,16 +64,16 @@ const RX_PROBLEMA: RegExp[] = [
 ]
 
 const RX_OBJETIVO: RegExp[] = [
-  /meta (?:é|:)?(.+)/i,
-  /objetivo (?:é|:)?(.+)/i,
+  /meta\s*(?:é|:)?\s*(.+)/i,
+  /objetivo\s*(?:é|:)?\s*(.+)/i,
   /quero alcan[cç]ar (.+)/i,
   /espero (.+)/i,
   /hip[oó]tese (?:é|:)?(.+)/i
 ]
 
 const RX_PUBLICO: RegExp[] = [
-  /meu p[uú]blico (?:alvo )?(?:é|:)?(.+)/i,
-  /p[uú]blico (?:alvo )?(?:é|:)?(.+)/i,
+  /meu\s+p[uú]blico(?:\s+alvo)?\s*(?:é|:)?\s*(.+)/i,
+  /p[uú]blico(?:\s+alvo)?\s*(?:é|:)?\s*(.+)/i,
   /persona (?:é|:)?(.+)/i,
   /usu[aá]rios? (?:s[aã]o|é|:)?(.+)/i,
   /clientes? (?:s[aã]o|é|:)?(.+)/i
@@ -123,6 +123,14 @@ export function analisarIngestao(texto: string): AnaliseIngestao {
       : []
 
   return { problema, objetivo, publico, restricoes, riscos, bdd }
+}
+
+/** Sugere um título curto sem rótulos de campo; nunca altera o texto de origem. */
+export function sugerirTituloIngestao(analise: Pick<AnaliseIngestao, 'problema' | 'objetivo'>, textoOriginal: string): string {
+  const candidato = analise.problema || analise.objetivo || textoOriginal
+  return normalizarEspacos(candidato)
+    .replace(/^(?:objetivo|problema|meta)\s*[:—-]\s*/i, '')
+    .slice(0, 60)
 }
 
 /** Ingestão automática do campo wiki/dados: concatena infos + wikiDados e delega a analisarIngestao. */

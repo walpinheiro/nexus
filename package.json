@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test:determinism": "vite-node scripts/test-determinism.mjs"
+    "test:determinism": "vite-node scripts/test-determinism.mjs",
+    "test:waivers": "vite-node scripts/test-waivers.mjs"
   },
   "dependencies": {
     "lucide-vue-next": "^1.0.0",
     "pinia": "^2.1.7",
     "vue": "^3.4.21",
-    "vue-router": "^4.3.0"
+    "vue-router": "^4.3.0",
+    "vueui-nova-kit": "1.0.0-rc.4"
   },
   "devDependencies": {
     "@types/node": "^26.6.1",
@@ -27,7 +29,7 @@
     "vue-tsc": "^2.0.6"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "^4.63.3",
+    "@rollup/rollup-linux-x64-gnu": "^4.64.7",
     "@rollup/rollup-win32-x64-msvc": "^4.63.3"
   }
 }

@@ -1,13 +1,54 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import { useUI } from '@/stores/useUI'
 import { useGate } from '@/stores/useGate'
-import { gateAnterior, gateDesbloqueado, ORDEM_GATES } from '@/utils/gates'
-import LucideIcon from '@/components/common/LucideIcon.vue'
+import { gateDesbloqueado, ORDEM_GATES } from '@/utils/gates'
+import { useGraph } from '@/stores/useGraph'
+import { useProjects } from '@/stores/useProjects'
+import { useUsers } from '@/stores/useUsers'
+import { VSidebar, VSelect } from 'vueui-nova-kit'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 
 const $route = useRoute()
-const ui = useUI()
 const gates = useGate()
+const graph = useGraph()
+const projects = useProjects()
+const users = useUsers()
+const router = useRouter()
+const projectOptions = computed(() => projects.state.projetos.map((project) => ({ value: project.id, label: project.titulo })))
+const featureParaStudio = computed(() => {
+  const candidatos = [
+    typeof $route.query.feature === 'string' ? $route.query.feature : '',
+    typeof $route.query.selecionado === 'string' ? $route.query.selecionado : '',
+    graph.state.selecionadoId ?? ''
+  ]
+  return candidatos.map((id) => graph.noPorId(id)).find((node) => node?.tipo === 'feature') ?? graph.state.nos.find((node) => node.tipo === 'feature')
+})
+const rotaStudio = computed(() => featureParaStudio.value
+  ? `/canvas?view=studio&feature=${encodeURIComponent(featureParaStudio.value.id)}&selecionado=${encodeURIComponent(featureParaStudio.value.id)}`
+  : '/canvas?view=studio')
+const activeItem = computed(() => $route.path === '/canvas'
+  ? $route.query.view === 'studio' ? 'canvas-studio' : $route.query.view === 'canvas' ? 'canvas-graph' : 'canvas'
+  : $route.path)
+const itensKit = computed(() => [
+  { type: 'group' as const, value: 'produto', label: 'Produto', collapsible: false, children: [
+    { value: '/', label: 'Visão', icon: 'overview', to: '/' },
+    { value: 'canvas', label: 'Canvas', icon: 'canvas', to: '/canvas', defaultOpen: true, children: [
+      { value: 'canvas-graph', label: 'Grafo NEXO', icon: 'workflow', to: '/canvas?view=canvas' },
+      { value: 'canvas-studio', label: 'Telas (Studio)', icon: 'design', to: rotaStudio.value, disabled: !featureParaStudio.value }
+    ] },
+    { value: '/backlog', label: 'Backlog', icon: 'inbox', to: '/backlog' }
+  ] },
+  { type: 'group' as const, value: 'gates', label: 'Gates', defaultOpen: true, children: ORDEM_GATES.map((gid) => ({
+    value: `/gates/${gid}`,
+    label: `${gid} · ${rotulos[gid]}`,
+    icon: estadoGate(gid).icon,
+    to: `/gates/${gid}`
+  })) },
+  { type: 'group' as const, value: 'administracao', label: 'Administração', collapsible: false, children: [
+    { value: '/usuarios', label: 'Usuários', icon: 'users', to: '/usuarios' }
+  ] }
+])
 
 const rotulos: Record<string, string> = {
   G0: 'Enquadramento',
@@ -18,112 +59,61 @@ const rotulos: Record<string, string> = {
   G5: 'Entrega'
 }
 
-function estadoGate(gid: string): 'bloqueado' | 'aprovado' | 'ativo' | 'rascunho' {
+function trocarProjeto(id: string) {
+  projects.selecionar(id, users.state.currentUserId)
+  graph.trocarProjeto(id)
+  gates.trocarProjeto(id)
+  router.push($route.path === '/canvas' ? '/canvas?view=canvas' : '/backlog')
+}
+
+function estadoGate(gid: string): { icon: string; label: string } {
   const g = gates.gates.find((x) => x.id === gid)
-  if (!g) return 'rascunho'
-  if (!gateDesbloqueado(gid as never, gates.gates)) return 'bloqueado'
-  if (g.status === 'aprovado') return 'aprovado'
-  return 'rascunho'
-}
-
-function ehAtivo(gid: string): boolean {
-  return ($route.params.id === gid) || ($route.path === '/canvas' && gid === 'G2')
-}
-
-function tooltip(gid: string): string {
-  const est = estadoGate(gid)
-  if (est === 'bloqueado') {
-    const ant = gateAnterior(gid as never)
-    return `Aprove ${ant} primeiro — ver Gate ${ant}`
+  if (!g) return { icon: 'file', label: 'Rascunho' }
+  if (g.status === 'aprovado') {
+    return Number(g.baselineVersao) > 0 && !!g.baselineAlvoId
+      ? { icon: 'check', label: `Aprovado · baseline v${g.baselineVersao}` }
+      : { icon: 'alert', label: 'Status aprovado, mas falta uma baseline válida' }
   }
-  const g = gates.gates.find((x) => x.id === gid)
-  if (est === 'aprovado') return `Aprovado · baseline v${g?.baselineVersao ?? '?'} por ${g?.aprovadoPor ?? '?'}` 
-  if (g?.status === 'revisao') return 'Em revisão — aguardando aprovação'
-  return 'Rascunho — preencha o checklist'
+  if (g.status === 'revisao') return { icon: 'clock', label: 'Em revisão' }
+  if (!gateDesbloqueado(gid as never, gates.gates)) return { icon: 'lock', label: 'Bloqueado · aguarda aprovação do gate anterior' }
+  return { icon: 'file', label: 'Disponível para iniciar' }
 }
+
+function selecionarItem(value: string) {
+  if (value === 'canvas-graph') {
+    router.push('/canvas?view=canvas')
+    return
+  }
+  if (value === 'canvas-studio') {
+    router.push(rotaStudio.value)
+    return
+  }
+  if (value === 'canvas') {
+    router.push('/canvas')
+    return
+  }
+  router.push(value)
+}
+
 
 </script>
 
 <template>
-  <aside
-    v-if="ui.state.sidebarAberta"
-    class="flex w-sidebar shrink-0 flex-col border-r border-nexo-border bg-nexo-surface"
-    aria-label="Navegação principal"
-  >
-    <nav class="space-y-1 p-3">
-      <RouterLink
-        to="/"
-        class="flex h-10 items-center gap-3 rounded-badge px-3 text-sm"
-        :class="$route.path === '/' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
-        :aria-current="$route.path === '/' ? 'page' : undefined"
-      >
-        <LucideIcon name="eye" :size="18" />
-        Visão
-      </RouterLink>
-      <RouterLink
-        to="/canvas?view=canvas"
-        class="flex h-10 items-center gap-3 rounded-badge px-3 text-sm"
-        :class="$route.path === '/canvas' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
-        :aria-current="$route.path === '/canvas' ? 'page' : undefined"
-      >
-        <LucideIcon name="layout" :size="18" />
-        Canvas
-      </RouterLink>
-      <RouterLink
-        to="/backlog"
-        class="flex h-10 items-center gap-3 rounded-badge px-3 text-sm"
-        :class="$route.path === '/backlog' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
-        :aria-current="$route.path === '/backlog' ? 'page' : undefined"
-      >
-        <LucideIcon name="inbox" :size="18" />
-        Backlog
-      </RouterLink>
-    </nav>
-
-    <div class="border-t border-nexo-border p-3">
-      <p class="px-3 text-[11px] font-semibold uppercase tracking-wider text-nexo-muted">Gates</p>
-      <nav class="mt-1 space-y-1" aria-label="Gates">
-        <RouterLink
-          v-for="gid in ORDEM_GATES"
-          :key="gid"
-          :to="`/gates/${gid}`"
-          :title="tooltip(gid)"
-          class="relative flex h-10 items-center gap-3 rounded-badge px-3 text-sm"
-          :class="estadoGate(gid) === 'bloqueado' ? 'bg-nexo-draft-bg text-nexo-draft' : estadoGate(gid) === 'aprovado' ? 'text-nexo-approved' : ehAtivo(gid) ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'"
-        >
-          <span
-            v-if="ehAtivo(gid)"
-            class="absolute left-0 top-1 h-8 w-[3px] rounded bg-nexo-primary"
-            aria-hidden="true"
-          />
-          <span
-            class="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-            :class="ehAtivo(gid) ? 'bg-nexo-primary text-white' : estadoGate(gid) === 'aprovado' ? 'bg-nexo-approved text-white' : estadoGate(gid) === 'bloqueado' ? 'bg-nexo-draft text-white' : 'border border-nexo-border text-nexo-muted'"
-          >
-            {{ gid }}
-          </span>
-          {{ rotulos[gid] }}
-          <span class="ml-auto inline-flex" aria-hidden="true">
-            <LucideIcon v-if="estadoGate(gid) === 'bloqueado'" name="lock" :size="18" />
-            <LucideIcon v-else-if="estadoGate(gid) === 'aprovado'" name="check" :size="18" />
-          </span>
-        </RouterLink>
-      </nav>
-      <RouterLink to="/usuarios" class="mt-2 flex h-10 items-center gap-3 rounded-badge px-3 text-sm" :class="$route.path === '/usuarios' ? 'bg-nexo-primary-soft font-semibold text-nexo-primary' : 'text-nexo-text hover:bg-nexo-canvas'">
-        <span class="flex h-7 w-7 items-center justify-center rounded-full border border-nexo-border text-xs font-bold text-nexo-muted">U</span>
-        Usuários
-      </RouterLink>
-    </div>
-
-    <div class="mt-auto space-y-2 p-3">
-      <button
-        type="button"
-        class="flex h-7 w-7 items-center justify-center rounded-full border border-nexo-border text-nexo-muted hover:text-nexo-primary"
-        aria-label="Recolher barra lateral"
-        @click="ui.alternarSidebar()"
-      >
-        <LucideIcon name="chevL" :size="18" />
-      </button>
-    </div>
-  </aside>
+  <VSidebar id="nexo-primary-navigation" class="nexo-kit-sidebar" variant="workspace" :items="itensKit" :active-item="activeItem" :width="224" :show-search="false" :show-footer="false" :show-collapse-toggle="false" :group-dividers="true" aria-label="Navegação principal" @select="selecionarItem">
+    <template #header><RouterLink to="/" class="nexo-sidebar-brand" aria-label="NEXO — Visão do produto"><span class="nexo-brand-mark" aria-hidden="true">X</span><span>NEXO</span></RouterLink></template>
+    <template #before-nav>
+      <div class="nexo-sidebar-project-context">
+        <VSelect class="nexo-sidebar-project-select" :model-value="projects.state.atualId" :options="projectOptions" label="Projeto" size="sm" @update:model-value="trocarProjeto" />
+      </div>
+    </template>
+    <template #item-trailing="{ item }">
+      <span v-if="item.value.startsWith('/gates/')" class="sr-only" role="img" :aria-label="estadoGate(item.value.slice(7)).label" :title="estadoGate(item.value.slice(7)).label">
+        {{ estadoGate(item.value.slice(7)).label }}
+      </span>
+    </template>
+  </VSidebar>
 </template>
+
+<style scoped>
+.nexo-kit-sidebar{flex:0 0 224px;width:224px;min-height:0;height:100%;background:var(--v-color-surface);border-right:1px solid var(--v-color-border)}.nexo-kit-sidebar :deep(.v-sidebar__header-slot){height:56px;min-height:56px;margin-bottom:8px;padding:8px 14px;border-bottom:1px solid var(--v-color-border)}.nexo-sidebar-brand{display:flex;min-width:0;align-items:center;gap:9px;color:var(--v-color-text);text-decoration:none;font-size:13px;font-weight:800;letter-spacing:.04em}.nexo-brand-mark{display:grid;place-items:center;width:28px;height:28px;flex:0 0 28px;border-radius:var(--v-radius-8);background:var(--v-color-primary);color:var(--v-color-on-primary);font-weight:800}.nexo-kit-sidebar :deep(.v-sidebar__before-nav){margin-bottom:0}.nexo-sidebar-project-context{width:100%;padding:0 12px}.nexo-sidebar-project-select{width:100%;min-width:0}.nexo-kit-sidebar :deep(.v-sidebar__nav){flex:1;min-height:0;overflow-y:auto;padding-top:8px}.nexo-kit-sidebar :deep(.v-nav-item.v-nav-item--active),.nexo-kit-sidebar :deep(.v-nav-item.v-nav-item--active:hover){background:var(--v-color-primary-100);color:var(--v-color-primary-text);box-shadow:inset 3px 0 0 var(--v-color-primary)}.nexo-kit-sidebar :deep(.v-nav-item.v-nav-item--active .v-nav-item__icon){color:var(--v-color-primary)}.nexo-kit-sidebar :deep(.v-nav-item__label){min-width:0;white-space:nowrap;overflow:visible;text-overflow:clip}
+</style>

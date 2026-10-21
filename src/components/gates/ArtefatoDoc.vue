@@ -2,6 +2,7 @@
 import type { Artefato } from '@/types/nexo'
 import type { GateInfo } from '@/stores/useGate'
 import LucideIcon from '@/components/common/LucideIcon.vue'
+import { VButton } from 'vueui-nova-kit'
 
 interface Props {
   artefato: Artefato | null
@@ -62,27 +63,27 @@ function progressoSecao(secao: SecaoProgresso): { feitos: number; total: number;
         </span>
         <span
           v-if="gateInfo?.baselineVersao"
-          class="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-xs font-bold text-green-800"
+          class="inline-flex items-center gap-1 rounded bg-nexo-approved-bg px-2 py-0.5 text-xs font-bold text-nexo-approved"
         >
           <LucideIcon name="shield-check" :size="12" /> Baseline v{{ gateInfo.baselineVersao }}
         </span>
         <span
           v-else
-          class="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800"
+          class="inline-flex items-center gap-1 rounded bg-nexo-stale-bg px-2 py-0.5 text-xs font-bold text-nexo-stale"
         >
           <LucideIcon name="clock" :size="12" /> Baseline pendente
         </span>
         <!-- Exportar .md é secundário dentro do artefato (motor exportWiki preservado) -->
-        <button
+        <VButton
           v-if="mostrarExportar"
           type="button"
-          class="inline-flex min-h-[32px] items-center gap-1.5 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-slate-50 transition-colors shadow-xs"
+          class="inline-flex min-h-[32px] items-center gap-1.5 rounded-btn border border-nexo-border bg-white px-3 py-1.5 text-sm font-semibold text-nexo-text hover:bg-nexo-surface transition-colors shadow-xs"
           :title="`Exportar markdown do Gate ${artefato.gate}`"
           @click="emit('exportar')"
         >
           <LucideIcon name="download" :size="13" />
           <span>Exportar .md</span>
-        </button>
+        </VButton>
       </div>
     </div>
 
@@ -97,13 +98,13 @@ function progressoSecao(secao: SecaoProgresso): { feitos: number; total: number;
           v-if="progressoSecao(secao).completa"
           name="check"
           :size="12"
-          class="text-green-600"
+          class="text-nexo-approved"
         />
         <span
           class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-bold"
           :class="
             progressoSecao(secao).completa
-              ? 'bg-green-100 text-green-800'
+              ? 'bg-nexo-approved-bg text-nexo-approved'
               : 'bg-nexo-canvas text-nexo-muted'
           "
         >

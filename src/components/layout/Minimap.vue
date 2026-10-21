@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGraph } from '@/stores/useGraph'
+import { NODE_DEFAULT_HEIGHT, NODE_WIDTH } from '@/components/canvas/geometry'
 
-const props = defineProps<{ largura?: number; altura?: number }>()
+const props = defineProps<{ largura?: number; altura?: number; nodeSizes?: Record<string, { width: number; height: number }> }>()
 
 const emit = defineEmits<{ (e: 'navegar', x: number, y: number): void }>()
 
@@ -10,6 +11,7 @@ const graph = useGraph()
 
 const W = computed(() => props.largura ?? 180)
 const H = computed(() => props.altura ?? 110)
+const nodeSize = (id: string) => props.nodeSizes?.[id] ?? { width: NODE_WIDTH, height: NODE_DEFAULT_HEIGHT }
 
 // bounds do mundo
 const bounds = computed(() => {
@@ -17,8 +19,8 @@ const bounds = computed(() => {
   const ys = graph.state.nos.map((n) => n.y)
   const minX = Math.min(0, ...xs) - 60
   const minY = Math.min(0, ...ys) - 60
-  const maxX = Math.max(1200, ...xs.map((x) => x + 280)) + 60
-  const maxY = Math.max(800, ...ys.map((y) => y + 190)) + 60
+  const maxX = Math.max(1200, ...graph.state.nos.map((n) => n.x + nodeSize(n.id).width)) + 60
+  const maxY = Math.max(800, ...graph.state.nos.map((n) => n.y + nodeSize(n.id).height)) + 60
   return { minX, minY, maxX, maxY }
 })
 
@@ -57,10 +59,10 @@ function clicar(ev: MouseEvent) {
       :key="n.id"
       :x="paraMini(n.x, n.y)[0]"
       :y="paraMini(n.x, n.y)[1]"
-      :width="Math.max(4, 280 * escala)"
-      :height="Math.max(3, 190 * escala)"
+      :width="Math.max(4, nodeSize(n.id).width * escala)"
+      :height="Math.max(3, nodeSize(n.id).height * escala)"
       rx="1.5"
-      :fill="n.id === graph.state.selecionadoId ? '#1D4ED8' : n.status === 'stale' ? '#F59E0B' : '#CBD5E1'"
+      :fill="n.id === graph.state.selecionadoId ? 'var(--v-color-primary)' : n.status === 'stale' ? 'var(--v-color-warning-base)' : 'var(--v-color-neutral-300)'"
     />
   </svg>
 </template>

@@ -10,6 +10,35 @@ export interface GateEval {
   bloqueantesFaltando: string[]
 }
 
+function dataCivil(value: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(0)
+  date.setUTCHours(0, 0, 0, 0)
+  date.setUTCFullYear(year, month - 1, day)
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null
+  return value
+}
+
+function chaveDataLocal(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/** A data de dispensa é uma data civil local e permanece válida durante todo esse dia. */
+export function dispensaVigenteNaData(prazo: string, agora = new Date()): boolean {
+  const data = dataCivil(prazo)
+  return !!data && data >= chaveDataLocal(agora)
+}
+
+/** Uma nova dispensa deve vencer em uma data civil posterior à data local de hoje. */
+export function prazoDispensaFuturo(prazo: string, agora = new Date()): boolean {
+  const data = dataCivil(prazo)
+  return !!data && data > chaveDataLocal(agora)
+}
+
 function getFeatureFields(o: NexoObject): {
   ator: string
   fluxo: string
@@ -29,10 +58,16 @@ function getFeatureFields(o: NexoObject): {
   }
 }
 
+function declaracaoUtil(value: unknown): boolean {
+  const texto = String(value ?? '').trim()
+  return texto.length >= 3 && !/^(a definir|não informado|nao informado|n\/a|tbd|todo|placeholder|exemplo)$/i.test(texto)
+}
+
 export function avaliarGate(
   objeto: NexoObject,
   waivers?: { codigo: string; prazo: string }[],
-  gateOverride?: GateId
+  gateOverride?: GateId,
+  nos?: NexoObject[]
 ): GateEval {
   const checks: GateCheck[] = []
   const gate = gateOverride ?? objeto.gate
@@ -182,8 +217,20 @@ export function avaliarGate(
         if (regrasIds.length < 1) return false
         if ((ff['fonte'] ?? 'stated') === 'pending_decision') return false
         const regras = Array.isArray(ff['regras']) ? (ff['regras'] as Record<string, unknown>[]) : []
-        if (regras.length === 0) return true
-        return regras.every((r) => r['arquivada'] !== true && String(r['fonte'] ?? '').trim() !== '')
+        const ids = regrasIds.map(String)
+        const vinculadas = (nos ?? []).filter((n) => n.tipo === 'regra' && ids.includes(n.id))
+        const candidatas = regras.length > 0 ? regras : vinculadas.map((r) => ({
+          id: r.id,
+          fonte: r.fonte,
+          fonte_refs: r.fonte_refs,
+          status: r.status
+        }))
+        return candidatas.length === ids.length && candidatas.every((r) =>
+          r['arquivada'] !== true && String(r['fonte'] ?? '').trim() !== '' &&
+          String(r['fonte'] ?? '') !== 'pending_decision' &&
+          (Array.isArray(r['fonte_refs']) ? r['fonte_refs'].length > 0 : true) &&
+          String(r['status'] ?? '') !== 'stale'
+        )
       })()
     })
     checks.push({
@@ -210,22 +257,24 @@ export function avaliarGate(
       descricao: 'Integração externa tem timeout, falha e indisponibilidade',
       severidade: 'bloqueante',
       ok: (() => {
-        if (integ.length === 0) return true
+        const decisao = String(ff['integracoes_decisao'] ?? '')
+        const justificativa = ff['integracoes_justificativa']
+        if (decisao === 'nenhuma') return integ.length === 0 && declaracaoUtil(justificativa)
+        if (decisao !== 'com_integracoes' || integ.length === 0) return false
         return integ.every((x) => {
-          if (typeof x === 'string') {
-            const s = x.toLowerCase()
-            return s.includes('timeout') || s.includes('falha') || s.includes('indispon')
-          }
+          if (typeof x !== 'object' || x === null) return false
           const xi = x as Record<string, unknown>
-          return xi['timeout_ms'] != null && xi['falha'] != null && xi['indisponibilidade'] != null
+          return declaracaoUtil(xi['nome']) && Number(xi['timeout_ms']) > 0 &&
+            declaracaoUtil(xi['falha']) && declaracaoUtil(xi['indisponibilidade'])
         })
       })()
     })
     checks.push({
       codigo: 'FTR-007',
-      descricao: 'Critério BDD com Given/When/Then verificável',
+      descricao: 'Critério BDD com Given/When/Then, camada e fonte declaradas',
       severidade: 'bloqueante',
-      ok: bdds.some((b) => String(b['given'] ?? '').trim() !== '' && String(b['when'] ?? '').trim() !== '' && String(b['then'] ?? '').trim() !== '')
+      ok: bdds.some((b) => declaracaoUtil(b['given']) && declaracaoUtil(b['when']) && declaracaoUtil(b['then']) &&
+        declaracaoUtil(b['camada']) && declaracaoUtil(b['fonte']))
     })
     checks.push({
       codigo: 'FTR-008',
@@ -354,9 +403,14 @@ export function avaliarGate(
     })
     checks.push({
       codigo: 'PBI-DEP',
-      descricao: 'Dependências resolvidas; zero bloqueador aberto',
+      descricao: 'Dependências resolvidas ou nenhuma dependência declarada com justificativa',
       severidade: 'bloqueante',
-      ok: !deps.some((d) => d.toLowerCase().includes('bloquead'))
+      ok: (() => {
+        const decisao = String(p['dependencias_decisao'] ?? '')
+        const motivo = String(p['dependencias_justificativa'] ?? '').trim()
+        if (deps.length === 0) return decisao === 'nenhuma' && motivo.length >= 10
+        return decisao === 'resolvidas' && motivo.length >= 10 && !deps.some((d) => d.toLowerCase().includes('bloquead'))
+      })()
     })
     checks.push({
       codigo: 'PBI-OWNER',
@@ -386,7 +440,7 @@ export function avaliarGate(
       codigo: 'PBI-BLOQ',
       descricao: 'Zero bloqueador: sem flag bloqueadora aberta',
       severidade: 'bloqueante',
-      ok: !String(p['flag'] ?? '').toLowerCase().includes('bloquead')
+      ok: p['bloqueador_aberto'] === false && declaracaoUtil(p['flag'])
     })
     // Regras condicionais
     checks.push({
@@ -442,7 +496,8 @@ export function avaliarGate(
       codigo: 'DON-002',
       descricao: 'PR merged com aprovação humana + link do PR',
       severidade: 'bloqueante',
-      ok: String(ev['pr_url'] ?? '').trim() !== '' && (ev['pr_merged'] === true || String(ev['pr_url'] ?? '').includes('pull'))
+      ok: declaracaoUtil(ev['pr_url']) && /^https?:\/\//i.test(String(ev['pr_url'] ?? '')) &&
+        ev['pr_merged'] === true && ev['aprovacao_humana'] === true
     })
     checks.push({
       codigo: 'DON-003',
@@ -451,7 +506,8 @@ export function avaliarGate(
       ok: (() => {
         const checks = Array.isArray(ev['checks_ci']) ? (ev['checks_ci'] as string[]) : []
         if (checks.length === 0) return false
-        return !checks.some((c) => /fail|error|blocked/i.test(c)) && (ev['sast_ok'] !== false) && (ev['policy_ok'] !== false)
+        return checks.every((c) => declaracaoUtil(c) && !/fail|error|blocked|pending|running/i.test(c)) &&
+          ev['sast_ok'] === true && ev['policy_ok'] === true
       })()
     })
     checks.push({
@@ -467,7 +523,8 @@ export function avaliarGate(
       ok: (() => {
         if (ev['seg_aprovado'] === true) return true
         const exc = ev['excecao'] as Record<string, unknown> | undefined
-        return !!exc && new Date(String(exc['prazo'] ?? '')).getTime() > Date.now()
+        return !!exc && declaracaoUtil(exc['owner']) && declaracaoUtil(exc['aceite']) &&
+          /^\d{4}-\d{2}-\d{2}$/.test(String(exc['prazo'] ?? '')) && new Date(`${String(exc['prazo'])}T23:59:59Z`).getTime() > Date.now()
       })()
     })
     checks.push({
@@ -479,13 +536,17 @@ export function avaliarGate(
     })
   }
 
-  // Dispensa vigente de aviso (DELTA Passo 4): considera o check OK até o prazo.
+  // Dispensa vigente de aviso (DELTA Passo 4): considera o check OK até o fim
+  // da data civil informada. Mantém o código estável para permitir renovação.
   const dispensas = waivers ?? (objeto as unknown as { __waivers?: { codigo: string; prazo: string }[] }).__waivers
   for (const c of checks) {
     if (c.severidade !== 'aviso' || c.ok) continue
     const w = dispensas?.find((x) => x.codigo === c.codigo)
-    if (w && new Date(w.prazo).getTime() > Date.now()) c.ok = true
-    else if (w) c.codigo = `${c.codigo}-EXP` as typeof c.codigo
+    if (w && dispensaVigenteNaData(w.prazo)) c.ok = true
+    else if (w) {
+      c.dispensaExpirada = true
+      c.prazoDispensaExpirada = w.prazo
+    }
   }
 
   const faltando = checks.filter((c) => c.severidade === 'bloqueante' && !c.ok).map((c) => c.codigo)
@@ -502,13 +563,24 @@ export function aprovadoresDoGate(gate: GateId): string[] {
     case 'G2':
       return ['PM', 'UX', 'TechLead']
     case 'G3':
-      return ['Arquiteto', 'TechLead', 'Seguranca', 'Dev']
+      return ['Arquiteto', 'TechLead', 'Seguranca']
     case 'G4':
       return ['PO', 'Dev', 'QA']
     case 'G5':
       return ['Dev', 'QA', 'TechLead']
     default:
       return []
+  }
+}
+
+export function quorumGate(gate: GateId): string[][] {
+  switch (gate) {
+    case 'G0': return [['PM']]
+    case 'G1': return [['Negocio'], ['PM']]
+    case 'G2': return [['PM'], ['UX'], ['TechLead']]
+    case 'G3': return [['Arquiteto'], ['Seguranca'], ['TechLead']]
+    case 'G4': return [['PO'], ['Dev'], ['QA']]
+    case 'G5': return [['Dev'], ['QA'], ['TechLead']]
   }
 }
 
@@ -519,6 +591,7 @@ export interface GateResumo {
   id: GateId
   status: string
   baselineVersao?: number | null
+  baselineAlvoId?: string | null
 }
 
 export function gateDesbloqueado(gateId: GateId, gates: GateResumo[]): boolean {
@@ -537,4 +610,65 @@ export function gateDesbloqueado(gateId: GateId, gates: GateResumo[]): boolean {
 export function gateAnterior(gateId: GateId): GateId | null {
   const idx = ORDEM_GATES.indexOf(gateId)
   return idx > 0 ? ORDEM_GATES[idx - 1] : null
+}
+
+/** Owner do objeto e solicitante da revisão nunca aprovam a própria proposta. */
+export function segregacaoFuncoesOk(ownerId: string, proponenteId: string, aprovadorId: string): boolean {
+  return aprovadorId !== ownerId && aprovadorId !== proponenteId
+}
+
+/** Alvos reais elegíveis para cada etapa, sem injetar dados de demonstração. */
+export function alvosDoGate(gateId: GateId, nos: NexoObject[], gates: GateResumo[]): NexoObject[] {
+  switch (gateId) {
+    case 'G0':
+      return nos.filter((n) => n.gate === 'G0' && n.tipo === 'epico')
+    case 'G1': {
+      const g0 = gates.find((g) => g.id === 'G0')
+      const g1 = gates.find((g) => g.id === 'G1')
+      if (g1?.status === 'aprovado' && Number(g1.baselineVersao) > 0 && g1.baselineAlvoId) {
+        return nos.filter((n) => n.tipo === 'epico' && n.id === g1.baselineAlvoId)
+      }
+      const g0Aprovado = g0?.status === 'aprovado' && Number(g0.baselineVersao) > 0 && !!g0.baselineAlvoId
+      return g0Aprovado ? nos.filter((n) => n.tipo === 'epico' && n.id === g0?.baselineAlvoId) : []
+    }
+    case 'G2': {
+      const g1 = gates.find((g) => g.id === 'G1')
+      return g1?.status === 'aprovado' && g1.baselineAlvoId
+        ? nos.filter((n) => n.tipo === 'feature' && n.parent_id === g1.baselineAlvoId)
+        : []
+    }
+    case 'G3': {
+      const g2 = gates.find((g) => g.id === 'G2')
+      return g2?.status === 'aprovado' && g2.baselineAlvoId
+        ? nos.filter((n) => n.tipo === 'feature' && n.id === g2.baselineAlvoId)
+        : []
+    }
+    case 'G4': {
+      const g3 = gates.find((g) => g.id === 'G3')
+      return g3?.status === 'aprovado' && g3.baselineAlvoId
+        ? nos.filter((n) => n.tipo === 'pbi' && (n.parent_id === g3.baselineAlvoId || (n as unknown as { feature_id?: string }).feature_id === g3.baselineAlvoId))
+        : []
+    }
+    case 'G5': {
+      const g4 = gates.find((g) => g.id === 'G4')
+      return g4?.status === 'aprovado' && g4.baselineAlvoId
+        ? nos.filter((n) => n.tipo === 'pbi' && n.id === g4.baselineAlvoId && n.gate === 'G5')
+        : []
+    }
+    default:
+      return nos.filter((n) => n.gate === gateId)
+  }
+}
+
+/** Objetos do projeto que podem ser inspecionados mesmo quando falta vínculo de baseline.
+ * Esta lista é somente para leitura/edição; a solicitação continua validada por alvosDoGate. */
+export function alvosVisiveisDoGate(gateId: GateId, nos: NexoObject[], gates: GateResumo[]): NexoObject[] {
+  const elegiveis = alvosDoGate(gateId, nos, gates)
+  const tipo = gateId === 'G0' || gateId === 'G1' ? 'epico' : gateId === 'G2' || gateId === 'G3' ? 'feature' : 'pbi'
+  const fase: Record<GateId, string[]> = {
+    G0: ['G0'], G1: ['G1'], G2: ['G2'], G3: ['G2', 'G3'], G4: ['G4'], G5: ['G5']
+  }
+  const candidatos = nos.filter((n) => n.tipo === tipo && fase[gateId].includes(n.gate))
+  const visibles = new Map([...elegiveis, ...candidatos].map((n) => [n.id, n]))
+  return [...visibles.values()]
 }
